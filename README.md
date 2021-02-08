@@ -21,6 +21,8 @@ QQ群交流群⑩群：[486745026](https:////shang.qq.com/wpa/qunwpa?idkey=f4687
 
 如需调整前端代码，请单独下载前端代码，[查看11.0PHP版前端仓库](https://gitee.com/wukongcrm_admin/P72crm_web)
 
+ **特别声明：如9.0版本升级至11.0版本，执行升级脚本前，请先备份数据库！！！** 
+
 ## 主要技术栈
 
 后端框架：ThinkPHP 5.0.24
