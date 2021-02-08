@@ -49,7 +49,7 @@ UI框架：Element-UI 2.6.3
 
 代码中已集成前端vue打包后文件，可免去打包操作：
 以本地（phpstudy集成环境）搭建举例：
-下载悟空CRM9.0开源版，在服务器根目录（www目录）下创建72crm文件夹，并放置代码； 浏览器访问
+下载悟空CRM11.0开源版，在服务器根目录（www目录）下创建72crm文件夹，并放置代码； 浏览器访问
 
 `http://localhost/72crm/index.php/admin/install/index.html `
 
