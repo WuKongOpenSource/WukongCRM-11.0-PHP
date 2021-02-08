@@ -9,7 +9,7 @@
 
 论坛：[http://bbs.72crm.net](http://bbs.72crm.net/)
 
-演示地址：[demo9.5kcrm.net](http://demo9.5kcrm.net/)(帐号：18888888888   密码：123456)
+演示地址：[demo11.5kcrm.net](http://demo9.5kcrm.net/)(帐号：18888888888   密码：123456a)
 
 QQ群交流群⑩群：[486745026](https:////shang.qq.com/wpa/qunwpa?idkey=f4687b809bf63f08f707aa1c56dee8dbcb9526237c429c4532222021d65bf83c)
 
@@ -33,7 +33,7 @@ QQ群交流群⑩群：[486745026](https:////shang.qq.com/wpa/qunwpa?idkey=f4687
 
 UI框架：Element-UI 2.6.3 
 
-悟空crm9.0的运行环境要求PHP5.6以上
+悟空crm11.0的运行环境要求PHP5.6以上
 
 
 ## 一键安装
@@ -44,7 +44,7 @@ UI框架：Element-UI 2.6.3
 
 `http://localhost/72crm/index.php/admin/install/index.html `
 
-根据安装提示步骤，完成悟空CRM9.0 的部署安装
+根据安装提示步骤，完成悟空CRM11.0 的部署安装
 
 
 
@@ -69,7 +69,7 @@ PHP >= 5.6.0
 ### 前端部署
 安装node.js 前端部分是基于node.js上运行的，所以必须先安装`node.js`，版本要求为6.0以上
 
-使用npm安装依赖 下载悟空CRM9.0前端代码； 可将代码放置在后端同级目录frontend，执行命令安装依赖：
+使用npm安装依赖 下载悟空CRM11.0前端代码； 可将代码放置在后端同级目录frontend，执行命令安装依赖：
 
     npm install
 
@@ -86,7 +86,7 @@ PHP >= 5.6.0
 
 ## 系统介绍
 
-以下为悟空CRM9.0 部分功能系统截图
+以下为悟空CRM11.0 部分功能系统截图
 
 
 
