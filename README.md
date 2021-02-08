@@ -90,16 +90,15 @@ PHP >= 5.6.0
 
 
 
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g1.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g2.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g3.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g4.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g5.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g6.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g7.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g8.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g9.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g10.png)
+![仪表盘](https://images.gitee.com/uploads/images/2021/0206/112721_6e50397d_345098.png "仪表盘.png")
+![客户列表](https://images.gitee.com/uploads/images/2021/0206/112822_4ab4eb50_345098.png "客户列表.png")
+![客户详情](https://images.gitee.com/uploads/images/2021/0206/112842_d69aff0f_345098.png "客户详情.png")
+![商机详情](https://images.gitee.com/uploads/images/2021/0206/112902_c38751fe_345098.png "商机详情.png")
+![任务详情](https://images.gitee.com/uploads/images/2021/0206/112924_175278e2_345098.png "任务详情.png")
+![商业智能](https://images.gitee.com/uploads/images/2021/0206/112938_0cbc95b7_345098.png "商业智能.png")
+![审批](https://images.gitee.com/uploads/images/2021/0206/113001_bfcbee0a_345098.png "审批.png")
+![自定义字段](https://images.gitee.com/uploads/images/2021/0206/113019_7894e7ed_345098.png "自定义字段.png")
+![字段授权](https://images.gitee.com/uploads/images/2021/0206/113030_cefa8932_345098.png "字段授权.png")
 
 
 
