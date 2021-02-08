@@ -29,7 +29,7 @@ class ApiCommon extends Common
         $cache = cache('Auth_'.$authKey.$platform);         
 
         // 校验sessionid和authKey
-        if (empty($sessionId) || empty($authKey) || empty($cache) || ($cache['sessionId'] !== $sessionId)) {
+        if (empty($sessionId) || empty($authKey) || empty($cache)) {
             header('Content-Type:application/json; charset=utf-8');
             $dataTime=date('H:i',time());
             exit(json_encode(['code' => 302, 'data' => ['extra' => 1, 'extraTime' => $dataTime], 'msg' => '请先登录!']));
