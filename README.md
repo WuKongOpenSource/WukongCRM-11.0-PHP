@@ -32,7 +32,7 @@ JAVA版下载地址：[https://gitee.com/wukongcrm/72crm-java](https://gitee.com
 
 ## 主要技术栈
 
-后端框架：ThinkPHP 5.0.2
+后端框架：ThinkPHP 5.0.24
 
 前端MVVM框架：Vue.JS 2.5.x 
 
@@ -53,7 +53,7 @@ UI框架：Element-UI 2.6.3
 
 `http://localhost/72crm/index.php/admin/install/index.html `
 
-根据安装提示步骤，完成悟空CRM9.0 的部署安装
+根据安装提示步骤，完成悟空CRM11.0 的部署安装
 
 
 
@@ -65,7 +65,7 @@ UI框架：Element-UI 2.6.3
 值得注意的一点是：跨域的情况下，会有预请求OPTION的情况
 
 ### Server搭建 
-服务端使用的框架为thinkphp5.0.2，搭建前请确保拥有lamp/lnmp/wamp环境。
+服务端使用的框架为thinkphp5.0.24，搭建前请确保拥有lamp/lnmp/wamp环境。
 
 这里所说的搭建其实就是把server框架放入WEB运行环境，并使用80端口。
 导入服务端根文件夹数据库文件public/sql/5kcrm.sql，并修改config/database.php配置文件。
