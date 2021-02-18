@@ -9,7 +9,7 @@
 
 论坛：[http://bbs.72crm.net](http://bbs.72crm.net/)
 
-演示地址：[demo11.5kcrm.net](http://demo9.5kcrm.net/)(帐号：18888888888   密码：123456a)
+演示地址：[demo11.5kcrm.net](http://demo11.5kcrm.net/)(帐号：18888888888   密码：123456a)
 
 QQ群交流群⑩群：[486745026](https:////shang.qq.com/wpa/qunwpa?idkey=f4687b809bf63f08f707aa1c56dee8dbcb9526237c429c4532222021d65bf83c)
 
