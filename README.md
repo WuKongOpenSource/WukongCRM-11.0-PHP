@@ -19,7 +19,7 @@ QQ群交流群⑩群：[486745026](https:////shang.qq.com/wpa/qunwpa?idkey=f4687
 
 悟空CRM采用全新的前后端分离模式，本仓库代码中已集成前端vue打包后文件，可免去打包操作
 
-如需调整前端代码，请单独下载前端代码，[查看11.0PHP版前端仓库](https://gitee.com/wukongcrm_admin/P72crm_web)
+如需调整前端代码，请单独下载前端代码，[查看11.0PHP版前端仓库](https://gitee.com/wukongcrm/P72crm_web)
 
  **特别声明：如9.0版本升级至11.0版本，执行升级脚本前，请先备份数据库！！！** 
 
