@@ -1955,7 +1955,7 @@ CREATE TABLE `5kcrm_crm_receivables_file` (
   `receivables_id` int(10) unsigned NOT NULL,
   `file_id` int(10) unsigned NOT NULL,
   PRIMARY KEY (`r_id`) USING BTREE
-) ENGINE=MyISAM AUTO_INCREMENT=0 DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=0 DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
 
 INSERT INTO `5kcrm_crm_config` (`name`, `value`, `description`) VALUES ('activity_phrase', 'a:5:{i:0;s:18:\\\"电话无人接听\\\";i:1;s:15:\\\"客户无意向\\\";i:2;s:42:\\\"客户意向度适中，后续继续跟进\\\";i:3;s:42:\\\"客户意向度较强，成交几率较大\\\";i:4;s:3:\\\"312\\\";}', '跟进记录常用语');
 INSERT INTO `5kcrm_crm_config` (`name`, `value`, `description`) VALUES ('visit_config', '1', '是否开启回访提醒：1开启；0不开启');
