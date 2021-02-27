@@ -400,7 +400,6 @@ class User extends Common
 				$this->error = '直属上级不能是自己或下属';
 				return false;
 			}
-			p(2333);
 			if (db('admin_user')->where(['id' => ['neq',$id],'username' => $param['username']])->find()) {
 				$this->error = '手机号已存在';
 				return false;			

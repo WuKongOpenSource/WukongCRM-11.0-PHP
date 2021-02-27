@@ -11,6 +11,14 @@ class ExamineLogic extends Common
 {
     private $statusArr = ['0' => '待审核', '1' => '审核中', '2' => '审核通过', '3' => '已拒绝', '4' => '已撤回'];
     
+    /**
+     * 导入数据查询
+     * @param $request
+     *
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/2/27 0027 17:34
+     */
     public function getDataList($request)
     {
         $userModel = new \app\admin\model\User();
