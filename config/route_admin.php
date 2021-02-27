@@ -15,6 +15,7 @@ return [
     'admin/install/step2' => ['admin/install/step2', ['method' => 'GET']],
     'admin/install/step3' => ['admin/install/step3', ['method' => 'GET']],
  	'admin/install/step4' => ['admin/install/step4', ['method' => 'POST|AJAX']],
+    'admin/install/step5' => ['admin/install/step5', ['method' => 'GET']],
  	'admin/install/progress' => ['admin/install/progress', ['method' => 'POST']], 	
 
     //子部门列表

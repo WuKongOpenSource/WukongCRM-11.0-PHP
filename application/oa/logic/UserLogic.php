@@ -27,42 +27,49 @@ class UserLogic
         $initials_type = ($param['initials'] == 1) ? 1 : 2;
         $where['user.status'] = 1;
         if ($search) {
-            $where = function ($query) use ($search) {
+            $whereMap = function ($query) use ($search) {
                 $query->where('user.realname', array('like', '%' . $search . '%'))
                     ->whereOr('user.mobile', array('like', '%' . $search . '%'));
             };
         }
-        if ($param['star_type'] == 1) {
-            $item = Db::name('crm_star')->where('user_id', $user_id)->column('target_id');
-            $where['user.id'] = ['in', $item];
+        if($param['structure_id']){
+            $where['user.id']= $param['structure_id'];
         }
-        if ($param['structure_id'] == '') {
-            $list = Db::name('admin_user')
-                ->alias('user')
-                ->join('__ADMIN_STRUCTURE__ structure', 'structure.id = user.structure_id', 'LEFT')
-                ->where($where)
-                ->field('user.id,user.thumb_img,user.realname,user.post,structure.name as structure_name,user.mobile')
-                ->page($param['page'], $param['limit'])
-                ->select();
-
-            foreach ($list as $k => $v) {
-                $starWhere = ['user_id' => $user_id, 'target_id' => $v['id'], 'type' => 'admin_user'];
-                $star = Db::name('crm_star')->where($starWhere)->value('star_id');
-                $list[$k]['thumb_img'] = $v['thumb_img'] ? getFullPath($v['thumb_img']) : '';
-                $list[$k]['star'] = !empty($star) ? 1 : 0;
+        if (isset($param['star_type'])) {
+            if ($param['star_type'] == 1) {
+                $item = Db::name('crm_star')->where(['user_id'=>$user_id,'type'=>'admin_user'])->column('target_id');
+                if(!empty($item)) {
+                    $where['user.id'] = ['in', $item];
+                    $list = Db::name('admin_user')
+                        ->alias('user')
+                        ->join('__ADMIN_STRUCTURE__ structure', 'structure.id = user.structure_id', 'LEFT')
+                        ->where($where)
+                        ->where($whereMap)
+                        ->field('user.id,user.thumb_img,user.realname,user.post,structure.name as structure_name,user.mobile')
+                        ->page($param['page'], $param['limit'])
+                        ->select();
+                    foreach ($list as $k => $v) {
+                        $starWhere = ['user_id' => $user_id, 'target_id' => $v['id'], 'type' => 'admin_user'];
+                        $star = Db::name('crm_star')->where($starWhere)->value('star_id');
+                        $list[$k]['thumb_img'] = $v['thumb_img'] ? getFullPath($v['thumb_img']) : '';
+                        $list[$k]['star'] = !empty($star) ? 1 : 0;
+                    }
+                    $dataCount = Db::name('admin_user')
+                        ->alias('user')
+                        ->join('__ADMIN_STRUCTURE__ structure', 'structure.id = user.structure_id', 'LEFT')
+                        ->where($where)
+                        ->count();
+                    $newarray = $this->groupByInitials($list, 'realname', $initials_type);
+                }else{
+                    return false;
+                }
             }
-            $dataCount = Db::name('admin_user')
-                ->alias('user')
-                ->join('__ADMIN_STRUCTURE__ structure', 'structure.id = user.structure_id', 'LEFT')
-                ->where($where)
-                ->count();
-            $newarray = $this->groupByInitials($list, 'realname', $initials_type);
         } else {
             $list = Db::name('admin_user')
                 ->alias('user')
                 ->join('__ADMIN_STRUCTURE__ structure', 'structure.id = user.structure_id', 'LEFT')
                 ->where($where)
-                ->where('structure.id', $param['structure_id'])
+                ->where($whereMap)
                 ->field('user.id,user.thumb_img,user.realname,user.post,structure.name as structure_name')
                 ->page($param['page'], $param['limit'])
                 ->select();
@@ -70,7 +77,6 @@ class UserLogic
                 ->alias('user')
                 ->join('__ADMIN_STRUCTURE__ structure', 'structure.id = user.structure_id', 'LEFT')
                 ->where($where)
-                ->where('structure.id', $param['structure_id'])
                 ->count();
             foreach ($list as $k => $v) {
                 $starWhere = ['user_id' => $user_id, 'target_id' => $v['id'], 'type' => 'admin_user'];

@@ -27,15 +27,15 @@ class Install extends Controller
         $param = Request::instance()->param();          
         $this->param = $param;
 
-        $request = request();
-        $m = strtolower($request->module());
-        $c = strtolower($request->controller());
-        $a = strtolower($request->action());     
-	
-        if (!in_array($a, array('upgrade','upgradeprocess','checkversion')) && file_exists(CONF_PATH . "install.lock")) {
-            echo "<meta http-equiv='content-type' content='text/html; charset=UTF-8'> <script>alert('请勿重复安装!');location.href='".$_SERVER["HTTP_HOST"]."';</script>";
-            die();       
-        }    
+//        $request = request();
+//        $m = strtolower($request->module());
+//        $c = strtolower($request->controller());
+//        $a = strtolower($request->action());
+//
+//        if (!in_array($a, array('upgrade','upgradeprocess','checkversion')) && file_exists(CONF_PATH . "install.lock")) {
+//            echo "<meta http-equiv='content-type' content='text/html; charset=UTF-8'> <script>alert('请勿重复安装!');location.href='".$_SERVER["HTTP_HOST"]."';</script>";
+//            die();
+//        }
     }
 
     private $upgrade_site = "http://message.72crm.com/";
@@ -73,7 +73,7 @@ class Install extends Controller
     public function version()
     {
         $res = include(CONF_PATH.'version.php'); 
-        return $res ? : array('VERSION' => '9.0.0','RELEASE' => '20190330'); 
+        return $res ? : array('VERSION' => '11.0.0','RELEASE' => '20210219'); 
     }    
 
     public function step2(){
@@ -114,6 +114,7 @@ class Install extends Controller
         
         $username = $param['root'];
         $password = $param['pwd'];
+        $wkcode = $param['wkcode'];
         if (empty($db_config['hostname'])) {
             return resultArray(['error' => '请填写数据库主机!']);
         }           
@@ -141,6 +142,17 @@ class Install extends Controller
         if (empty($username)) {
             return resultArray(['error' => '请填写管理员用户名!']);
         }
+        if (empty($wkcode)) {
+            return resultArray(['error' => '请填写序列号!']);
+        }
+        $resCheckData = checkWkCode($wkcode);
+        if (!$resCheckData) {
+            return resultArray(['error' => '序列号错误!']);
+        }
+        $resData = object_to_array(json_decode($resCheckData));
+        if ($resData['date'] != date('Y-m-d')) {
+            return resultArray(['error' => '序列号已失效，请前往悟空官网个人中心获取最新数据!']);
+        }
         if (empty($password)) {
             return resultArray(['error' => '请填写管理员密码!']);
         }
@@ -161,6 +173,7 @@ class Install extends Controller
         }
 		$db_config['database'] = $database;
         self::mkDatabase($db_config);
+        self::mkLicense($wkcode);
         $C_Patch = substr($_SERVER['SCRIPT_FILENAME'],0,-10);
         $sql = file_get_contents( $C_Patch.'/public/sql/5kcrm.sql');
         $sqlList = parse_sql($sql, 0, ['5kcrm_' => $db_config['prefix']]);
@@ -185,8 +198,13 @@ class Install extends Controller
 		//插入信息
         Db::connect($db_config)->query("insert into ".$db_config['prefix']."admin_user (username, password, salt, img, thumb_img, realname, create_time, num, email, mobile, sex, status, structure_id, post, parent_id, type, authkey, authkey_time ) values ( '".$username."', '".$password."', '".$salt."', '', '', '管理员', ".time().", '', '', '".$username."', '', 1, 1, 'CEO', 0, 1, '', 0 )");
         Db::connect($db_config)->query("insert into ".$db_config['prefix']."hrm_user_det (user_id, join_time, type, status, userstatus, create_time, update_time, mobile, sex, age, job_num, idtype, idnum, birth_time, nation, internship, done_time, parroll_id, email, political, location, leave_time ) values ( 1, ".time().", 1, 1, 2, ".time().", ".time().", '".$username."', '', 0, '', 0, '', '', 0, 0, 0, 0, '', '', '', 0 )");
-        touch(CONF_PATH . "install.lock"); 
+        touch(CONF_PATH . "install.lock");
         return resultArray(['data'=>'安装成功']);
+    }
+
+    public function step5()
+    {
+        return $this->fetch();
     }
 	
 	//ajax 进度条
@@ -314,7 +332,7 @@ INFO;
     {
         $items = [
             'os'      => ['操作系统', PHP_OS, '类Unix', 'ok'],
-            'php'     => ['PHP版本', PHP_VERSION, '7.2 ( <em style="color: #888; font-size: 12px;">>= 5.6</em> )', 'ok','性能更佳'],
+            'php'     => ['PHP版本', PHP_VERSION, '7.3 ( <em style="color: #888; font-size: 12px;">>= 5.6</em> )', 'ok','性能更佳'],
             'gd'      => ['gd', '开启', '开启', 'ok'],
             'openssl' => ['openssl', '开启', '开启', 'ok'],
             'pdo' => ['pdo', '开启', '开启', 'ok'],
@@ -379,4 +397,32 @@ INFO;
         }
         return $items;
     }
+
+    /**
+     * 验证序列号
+     * @param 
+     * @return
+     */        
+    public function checkCodeOld($username) {
+        $encryption = md5($username);
+        $substr = substr($username, strlen($username)-6);
+        $subArr = str_split($substr, 1);
+        $code = '';
+        for ($i = 0; $i <= 5; $i++) {
+            $code .= $encryption[$subArr[$i]];
+        }
+        return $code;
+    }
+
+    //写入license文件
+    private function mkLicense($wkcode)
+    {
+        file_put_contents( CONF_PATH.'license.dat', $wkcode);
+        // 判断写入是否成功
+        // $config = include CONF_PATH.'license.dat';
+        // if (empty($config)) {
+        //     return resultArray(['error' => 'license配置写入失败！']);
+        // }
+        return true;
+    }    
 }

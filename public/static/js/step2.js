@@ -45,7 +45,12 @@ var rules = {
     required: true,
     regexp: /^(?=.*[a-zA-Z])(?=.*\d).{6,20}$/,
     label: '管理员密码(6~20位字母加数字组合)'
-  }
+  },
+  wkcode: {
+    required: false,
+    regexp: null,
+    label: '序列号'
+  },  
 };
 
 var timer = null;
@@ -63,32 +68,36 @@ $('.next').click(function () {
   // 校验form数据 true 校验通过  false 校验失败
   var forms = getFormData();
   var result = checkForm();
-  console.log('result---', result, forms);
+  // console.log('result---', result, forms);
   if (result) {
-    $.ajax({
-      cache: true,
-      type: "POST",
-      dataType: 'json',
-      url: "./step4",
-      data: {
-        form: forms
-      },
-      async: false,
-      success: function (result) {
-        if (result.code == '200') {
-          alert(result.data);
-          window.location = '../../../index.html';
-        } else if (result.code == '400') {
-          alert(result.error); //失败
-          return false;
-          // window.location = 'step3.html'
-        } else {
-          window.location = 'step3.html'
-          alert('安装失败');
+    
+    $('#cover').css('display', 'block');//显示遮罩层
+    setTimeout(()=>{
+      $.ajax({
+        cache: true,
+        type: "POST",
+        dataType: 'json',
+        url: "./step4",
+        data: {
+          form: forms
+        },
+        async: false,
+        success: function (result) {
+          if (result.code == '200') {
+            window.location = 'step5.html';
+          } else if (result.code == '400') {
+            $('#cover').css('display', 'none');
+            alert(result.error); //失败
+            return false;
+            // window.location = 'step3.html'
+          } else {
+            window.location = 'step3.html'
+            alert('安装失败');
+          }
         }
-      }
-      // getRes();
-    });    
+        // getRes();
+      }); 
+    })   
   }
 });
 
@@ -168,7 +177,7 @@ function _initFormValue() {
  * @return {form}
  */
 function getFormData() {
-  $('input').each(function (index, item) {
+  $('.wkform').each(function (index, item) {
     form[item.name] = item.value;
     // 重置表单状态
     $(item).removeClass('input-error');
@@ -186,6 +195,7 @@ function getFormData() {
  * @return {boolean}
  */
 function checkForm() {
+
   var result = {};
   for (var key in rules) {
     var rule = rules[key];
@@ -229,8 +239,3 @@ function renderErrorMsg(key, msg) {
     }
   })
 }
-
-/**
- * 提交表单
- */
-function submitForm() {}

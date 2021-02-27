@@ -1,0 +1,2 @@
+UPDATE `5kcrm_admin_field` SET `operating`= 3, `field` = 'owner_user_id', `form_type` = 'single_user' WHERE `types` = 'crm_visit' AND `field` = 'visit_user_id';
+UPDATE `5kcrm_admin_field` SET `operating`= 3 WHERE `types` = 'crm_visit' AND `field` = 'contacts_id';

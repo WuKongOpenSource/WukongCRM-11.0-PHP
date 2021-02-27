@@ -53,10 +53,10 @@ class Scene extends Common
             foreach ($value AS $k => $v) {
                 $sceneData[$k] = [
                     'condition' => trim($v['condition']),
-                    'value' => $v['value'],
+                    'value'     => $v['value'],
                     'form_type' => $v['form_type'],
-                    'name' => $v['name'],
-                    'type' => $v['type']
+                    'name'      => $v['name'],
+                    'type'      => $v['type']
                 ];
             }
         }
@@ -200,7 +200,13 @@ class Scene extends Common
         $sceneData = [];
         foreach ($param['data'] AS $key => $value) {
             foreach ($value AS $k => $v) {
-                $sceneData[$k] = $v;
+                $sceneData[$k] = [
+                    'condition' => trim($v['condition']),
+                    'value'     => $v['value'],
+                    'form_type' => $v['form_type'],
+                    'name'      => $v['name'],
+                    'type'      => $v['type']
+                ];
             }
         }
         if (!empty($sceneData)) $param['data'] = $sceneData;
@@ -210,7 +216,9 @@ class Scene extends Common
 		$res = $this->allowField(true)->save($param, ['scene_id' => $id]);
 		if ($param['is_default'] == 1) {
 			$this->defaultDataById($param,$param['id']);
-		}
+		} else {
+		    db('admin_scene_default')->where(['user_id' => $user_id, 'types' => $param['types'], 'scene_id' => $id])->delete();
+        }
 		if ($res) {
 			return true;
 		} else {

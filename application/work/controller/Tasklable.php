@@ -84,6 +84,9 @@ class Tasklable extends ApiCommon
             $str = ','.$userInfo['id'].',';
             $param['whereStr'] = ' ( task.create_user_id ='.$userInfo['id'].' or (  task.owner_user_id like "%'.$str.'%") or ( task.main_user_id = '.$userInfo['id'].' ) )';
         }
+        # 标签列表只查询项目下的任务
+        $param['work_id'] = ['neq', 0];
+
         $resData = $taskModel->getTaskList($param);
         $taskList = $resData['list'] ? : [];
         

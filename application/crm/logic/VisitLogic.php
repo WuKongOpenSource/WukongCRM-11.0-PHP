@@ -54,12 +54,7 @@ class VisitLogic extends Common
 
         //高级筛选
         $map = where_arr($map, 'crm', 'visit', 'index');
-        $order = ['visit.update_time desc'];
 
-        if (isset($map['visit.visit_time'])) {
-            $map['visit.visit_time'][1][0] = date('Y-m-d', $map['visit.visit_time'][1][0]);
-            $map['visit.visit_time'][1][1] = date('Y-m-d', $map['visit.visit_time'][1][1]);
-        }
         $authMap = [];
         if (!$partMap) {
             $a = 'index';
@@ -68,20 +63,20 @@ class VisitLogic extends Common
                 if (!is_array($map['visit.owner_user_id'][1])) {
                     $map['visit.owner_user_id'][1] = [$map['visit.owner_user_id'][1]];
                 }
-                if ($map['visit.owner_user_id'][0] == 'neq') {
+                if (in_array($map['visit.owner_user_id'][0], ['neq', 'notin'])) {
                     $auth_user_ids = array_diff($auth_user_ids, $map['visit.owner_user_id'][1]) ?: [];    //取差集
                 } else {
                     $auth_user_ids = array_intersect($map['visit.owner_user_id'][1], $auth_user_ids) ?: [];    //取交集
                 }
-                unset($map['visit.owner_user_id']);
                 $auth_user_ids = array_merge(array_unique(array_filter($auth_user_ids))) ?: ['-1'];
                 $authMap['visit.owner_user_id'] = array('in', $auth_user_ids);
+                unset($map['visit.owner_user_id']);
             } else {
                 $authMapData = [];
                 $authMapData['auth_user_ids'] = $auth_user_ids;
                 $authMapData['user_id'] = $user_id;
                 $authMap = function ($query) use ($authMapData) {
-                    $query->where('visit.owner_user_id', array('in', $authMapData['auth_user_ids']))
+                    $query->where('visit.owner_user_id', ['in', $authMapData['auth_user_ids']])
                         ->whereOr('visit.ro_user_id', array('like', '%,' . $authMapData['user_id'] . ',%'))
                         ->whereOr('visit.rw_user_id', array('like', '%,' . $authMapData['user_id'] . ',%'));
                 };
@@ -96,6 +91,7 @@ class VisitLogic extends Common
         //人员类型
         $userField = $fieldModel->getFieldByFormType('crm_visit', 'user'); //人员类型
         $structureField = $fieldModel->getFieldByFormType('crm_visit', 'structure');  //部门类型
+        $datetimeField = $fieldModel->getFieldByFormType('crm_visit', 'datetime'); //日期时间类型
 
         //排序
         if ($order_type && $order_field) {
@@ -118,12 +114,11 @@ class VisitLogic extends Common
             ->where($partMap)
             ->where($authMap)
             ->limit($request['offset'], $request['length'])
-            ->field(array_merge($indexField, [
-                'contract.num' => 'contract_number',
-                'customer.name' => 'customer_name',
-                'contacts.name' => 'contacts_name',
-
-            ]))
+            ->field('visit.*,
+                contract.num as contract_number,
+                customer.name as customer_name,
+                contacts.name as contacts_name'
+            )
             ->orderRaw($order)
             ->group('visit.visit_id')
             ->select();
@@ -140,10 +135,15 @@ class VisitLogic extends Common
             $list[$k]['create_user_name'] = !empty($list[$k]['create_user_id_info']['realname']) ? $list[$k]['create_user_id_info']['realname'] : '';
             $list[$k]['owner_user_name'] = !empty($list[$k]['owner_user_id_info']['realname']) ? $list[$k]['owner_user_id_info']['realname'] : '';
             foreach ($userField as $key => $val) {
-                $list[$k][$val . '_info'] = isset($v[$val]) ? $userModel->getListByStr($v[$val]) : [];
+                $usernameField  = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
+                $list[$k][$val] = implode($usernameField, ',');
             }
             foreach ($structureField as $key => $val) {
-                $list[$k][$val . '_info'] = isset($v[$val]) ? $structureModel->getDataByStr($v[$val]) : [];
+                $structureNameField = !empty($v[$val]) ? db('admin_structure')->whereIn('id', stringToArray($v[$val]))->column('name') : [];
+                $list[$k][$val]     = implode($structureNameField, ',');
+            }
+            foreach ($datetimeField as $key => $val) {
+                $list[$k][$val] = !empty($v[$val]) ? date('Y-m-d H:i:s', $v[$val]) : null;
             }
             $list[$k]['contract_id_info']['contract_id'] = $v['contract_id'];
             $list[$k]['contract_id_info']['name'] = $v['contract_name'];
@@ -161,7 +161,7 @@ class VisitLogic extends Common
             $is_update = 0;
             $is_delete = 0;
             if (in_array($v['owner_user_id'], $readAuthIds) || $roPre || $rwPre) $is_read = 1;
-            if (in_array($v['owner_user_id'], $updateAuthIds) || $rwPre) $is_update = 1;
+            if (in_array($v['owner_user_id'], $updateAuthIds)  || $rwPre) $is_update = 1;
             if (in_array($v['owner_user_id'], $deleteAuthIds)) $is_delete = 1;
             $permission['is_read'] = $is_read;
             $permission['is_update'] = $is_update;
@@ -198,6 +198,11 @@ class VisitLogic extends Common
         $dataInfo['contacts_id_info'] = db('crm_contacts')->where(['contacts_id' => $dataInfo['contacts_id']])->field('contacts_id,name')->find();
         $dataInfo['contacts_name'] = !empty($dataInfo['contacts_id_info']['name']) ? $dataInfo['contacts_id_info']['name'] : '';
         # 处理日期格式
+        $fieldModel = new \app\admin\model\Field();
+        $datetimeField = $fieldModel->getFieldByFormType('crm_visit', 'datetime'); //日期时间类型
+        foreach ($datetimeField as $key => $val) {
+            $dataInfo[$val] = !empty($dataInfo[$val]) ? date('Y-m-d H:i:s', $dataInfo[$val]) : null;
+        }
         $dataInfo['create_time'] = !empty($dataInfo['create_time']) ? date('Y-m-d H:i:s', $dataInfo['create_time']) : null;
         $dataInfo['update_time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
         return $dataInfo;
@@ -330,7 +335,7 @@ class VisitLogic extends Common
                 return resultArray(['error' => $this->getError()]);
             }
             //删除关联附件
-            $fileModel->delRFileByModule('crm_business', $delIds);
+            $fileModel->delRFileByModule('crm_visit', $delIds);
             //删除关联操作记录
             $actionRecordModel->delDataById(['types' => 'crm_visit', 'visit_id' => $delIds]);
             actionLog($delIds, '', '', '');

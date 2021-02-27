@@ -333,8 +333,8 @@ class Task extends ApiCommon
         # 获取任务的项目信息
         $workInfo = Db::name('work')->field(['work_id', 'group_id', 'is_open'])->where('work_id', $taskData['work_id'])->find();
         # 是否是公开项目
-        $userId  = empty($workInfo['is_open'])  ? $userInfo['id'] : 0;
-        $groupId = !empty($workInfo['is_open']) ? $workInfo['group_id ']   : 0;
+        $userId  = $userInfo['id'];
+        $groupId = !empty($workInfo['is_open']) ? $workInfo['group_id'] : 0;
         # 获取项目下的权限
         $taskData['auth'] = !empty($taskData['work_id']) ? $this->getRuleList($workInfo['work_id'], $userId, $groupId) : [];
 

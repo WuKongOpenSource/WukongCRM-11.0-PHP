@@ -127,7 +127,7 @@ class Customer extends Common
 			    	if (!is_array($map['customer.owner_user_id'][1])) {
 						$map['customer.owner_user_id'][1] = [$map['customer.owner_user_id'][1]];
 					}
-					if ($map['customer.owner_user_id'][0] == 'neq') {
+					if (in_array($map['customer.owner_user_id'][0], ['neq', 'notin'])) {
 						$auth_user_ids = array_diff($auth_user_ids, $map['customer.owner_user_id'][1]) ? : [];	//取差集
 					} else {
 						$auth_user_ids = array_intersect($map['customer.owner_user_id'][1], $auth_user_ids) ? : [];	//取交集
@@ -169,6 +169,7 @@ class Customer extends Common
 		$indexField = $fieldModel->getIndexField('crm_customer', $user_id, 1) ? : array('name');
 		$userField = $fieldModel->getFieldByFormType('crm_customer', 'user'); //人员类型
 		$structureField = $fieldModel->getFieldByFormType('crm_customer', 'structure'); //部门类型
+        $datetimeField = $fieldModel->getFieldByFormType('crm_customer', 'datetime'); //日期时间类型
 		//排序
 		if ($order_type && $order_field) {
 			$order = $fieldModel->getOrderByFormtype('crm_customer','customer',$order_field,$order_type);
@@ -190,8 +191,7 @@ class Customer extends Common
 				->where($poolMap)
 				->where($otherMap)
         		->limit($request['offset'], $request['length'])
-        		->field(implode(',',$indexField))
-        		->order($order_t) /*置顶*/
+        		->field('customer.*')
         		->orderRaw($order)
 				->select();
         //保护规则
@@ -228,14 +228,19 @@ class Customer extends Common
                 $list[$k]['owner_user_name'] = !empty($list[$k]['owner_user_id_info']['realname']) ? $list[$k]['owner_user_id_info']['realname'] : '';
 				foreach ($userField as $key => $val) {
 					if (in_array($val, $field_list)) {
-						$list[$k][$val.'_info'] = isset($v[$val]) ? $userModel->getListByStr($v[$val]) : [];
+                        $usernameField  = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
+                        $list[$k][$val] = implode($usernameField, ',');
 					}
 	        	}
 				foreach ($structureField as $key => $val) {
 					if (in_array($val, $field_list)) {
-						$list[$k][$val.'_info'] = isset($v[$val]) ? $structureModel->getDataByStr($v[$val]) : [];
+                        $structureNameField = !empty($v[$val]) ? db('admin_structure')->whereIn('id', stringToArray($v[$val]))->column('name') : [];
+                        $list[$k][$val]     = implode($structureNameField, ',');
 					}
 				}
+                foreach ($datetimeField as $key => $val) {
+                    $list[$k][$val] = !empty($v[$val]) ? date('Y-m-d H:i:s', $v[$val]) : null;
+                }
 				//商机数
 				$list[$k]['business_count'] = $business_count[$v['customer_id']]['count'] ?: 0;
 	        	//距进入公海天数
@@ -267,9 +272,6 @@ class Customer extends Common
 		        $permission['is_update'] = $is_update;
 		        $permission['is_delete'] = $is_delete;
 		        $list[$k]['permission']	= $permission;
-
-		        # 下次联系时间
-                $list[$k]['next_time'] = !empty($v['next_time']) ? date('Y-m-d H:i:s', $v['next_time']) : null;
 
                 # 关注
                 $starWhere = ['user_id' => $user_id, 'target_id' => $v['customer_id'], 'type' => 'crm_customer'];
@@ -327,9 +329,6 @@ class Customer extends Common
 			return false;
 		}
         unset($param['customer_id']);
-        # 处理下次联系时间
-        if (!empty($param['next_time'])) $param['next_time'] = strtotime($param['next_time']);
-
 
 		//处理部门、员工、附件、多选类型字段
 		$arrFieldAtt = $fieldModel->getArrayField('crm_customer');
@@ -377,71 +376,68 @@ class Customer extends Common
 	 * @author Michael_xu
 	 * @param  
 	 * @return                            
-	 */	
-	public function updateDataById($param, $customer_id = '')
-	{
-		$user_id = $param['user_id'];
-		$dataInfo = $this->get($customer_id);
-		if (!$dataInfo) {
-			$this->error = '数据不存在或已删除';
-			return false;
-		}		
-
-		//数据权限判断
+	 */
+    public function updateDataById($param, $customer_id = '')
+    {
+        $user_id = $param['user_id'];
+        $dataInfo = $this->get($customer_id);
+        if (!$dataInfo) {
+            $this->error = '数据不存在或已删除';
+            return false;
+        }
+        $id = $param['id']?:$customer_id;
+        //数据权限判断
         $userModel = new \app\admin\model\User();
         $auth_user_ids = $userModel->getUserByPer('crm', 'customer', 'update');
         //读写权限
-        $rwPre = $userModel->rwPre($user_id, $dataInfo['ro_user_id'], $dataInfo['rw_user_id'], 'update');     
+        $rwPre = $userModel->rwPre($user_id, $dataInfo['ro_user_id'], $dataInfo['rw_user_id'], 'update');
         //判断是否客户池数据
         $wherePool = $this->getWhereByPool();
-		$resPool = db('crm_customer')->alias('customer')->where(['customer_id' => $param['id']])->where($wherePool)->find();
+        $resPool = db('crm_customer')->alias('customer')->where(['customer_id' => $id])->where($wherePool)->find();
         if ($resPool || (!in_array($dataInfo['owner_user_id'],$auth_user_ids) && !$rwPre)) {
             $this->error = '无权操作';
             return false;
-        }		
-
-		$param['customer_id'] = $customer_id;
-		//过滤不能修改的字段
-		$unUpdateField = ['create_user_id','is_deleted','delete_time','user_id'];
-		foreach ($unUpdateField as $v) {
-			unset($param[$v]);
-		}
-		$param['deal_status'] = $dataInfo['deal_status'];
-		$fieldModel = new \app\admin\model\Field();
-		// 自动验证
-		$validateArr = $fieldModel->validateField($this->name); //获取自定义字段验证规则
-		$validate = new Validate($validateArr['rule'], $validateArr['message']);
-		$result = $validate->check($param);
-		if (!$result) {
-			$this->error = $validate->getError();
-			return false;
-		}
-		//地址
-		$param['address'] = $param['address'] ? implode(chr(10),$param['address']) : '';
-		if ($param['deal_status'] == '已成交' && $dataInfo->data['deal_status'] == '未成交') {
+        }
+        
+        $param['customer_id'] = $customer_id;
+        //过滤不能修改的字段
+        $unUpdateField = ['create_user_id','is_deleted','delete_time','user_id'];
+        foreach ($unUpdateField as $v) {
+            unset($param[$v]);
+        }
+        $param['deal_status'] = $dataInfo['deal_status'];
+        $fieldModel = new \app\admin\model\Field();
+        // 自动验证
+        $validateArr = $fieldModel->validateField($this->name); //获取自定义字段验证规则
+        $validate = new Validate($validateArr['rule'], $validateArr['message']);
+        $result = $validate->check($param);
+        if (!$result) {
+            $this->error = $validate->getError();
+            return false;
+        }
+        //地址
+        $param['address'] = $param['address'] ? implode(chr(10),$param['address']) : '';
+        if ($param['deal_status'] == '已成交' && $dataInfo->data['deal_status'] == '未成交') {
             $param['deal_time'] = time();
         }
-
-        # 处理下次联系时间
-        if (!empty($param['next_time'])) $param['next_time'] = strtotime($param['next_time']);
-
-		//处理部门、员工、附件、多选类型字段
-		$arrFieldAtt = $fieldModel->getArrayField('crm_customer');
-		foreach ($arrFieldAtt as $k=>$v) {
-			$param[$v] = arrayToString($param[$v]);
-		}
-		$param['follow'] = '已跟进';
-		if ($this->update($param, ['customer_id' => $customer_id], true)) {
-			//修改记录
-			updateActionLog($user_id, 'crm_customer', $customer_id, $dataInfo->data, $param);
-			$data = [];
-			$data['customer_id'] = $customer_id;
-			return $data;
-		} else {
-			$this->error = '编辑失败';
-			return false;
-		}					
-	}
+        
+        //处理部门、员工、附件、多选类型字段
+        $arrFieldAtt = $fieldModel->getArrayField('crm_customer');
+        foreach ($arrFieldAtt as $k=>$v) {
+            $param[$v] = arrayToString($param[$v]);
+        }
+        $param['follow'] = '已跟进';
+        if ($this->update($param, ['customer_id' => $customer_id], true)) {
+            //修改记录
+            updateActionLog($user_id, 'crm_customer', $customer_id, $dataInfo->data, $param);
+            $data = [];
+            $data['customer_id'] = $customer_id;
+            return $data;
+        } else {
+            $this->error = '编辑失败';
+            return false;
+        }
+    }
 
     /**
      * 客户数据
@@ -495,7 +491,11 @@ class Customer extends Common
         $primaryId = Db::name('crm_contacts')->where(['customer_id' => $id, 'primary' => 1])->value('contacts_id');
         $dataInfo['contacts_id'] = !empty($primaryId) && $this->getContactsAuth($primaryId) ? $primaryId : 0;
         # 处理时间格式
-        $dataInfo['next_time']   = !empty($dataInfo['next_time'])   ? date('Y-m-d H:i:s', $dataInfo['next_time'])   : null;
+        $fieldModel = new \app\admin\model\Field();
+        $datetimeField = $fieldModel->getFieldByFormType('crm_customer', 'datetime'); //日期时间类型
+        foreach ($datetimeField as $key => $val) {
+            $dataInfo[$val] = !empty($dataInfo[$val]) ? date('Y-m-d H:i:s', $dataInfo[$val]) : null;
+        }
         $dataInfo['create_time'] = !empty($dataInfo['create_time']) ? date('Y-m-d H:i:s', $dataInfo['create_time']) : null;
         $dataInfo['update_time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
         $dataInfo['last_time']   = !empty($dataInfo['last_time'])   ? date('Y-m-d H:i:s', $dataInfo['last_time'])   : null;

@@ -468,7 +468,7 @@ class Examine extends ApiCommon
                     $is_end = 1;
                     //审批结束
                     $checkData['check_status'] = !empty($status) ? 2 : 3;
-                    $examineData['check_user_id'] = '';
+//                    $examineData['check_user_id'] = '';
                 } else {
                     //修改主体相关审批信息
                     $examineData['check_user_id'] = arrayToString($next_user_ids);
@@ -484,7 +484,7 @@ class Examine extends ApiCommon
             }
             if ($is_end == 1) {
                 $checkData['check_status'] = !empty($status) ? 2 : 3;
-                $examineData['check_user_id'] = '';
+//                $examineData['check_user_id'] = '';
                 $examineData['check_status'] = 2;
             }
         } else {
@@ -588,8 +588,9 @@ class Examine extends ApiCommon
         $checkData['status'] = $status;
 
         $examineData['check_status'] = 4;
-        $examineData['check_user_id'] = '';
-        $examineData['flow_user_id'] = '';
+        # 如果将审批人置空，会导致普通员工在右上角消息中无法查看审批
+        $examineData['check_user_id'] = $dataInfo['check_user_id'];
+        $examineData['flow_user_id']  = '';
         $resExamine = db('oa_examine')->where(['examine_id' => $examine_id])->update($examineData);
         if ($resExamine) {
             //将审批记录至为无效

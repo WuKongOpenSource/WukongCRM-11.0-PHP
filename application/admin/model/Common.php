@@ -295,6 +295,7 @@ class Common extends Model
 	 */
 	public function exportHandle($list, $field_list, $type = '')
 	{
+	 
 		foreach ($list as &$val) {
 			foreach ($field_list as $field) {
 				switch ($field['form_type']) {
@@ -310,7 +311,7 @@ class Common extends Model
 						$val[$field['field']] = implode(',', array_column($temp, 'name'));
 						break;
 					case 'datetime':
-						$val[$field['field']] = strtotime($val[$field['field']]) ? $val[$field['field']] : date('Y-m-d H:i:s', $val[$field['field']]);
+						$val[$field['field']] = strtotime($val[$field['field']]) ? $val[$field['field']] : '';
 						break;
 					case 'customer':
 					case 'business':

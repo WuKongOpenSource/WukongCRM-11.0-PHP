@@ -35,7 +35,7 @@ class Product extends Common
      * @return array
      */
 	public function getDataList($request)
-    {  	
+    {
     	$userModel = new \app\admin\model\User();
     	$structureModel = new \app\admin\model\Structure();
     	$fieldModel = new \app\admin\model\Field();
@@ -48,8 +48,8 @@ class Product extends Common
     	$isStatus = !empty($request['is_status']) ? $request['is_status'] : 0;
 		unset($request['scene_id']);
 		unset($request['search']);
-		unset($request['user_id']); 
-		unset($request['order_field']);	
+		unset($request['user_id']);
+		unset($request['order_field']);
 		unset($request['order_type']);
 		unset($request['is_status']);
 
@@ -87,7 +87,7 @@ class Product extends Common
             if (!is_array($map['product.owner_user_id'][1])) {
                 $map['product.owner_user_id'][1] = [$map['product.owner_user_id'][1]];
             }
-            if ($map['product.owner_user_id'][0] == 'neq') {
+            if (in_array($map['product.owner_user_id'][0], ['neq', 'notin'])) {
                 $auth_user_ids = array_diff($auth_user_ids, $map['product.owner_user_id'][1]) ?: [];    //取差集
             } else {
                 $auth_user_ids = array_intersect($map['product.owner_user_id'][1], $auth_user_ids) ?: [];    //取交集
@@ -102,25 +102,26 @@ class Product extends Common
 		$indexField = $fieldModel->getIndexField('crm_product', $user_id, 1) ? : ['name'];
 		$userField = $fieldModel->getFieldByFormType('crm_product', 'user'); //人员类型
 		$structureField = $fieldModel->getFieldByFormType('crm_product', 'structure');  //部门类型
-					
+        $datetimeField = $fieldModel->getFieldByFormType('crm_product', 'datetime'); //日期时间类型
+		
 		//排序
 		if ($order_type && $order_field) {
 			$order = $fieldModel->getOrderByFormtype('crm_product','product',$order_field,$order_type);
 		} else {
 			$order = 'product.update_time desc';
-		}		
+		}
 
 		$join = [
 			['__CRM_PRODUCT_CATEGORY__ product_category', 'product_category.category_id = product.category_id', 'LEFT'],
 		];
-
+        $map['product.delete_user_id']=0;
 		$list = db('crm_product')->alias('product')
 				->join($join)
 				->where($map)
 				->where($authMap)
         		->limit($request['offset'], $request['length'])
 				->field($indexField)
-				->field(array_merge($indexField, ['product_category.name' => 'category_name']))
+				->field('product.*,product_category.name as category_name')
         		->orderRaw($order)
         		->select();
         $dataCount = db('crm_product')->alias('product')
@@ -132,11 +133,16 @@ class Product extends Common
         	$list[$k]['create_user_name'] = !empty($list[$k]['create_user_id_info']['realname']) ? $list[$k]['create_user_id_info']['realname'] : '';
             $list[$k]['owner_user_name'] = !empty($list[$k]['owner_user_id_info']['realname']) ? $list[$k]['owner_user_id_info']['realname'] : '';
         	foreach ($userField as $key => $val) {
-        		$list[$k][$val.'_info'] = isset($v[$val]) ? $userModel->getListByStr($v[$val]) : [];
+                $usernameField  = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
+                $list[$k][$val] = implode($usernameField, ',');
         	}
 			foreach ($structureField as $key => $val) {
-        		$list[$k][$val.'_info'] = isset($v[$val]) ? $structureModel->getDataByStr($v[$val]) : [];
+                $structureNameField = !empty($v[$val]) ? db('admin_structure')->whereIn('id', stringToArray($v[$val]))->column('name') : [];
+                $list[$k][$val]     = implode($structureNameField, ',');
         	}
+            foreach ($datetimeField as $key => $val) {
+                $list[$k][$val] = !empty($v[$val]) ? date('Y-m-d H:i:s', $v[$val]) : null;
+            }
         	//产品类型
 			$list[$k]['category_id_info'] = $v['category_name'];
             # 处理日期格式
@@ -153,23 +159,25 @@ class Product extends Common
 	/**
 	 * 创建产品主表信息
 	 * @author Michael_xu
-	 * @param  
-	 * @return                            
-	 */	
+	 * @param
+	 * @return
+	 */
 	public function createData($param)
 	{
 		$fieldModel = new \app\admin\model\Field();
 		$productCategoryModel = model('ProductCategory');
-		// 自动验证
-		$validateArr = $fieldModel->validateField($this->name); //获取自定义字段验证规则
-		$validate = new Validate($validateArr['rule'], $validateArr['message']);
-
-		$result = $validate->check($param);
-		if (!$result) {
-			$this->error = $validate->getError();
-			return false;
-		}
-
+        $dataInfo = db('crm_product')->where(['name'=>$param['name'],'delete_user_id'=>0])->find();
+        if(isset($dataInfo)){
+            // 自动验证
+            $validateArr = $fieldModel->validateField($this->name); //获取自定义字段验证规则
+            $validate = new Validate($validateArr['rule'], $validateArr['message']);
+    
+            $result = $validate->check($param);
+            if (!$result) {
+                $this->error = $validate->getError();
+                return false;
+            }
+        }
 		//处理部门、员工、附件、多选类型字段
 		$arrFieldAtt = $fieldModel->getArrayField('crm_product');
 		foreach ($arrFieldAtt as $k=>$v) {
@@ -200,17 +208,18 @@ class Product extends Common
 		} else {
 			$this->error = '添加失败';
 			return false;
-		}			
+		}
 	}
 
 	/**
 	 * 编辑产品主表信息
 	 * @author Michael_xu
-	 * @param  
-	 * @return                            
-	 */	
+	 * @param
+	 * @return
+	 */
 	public function updateDataById($param, $product_id = '')
 	{
+        $userModel = new \app\admin\model\User();
 		$dataInfo = $this->getDataById($product_id);
 		$productCategoryModel = model('ProductCategory');
 		if (!$dataInfo) {
@@ -222,7 +231,7 @@ class Product extends Common
         if (!in_array($dataInfo['owner_user_id'], $auth_user_ids)) {
             $this->error = '无权操作';
             return false;
-        }		
+        }
 
 		$param['product_id'] = $product_id;
 		//过滤不能修改的字段
@@ -232,15 +241,16 @@ class Product extends Common
 		}
 		
 		$fieldModel = new \app\admin\model\Field();
-		// 自动验证
-		$validateArr = $fieldModel->validateField($this->name); //获取自定义字段验证规则
-		$validate = new Validate($validateArr['rule'], $validateArr['message']);
-
-		$result = $validate->check($param);
-		if (!$result) {
-			$this->error = $validate->getError();
-			return false;
-		}	
+            // 自动验证
+//            $validateArr = $fieldModel->validateField($this->name); //获取自定义字段验证规则
+//            $validate = new Validate($validateArr['rule'], $validateArr['message']);
+//
+//            $result = $validate->check($param);
+//            if (!$result) {
+//                $this->error = $validate->getError();
+//                return false;
+//            }
+		
 
 		//处理部门、员工、附件、多选类型字段
 		$arrFieldAtt = $fieldModel->getArrayField('crm_product');
@@ -250,17 +260,16 @@ class Product extends Common
 
 		//产品分类
 		$category_id = $param['category_id'];
-		if (is_array($category_id)) {
-			$param['category_id'] = $productCategoryModel->getIdByStr($category_id);
-			$param['category_str'] = arrayToString($category_id);
-		}
+//		if (is_array($category_id)) {
+//			$param['category_id'] = $productCategoryModel->getIdByStr($category_id);
+//			$param['category_str'] = arrayToString($category_id);
+//		}
         if(!is_int($category_id)){
             $list=db('crm_product_category')->column('category_id','name');
+            $param['category_id']=1;
             foreach ($list as $k=>$v){
-                if($k==$param['category_id']){
+                if($k==$category_id){
                     $param['category_id']=$v;
-                }else{
-                    $param['category_id']=0;
                 }
             }
         }
@@ -274,7 +283,7 @@ class Product extends Common
 			$this->rollback();
 			$this->error = '编辑失败';
 			return false;
-		}					
+		}
 	}
 
     /**
@@ -287,8 +296,9 @@ class Product extends Common
      * @throws \think\exception\DbException
      */
    	public function getDataById($id = '')
-   	{   		
+   	{
    		$map['product_id'] = $id;
+   		$map['delete_user_id'] = 0;
 		$dataInfo = db('crm_product')->where($map)->find();
 		if (!$dataInfo) {
 			$this->error = '暂无此数据';
@@ -302,8 +312,13 @@ class Product extends Common
 
 		$userModel = new \app\admin\model\User();
 		$dataInfo['create_user_id_info'] = $userModel->getUserById($dataInfo['create_user_id']);
-        $dataInfo['category_id_info'] = db('crm_product_category')->where(['category_id' => $dataInfo['category_id']])->value('name');	
+        $dataInfo['category_id_info'] = db('crm_product_category')->where(['category_id' => $dataInfo['category_id']])->value('name');
 		# 处理日期格式
+        $fieldModel = new \app\admin\model\Field();
+        $datetimeField = $fieldModel->getFieldByFormType('crm_product', 'datetime'); //日期时间类型
+        foreach ($datetimeField as $key => $val) {
+            $dataInfo[$val] = !empty($dataInfo[$val]) ? date('Y-m-d H:i:s', $dataInfo[$val]) : null;
+        }
         $dataInfo['create_time'] = !empty($dataInfo['create_time']) ? date('Y-m-d H:i:s', $dataInfo['create_time']) : null;
         $dataInfo['update_time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
         return $dataInfo;
@@ -320,19 +335,15 @@ class Product extends Common
      */
    	private function getProductImages($fileIds)
     {
-        $result = [];
+        $files = Db::name('admin_file')->whereIn('file_id', $fileIds)->select();
 
-        $files = Db::name('admin_file')->field(['file_id', 'file_path_thumb', 'file_path', 'save_name'])->whereIn('file_id', $fileIds)->select();
         foreach ($files AS $key => $value) {
-            $result[] = [
-                'file_id'         => $value['file_id'],
-                'file_path_thumb' => getFullPath($value['file_path_thumb']),
-                'file_path'       => getFullPath($value['file_path']),
-                'save_name'       => $value['save_name']
-            ];
+            $files[$key]['file_path'] = getFullPath($value['file_path']);
+            $files[$key]['file_path_thumb'] = getFullPath($value['file_path_thumb']);
+            $files[$key]['size'] = format_bytes($value['size']);
         }
 
-        return $result;
+        return $files;
     }
 
 	/**
@@ -346,10 +357,10 @@ class Product extends Common
      * @param  subtotal 小计（折扣后价格）
      * @param  unit 单位
      * @param  total_price 折扣后整单总价
-     * @param  discount_rate 整单折扣 
+     * @param  discount_rate 整单折扣
      * @param  objId 关联对象ID
-     * @return 
-     */ 
+     * @return
+     */
     public function createObject($types, $param, $objId)
     {
     	switch ($types) {
@@ -375,7 +386,7 @@ class Product extends Common
 		    		$product[$key]['discount'] = $value['discount']; //折扣
 		    		$product[$key]['unit'] = $value['unit'] ? : ''; //单位
 		    		$product[$key]['subtotal'] = $value['subtotal'];
-		    		// $total_price += $product[$key]['subtotal'] = round(($value['price'] * $value['num']) * $discount); //总价	
+		    		// $total_price += $product[$key]['subtotal'] = round(($value['price'] * $value['num']) * $discount); //总价
 		    		$product[$key][$db_id] = $objId;
 		    	}
 
@@ -388,18 +399,18 @@ class Product extends Common
 				//产品合计
 				$rData['discount_rate'] = !empty($param['discount_rate']) ? $param['discount_rate'] : 0.00; //整单折扣
 		    	$discount_rate = ((100 - $rData['discount_rate']) > 0) ? (100 - $rData['discount_rate'])/100 : 0;
-		    	// $rData['total_price'] = $total_price ? $total_price*$discount_rate : '0.00'; //整单合计	
-		    	$rData['total_price'] = $param['total_price'] ? : '0.00'; //整单合计	
-		    	db($rDb)->where([$db_id => $objId])->update($rData);	    	
+		    	// $rData['total_price'] = $total_price ? $total_price*$discount_rate : '0.00'; //整单合计
+		    	$rData['total_price'] = $param['total_price'] ? : '0.00'; //整单合计
+		    	db($rDb)->where([$db_id => $objId])->update($rData);
 		    	
 		    	// 提交事务
     			Db::commit();
-		    	return true;    			
+		    	return true;
 			} catch (\Exception $e) {
 				$this->error = '产品数据创建出错';
 				// 回滚事务
-			    Db::rollback();					
-	    		return false;   				    
+			    Db::rollback();
+	    		return false;
 			}
     	} else {
     		//删除产品信息
@@ -425,7 +436,7 @@ class Product extends Common
         $perUserIds = $userModel->getUserByPer('bi', 'product', 'read'); //权限范围内userIds
         $whereData = $adminModel->getWhere($param, '', $perUserIds); //统计条件
         $userIds = $whereData['userIds'];
-        $between_time = $whereData['between_time'];     
+        $between_time = $whereData['between_time'];
         $where = [];
 		//时间段
 		$where['contract.create_time'] = ['between', $between_time];
@@ -457,7 +468,7 @@ class Product extends Common
 			$list[$k]['contract_id_info'] = $contract_info ? : array();
 			//产品
 			$product_info = [];
-			$product_info['name'] = $v['product_name']; 
+			$product_info['name'] = $v['product_name'];
 			$product_info['product_id'] = $v['product_id'];
 			$list[$k]['product_id_info'] = $product_info ? : array();
 			//负责人
@@ -467,14 +478,14 @@ class Product extends Common
 			$list[$k]['owner_user_name'] = $owner_user_id_info['realname'];
 		}
         return $list;
-    }  
+    }
 
 	/**
      * [根据产品类别ID，查询父级ID]
      * @author Michael_xu
-     * @param 
-     * @return                   
-     */		
+     * @param
+     * @return
+     */
 	public function getPidStr($category_id, $idArr, $first = '')
 	{
 		if ($first == 1) $idArr = [];

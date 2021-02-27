@@ -324,7 +324,7 @@ class ExamineStep extends Common
                 $is_recheck = 1;
             }
         }
-        if (in_array($check_user_id, stringToArray($dataInfo['check_user_id'])) && !in_array($dataInfo['check_status'],['2','3'])) {
+        if (in_array($check_user_id, stringToArray($dataInfo['check_user_id'])) && !in_array($dataInfo['check_status'],['2','3','4'])) {
             $is_check = 1;
         }
 
@@ -339,6 +339,7 @@ class ExamineStep extends Common
 
                 $createUserInfo['check_type'] = 3;
                 $newlist[0]['type'] = '3'; //创建
+                $newlist[0]['status'] = '5'; //创建，前端要求给创建人加一个status字段，定义为5
             }
             $newlist[0]['user_id_info'] = array($createUserInfo);
             $newlist[0]['time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;

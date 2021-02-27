@@ -10,7 +10,193 @@ use think\Validate;
 class ExamineLogic extends Common
 {
     private $statusArr = ['0' => '待审核', '1' => '审核中', '2' => '审核通过', '3' => '已拒绝', '4' => '已撤回'];
-
+    
+    public function getDataList($request)
+    {
+        $userModel = new \app\admin\model\User();
+        $fileModel = new \app\admin\model\File();
+        $recordModel = new \app\admin\model\Record();
+        
+        $examine_by = $request['examine_by']; //1待我审批 2我已审批 all 全部
+        $user_id = $request['user_id'];
+        $bi = $request['bi_types'];
+        $check_status = $request['check_status']; //0 待审批 2 审批通过 4 审批拒绝 all 全部
+        unset($request['by']);
+        unset($request['bi_types']);
+        unset($request['user_id']);
+        unset($request['check_status']);
+        unset($request['examine_by']);
+        $request = $this->fmtRequest($request);
+        $map = $request['map'] ?: [];
+        if (isset($map['search']) && $map['search']) {
+            //普通筛选
+            $map['examine.content'] = ['like', '%' . $map['search'] . '%'];
+        } else {
+            $map = where_arr($map, 'oa', 'examine', 'index'); //高级筛选
+        }
+        unset($map['search']);
+        //审批类型
+        $map['examine.category_id'] = $map['examine.category_id'] ?: array('gt', 0);
+        
+        $map_str = '';
+        $logmap = '';
+        switch ($examine_by) {
+            case 'all' :
+                //如果超管则能看到全部
+                if (!isSuperAdministrators($user_id)) {
+                    $map_str = "(( check_user_id LIKE '%," . $user_id . ",%' OR check_user_id = " . $user_id . " ) OR ( flow_user_id LIKE '%," . $user_id . ",%'  OR `flow_user_id` = " . $user_id . " ) )";
+                }
+                break;
+            case '1' :
+                $map['check_user_id'] = [['like', '%,' . $user_id . ',%']];
+                break; //待审
+            case '2' :
+                $map_str = "(( check_user_id LIKE '%," . $user_id . ",%' OR check_user_id = " . $user_id . " )
+                 OR ( flow_user_id LIKE '%," . $user_id . ",%'  OR `flow_user_id` = " . $user_id . " ) )";
+//                $map['flow_user_id'] = [['like', '%,' . $user_id . ',%'], ['eq', $user_id], 'or'];
+                break; //已审
+            default:
+                $map['examine.create_user_id'] = $user_id;
+                break;
+        }
+        $order = 'examine.create_time desc,examine.update_time desc';
+        //发起时间
+        if ($map['examine.between_time'][0] && $map['examine.between_time'][1]) {
+            $start_time = $map['examine.between_time'][0];
+            $end_time = $map['examine.between_time'][1];
+            $map['examine.create_time'] = array('between', array($start_time, $end_time));
+        }
+        unset($map['examine.between_time']);
+        
+        //审核状态 0 待审批 2 审批通过 4 审批拒绝 all 全部
+        if (isset($check_status)) {
+            if ($check_status == 'all') {
+                $map['examine.check_status'] = ['egt', 0];
+                if (isSuperAdministrators($user_id)) {
+                    unset($map['examine.create_user_id']);
+                }
+            } elseif ($check_status == 4) {
+                $map['examine.check_status'] = ['eq', 3];
+            } elseif ($check_status == 0) {
+                $map['examine.check_status'] = ['<=', 1];
+            } else {
+                $map['examine.check_status'] = $check_status;
+            }
+        } else {
+            if ($examine_by == 'all') {
+                $map['examine.check_status'] = ['egt', 0];
+            } elseif ($examine_by == 1) {
+                $map['examine.check_status'] = ['elt', 1];
+            } elseif ($examine_by == 2) {
+                $map['examine.check_status'] = ['egt', 2];
+            }
+        }
+        $join = [
+            ['__ADMIN_USER__ user', 'user.id = examine.create_user_id', 'LEFT'],
+            ['__OA_EXAMINE_CATEGORY__ examine_category', 'examine_category.category_id = examine.category_id', 'LEFT'],
+        ];
+        $list_view = db('oa_examine')
+            ->alias('examine')
+            ->where($map_str)
+            ->where($map)
+            ->join($join);
+        $res = [];
+        $list = $list_view
+            ->page($request['page'], $request['limit'])
+            ->field('examine.*,user.realname,user.thumb_img,examine_category.title as category_name,examine_category.category_id as examine_config,examine_category.icon as examineIcon')
+            ->order($order)
+            ->select();
+        foreach ($list as $k => $v) {
+            $causeCount = 0;
+            $causeTitle = '';
+            $duration = $v['duration'] ?: '0.0';
+            $money = $v['money'] ?: '0.00';
+            
+            $list[$k]['causeTitle'] = $causeTitle;
+            $list[$k]['causeCount'] = $causeCount ?: 0;
+            $item = db('oa_examine_travel')->where(['examine_id' => $v['examine_id']])->select();
+            if ($item) {
+                foreach ($item as $key => $value) {
+                    if($v['check_status']==4){
+                        $usernames = '';
+                    }else{
+                        $usernames = db('admin_user')->whereIn('id', stringToArray($v['check_user_id']))->column('realname');
+                    }
+                 
+                    //关联业务
+                    $relationArr = [];
+                    $relationArr = $recordModel->getListByRelationId('examine', $v['examine_id']);
+                    $item[$key]['relation'] = arrayToString(array_column($relationArr['businessList'], 'name')) . ' ' .
+                        arrayToString(array_column($relationArr['contactsList'], 'name')) . ' ' .
+                        arrayToString(array_column($relationArr['contractList'], 'name')) . ' ' .
+                        arrayToString(array_column($relationArr['customerList'], 'name'));
+                    $res[] = [
+                        'category_name' => $v['category_name'],
+                        'create_time' => !empty($v['create_time']) ? date('Y-m-d H:i:s', $v['create_time']) : null,
+                        'realname' => $v['realname'],
+                        'check_status_info' => $this->statusArr[(int)$v['check_status']],
+                        'examine_name' => implode($usernames, '，'),
+                        'content' => $v['content'],
+                        'remark' => $v['remark'],
+                        'duration' => $v['duration'],
+                        'vehicle' => $value['vehicle'],
+                        'trip' => $value['trip'],
+                        'money' => $value['money'],
+                        'traffic' => $value['traffic'],
+                        'stay' => $value['stay'],
+                        'diet' => $value['diet'],
+                        'other' => $value['other'],
+                        'start_address' => $value['start_address'],
+                        'end_address' => $value['end_address'],
+                        'start_time' => !empty($value['start_time']) ? date('Y-m-d H:i:s', $value['start_time']) : null,
+                        'end_time' => !empty($value['end_time']) ? date('Y-m-d H:i:s', $value['end_time']) : null,
+                        'description' => $value['description'],
+                        'replyList' => str_replace(',', ' ', $item[$key]['relation']),
+                    ];
+                }
+            } else {
+                $list[$k]['create_time'] = !empty($v['create_time']) ? date('Y-m-d H:i:s', $v['create_time']) : null;
+                $list[$k]['start_time'] = !empty($v['start_time']) ? date('Y-m-d H:i:s', $v['start_time']) : null;
+                $list[$k]['end_time'] = !empty($v['end_time']) ? date('Y-m-d H:i:s', $v['end_time']) : null;
+                if($v['check_status']==4){
+                    $usernames = '';
+                }else{
+                    $usernames = db('admin_user')->whereIn('id', stringToArray($v['check_user_id']))->column('realname');
+                }
+                //关联业务
+                $relationArr = [];
+                $relationArr = $recordModel->getListByRelationId('examine', $v['examine_id']);
+                $list[$k]['relation'] = arrayToString(array_column($relationArr['businessList'], 'name')) . ' ' .
+                    arrayToString(array_column($relationArr['contactsList'], 'name')) . ' ' .
+                    arrayToString(array_column($relationArr['contractList'], 'name')) . ' ' .
+                    arrayToString(array_column($relationArr['customerList'], 'name'));
+                $res[] = [
+                    'category_name' => $v['category_name'],
+                    'create_time' => !empty($v['create_time']) ? date('Y-m-d H:i:s', $v['create_time']) : null,
+                    'realname' => $v['realname'],
+                    'check_status_info' => $this->statusArr[(int)$v['check_status']],
+                    'examine_name' => implode($usernames, '，'),
+                    'content' => $v['content'],
+                    'remark' => $v['remark'],
+                    'duration' => $v['duration'],
+                    'vehicle' => '',
+                    'money' => $v['money'],
+                    'traffic' => '',
+                    'stay' => '',
+                    'diet' => '',
+                    'other' => '',
+                    'start_address' => '',
+                    'end_address' => '',
+                    'start_time' => !empty($v['start_time']) ? date('Y-m-d H:i:s', $v['start_time']) : null,
+                    'end_time' => !empty($v['end_time']) ? date('Y-m-d H:i:s', $v['end_time']) : null,
+                    'description' => '',
+                    'replyList' => str_replace(',', ' ', $item[$key]['relation']),
+                ];
+            }
+        }
+        return $res;
+    }
+    
     /**
      * 审批导出
      * @param $param
@@ -19,35 +205,125 @@ class ExamineLogic extends Common
     public function excelExport($param)
     {
         $excelModel = new \app\admin\model\Excel();
-        $field_list1 = [
-            array('name' => '审批类型', 'field' => 'category_name', 'form_type' => 'text'),
-            array('name' => '创建时间', 'field' => 'create_time', 'form_type' => ''),
-            array('name' => '创建人', 'field' => 'create_user_id', 'form_type' => 'user'),
-            array('name' => '状态', 'field' => 'check_status_info','form_type' => ''),
-            array('name' => '当前审批人', 'field' => 'check_user_id','form_type' => 'userStr'),
-            // array('name' => '下一审批人', 'field' => 'last_user_id','form_type' => 'user'),
-            // array('name' => '关联业务', 'field' => 'relation','form_type' => ''),
-        ];
-        // 导出的字段列表
-        $fieldModel = new \app\admin\model\Field();
-        $field_list = $fieldModel->getIndexFieldConfig('oa_examine', $param['user_id'], $param['category_id']);
+        $data = $this->getDataList($param);
+        $list = [];
+        switch ($param['category_id']) {
+            case '1' :
+                $field_list = [
+                    '0' => ['name' => '审批类型', 'field' => 'category_name'],
+                    '1' => ['name' => '创建时间', 'field' => 'create_time'],
+                    '2' => ['name' => '创建人', 'field' => 'realname'],
+                    '3' => ['name' => '状态', 'field' => 'check_status_info'],
+                    '4' => ['name' => '当前审批人', 'field' => 'examine_name'],
+                    '5' => ['name' => '备注', 'field' => 'description'],
+                    '6' => ['name' => '关联业务', 'field' => 'replyList'],
+                ];
+                break;
+            case '2' :
+                $field_list = [
+                    '0' => ['name' => '审批类型', 'field' => 'category_name'],
+                    '1' => ['name' => '创建时间', 'field' => 'create_time'],
+                    '2' => ['name' => '创建人', 'field' => 'realname'],
+                    '3' => ['name' => '状态', 'field' => 'check_status_info'],
+                    '4' => ['name' => '当前审批人', 'field' => 'examine_name'],
+                    '5' => ['name' => '审批内容', 'field' => 'content'],
+                    '6' => ['name' => '开始时间', 'field' => 'start_time'],
+                    '7' => ['name' => '结束时间', 'field' => 'end_time'],
+                    '8' => ['name' => '时长', 'field' => 'duration'],
+                    '9' => ['name' => '备注', 'field' => 'description'],
+                    '10' => ['name' => '关联业务', 'field' => 'replyList'],
+                ];
+                break;
+            case '3' :
+                $field_list = [
+                    '0' => ['name' => '审批类型', 'field' => 'category_name'],
+                    '1' => ['name' => '创建时间', 'field' => 'create_time'],
+                    '2' => ['name' => '创建人', 'field' => 'realname'],
+                    '3' => ['name' => '状态', 'field' => 'check_status_info'],
+                    '4' => ['name' => '当前审批人', 'field' => 'examine_name'],
+                    '5' => ['name' => '出差事由', 'field' => 'content'],
+                    '6' => ['name' => '备注', 'field' => 'remark'],
+                    '7' => ['name' => '出差总天数', 'field' => 'duration'],
+                    '8' => ['name' => '交通工具', 'field' => 'vehicle'],
+                    '9' => ['name' => '单程往返', 'field' => 'trip'],
+                    '10' => ['name' => '出发城市', 'field' => 'start_address'],
+                    '11' => ['name' => '目的城市', 'field' => 'end_address'],
+                    '12' => ['name' => '开始时间', 'field' => 'start_time'],
+                    '13' => ['name' => '结束时间', 'field' => 'end_time'],
+                    '14' => ['name' => '出差备注', 'field' => 'description'],
+                    '15' => ['name' => '时长', 'field' => 'duration'],
+                    '16' => ['name' => '关联业务', 'field' => 'replyList'],
+                ];
+                break;
+            case '4' :
+                $field_list = [
+                    '0' => ['name' => '审批类型', 'field' => 'category_name'],
+                    '1' => ['name' => '创建时间', 'field' => 'create_time'],
+                    '2' => ['name' => '创建人', 'field' => 'realname',],
+                    '3' => ['name' => '状态', 'field' => 'check_status_info'],
+                    '4' => ['name' => '当前审批人', 'field' => 'examine_name'],
+                    '5' => ['name' => '加班原因', 'field' => 'content'],
+                    '6' => ['name' => '开始时间', 'field' => 'start_time'],
+                    '7' => ['name' => '结束时间', 'field' => 'end_time'],
+                    '8' => ['name' => '加班总天数', 'field' => 'duration'],
+                    '9' => ['name' => '备注', 'field' => 'description'],
+                    '10' => ['name' => '关联业务', 'field' => 'replyList'],
+                ];
+                break;
+            case '5':
+                $field_list = [
+                    '0' => ['name' => '审批类型', 'field' => 'category_name'],
+                    '1' => ['name' => '创建时间', 'field' => 'create_time'],
+                    '2' => ['name' => '创建人', 'field' => 'realname'],
+                    '3' => ['name' => '状态', 'field' => 'check_status_info'],
+                    '4' => ['name' => '当前审批人', 'field' => 'examine_name'],
+                    '5' => ['name' => '差旅内容', 'field' => 'content'],
+                    '6' => ['name' => '报销总金额', 'field' => 'money'],
+                    '7' => ['name' => '备注', 'field' => 'remark'],
+                    '8' => ['name' => '出发城市', 'field' => 'start_address'],
+                    '9' => ['name' => '目的城市', 'field' => 'end_address'],
+                    '10' => ['name' => '开始时间', 'field' => 'start_time'],
+                    '11' => ['name' => '结束时间', 'field' => 'end_time'],
+                    '12' => ['name' => '交通费', 'field' => 'traffic'],
+                    '13' => ['name' => '住宿费', 'field' => 'stay'],
+                    '14' => ['name' => '餐饮费', 'field' => 'diet'],
+                    '15' => ['name' => '其他费用', 'field' => 'other'],
+                    '16' => ['name' => '合计', 'field' => 'money'],
+                    '17' => ['name' => '费用明细描述', 'field' => 'description'],
+                    '18' => ['name' => '关联业务', 'field' => 'relation'],
+                ];
+                break;
+            case '6' :
+                $field_list = [
+                    '0' => ['name' => '审批类型', 'field' => 'category_name'],
+                    '1' => ['name' => '创建时间', 'field' => 'create_time'],
+                    '2' => ['name' => '创建人', 'field' => 'realname'],
+                    '3' => ['name' => '状态', 'field' => 'check_status_info'],
+                    '4' => ['name' => '当前审批人', 'field' => 'examine_name'],
+                    '5' => ['name' => '借款事由', 'field' => 'content'],
+                    '6' => ['name' => '开始时间', 'field' => 'start_time'],
+                    '7' => ['name' => '结束时间', 'field' => 'end_time'],
+                    '8' => ['name' => '借款金额', 'field' => 'money'],
+                    '9' => ['name' => '备注', 'field' => 'description'],
+                    '10' => ['name' => '关联业务', 'field' => 'replyList'],
+                ];
+                break;
+            default :
+                $field_list = [
+                    '0' => ['name' => '审批类型', 'field' => 'category_name'],
+                    '1' => ['name' => '创建时间', 'field' => 'create_time'],
+                    '2' => ['name' => '创建人', 'field' => 'realname'],
+                    '3' => ['name' => '状态', 'field' => 'check_status_info'],
+                    '4' => ['name' => '当前审批人', 'field' => 'examine_name'],
+                    '5' => ['name' => '备注', 'field' => 'description'],
+                    '6' => ['name' => '关联业务', 'field' => 'replyList'],
+                    
+                ];
+        }
         $file_name = 'oa_examine';
-        $temp_file = $param['temp_file'];
-        unset($param['temp_file']);
-        $page = $param['page'] ?: 1;
-        $model = model('Examine');
-        $field_list = array_merge_recursive($field_list1, $field_list);
-
-        return $excelModel->batchExportCsv($file_name, $temp_file, $field_list, $page, function ($page, $limit) use ($model, $param, $field_list) {
-            $param['page'] = $page;
-            $param['limit'] = $limit;
-            $data = $model->getDataList($param);
-            // $newData['list'] = $model->exportHandle($data['page']['list'], $field_list, 'oa_examine');
-            $newData['list'] = $data['page']['list'];
-            return $newData;
-        });
+        return $excelModel->dataExportCsv($file_name, $field_list, $data);
     }
-
+    
     /**
      * 审批数据
      * @param $param
@@ -65,9 +341,9 @@ class ExamineLogic extends Common
                 $query->where('a.check_user_id', ['like', '%' . $user_id . '%'])->whereOr('a.flow_user_id', ['like', '%' . $user_id . '%']);
             };
         } elseif ($param['status'] == 1) {
-            $where['a.check_status'] = ['in', [2,3]];
-            $whereOr = function ($query) use ( $user_id) {
-                $query->where('a.check_user_id',['like', '%' . $user_id . '%'])->whereOr('a.flow_user_id', ['like', '%' . $user_id . '%']);
+            $where['a.check_status'] = ['in', [2, 3]];
+            $whereOr = function ($query) use ($user_id) {
+                $query->where('a.check_user_id', ['like', '%' . $user_id . '%'])->whereOr('a.flow_user_id', ['like', '%' . $user_id . '%']);
             };
         } elseif ($param['status'] == 3) {
             $where['a.check_status'] = ['lt', 5];
@@ -98,7 +374,7 @@ class ExamineLogic extends Common
                     $list[$k]['customer_id_info']['customer_id'] = $v['customer_id'];
                     $list[$k]['customer_id_info']['name'] = $v['customer_name'];
                     $list[$k]['create_user_info'] = $userModel->getUserById($v['create_user_id']);
-
+                    
                 }
                 $dataCount = db('crm_contract')
                     ->alias('a')
@@ -135,7 +411,7 @@ class ExamineLogic extends Common
                     $list[$k]['create_user_info'] = $userModel->getUserById($v['create_user_id']);
                     $list[$k]['contract_id_info']['contract_id'] = $v['contract_id'];
                     $list[$k]['contract_id_info']['name'] = $v['contract_name'];
-
+                    
                 }
                 break;
             case '3':
@@ -153,7 +429,7 @@ class ExamineLogic extends Common
                     ->select();
                 foreach ($list as $k => $v) {
                     $list[$k]['create_user_info'] = $userModel->getUserById($v['create_user_id']);
-
+                    
                 }
                 $dataCount = db('crm_invoice')
                     ->alias('a')
@@ -162,13 +438,13 @@ class ExamineLogic extends Common
                     ->where($whereOr)
                     ->count();
                 break;
-
+            
         }
-
+        
         foreach ($list as $key => $v) {
             $list[$key]['create_time'] = date('Y-m-d H:i:s', $v['create_time']) ?: '';
         }
-
+        
         $data = [];
         $data['page']['list'] = $list;
         $data['page']['dataCount'] = $dataCount ?: 0;
@@ -184,5 +460,5 @@ class ExamineLogic extends Common
         }
         return $data;
     }
-
+    
 }

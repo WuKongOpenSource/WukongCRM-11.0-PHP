@@ -91,7 +91,8 @@ class Users extends ApiCommon
         $data = $userModel->getDataById($param['id']);
         if (!$data) {
             return resultArray(['error' => $userModel->getError()]);
-        } 
+        }
+        $data['serverUserInfo'] = $this->queryLoginUser();
         return resultArray(['data' => $data]);
     }
 
@@ -500,6 +501,7 @@ class Users extends ApiCommon
         $data['username'] = $param['username'];
         $data['password'] = user_md5($param['password'], $userData['salt'], $param['username']);
         $data['userInfo'] = $userData;
+        $data['mobile'] = $param['username'];
         $resSync = model('Sync')->syncData($data);
         if ($resSync) {
             unset($data['userInfo']);
@@ -658,9 +660,6 @@ class Users extends ApiCommon
     /**
      * 设置关注
      *
-     * @return \think\response\Json
-     * @throws \think\Exception
-     * @throws \think\exception\PDOException
      */
     public function userStar()
     {
@@ -700,10 +699,6 @@ class Users extends ApiCommon
     /**
      * 获取下属（全部层级）
      *
-     * @return \think\response\Json
-     * @throws \think\db\exception\DataNotFoundException
-     * @throws \think\db\exception\ModelNotFoundException
-     * @throws \think\exception\DbException
      */
     public function subordinate()
     {
@@ -719,5 +714,22 @@ class Users extends ApiCommon
         }
 
         return resultArray(['data' => $data]);
+    }
+
+    /**
+     * 获取当前登录人信息
+     *
+     */    
+    public function queryLoginUser()
+    {
+        $resData = [];
+        $wkcode = file_get_contents(CONF_PATH.'license.dat'); 
+        if ($wkcode) {
+            $resCheckData = checkWkCode($wkcode);
+            if ($resCheckData) {
+                $resData = object_to_array(json_decode($resCheckData));
+            }            
+        }
+        return $resData;      
     }
 }

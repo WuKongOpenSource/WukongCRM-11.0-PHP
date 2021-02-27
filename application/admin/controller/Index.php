@@ -52,6 +52,7 @@ class Index extends ApiCommon
             if ($value['field'] == 'address')      $field_arr[$key]['form_type'] = 'map_address';
             if ($value['field'] == 'deal_status')  $field_arr[$key]['form_type'] = 'deal_status';
             if ($value['field'] == 'check_status') $field_arr[$key]['form_type'] = 'check_status';
+            if ($param['types'] == 'crm_visit' && $value['field'] == 'owner_user_id') $field_arr[$key]['name'] = '回访人';
         }
 
         return resultArray(['data' => $field_arr]);

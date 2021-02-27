@@ -23,7 +23,7 @@ class Log extends Common
     protected $createTime = 'create_time';
     protected $updateTime = 'update_time';
     protected $autoWriteTimestamp = true;
-
+    
     /**
      * [getDataList 日志list]
      * @param     [string]                   $map [查询条件]
@@ -39,10 +39,10 @@ class Log extends Common
         $fileModel = new \app\admin\model\File();
         $commonModel = new \app\admin\model\Comment();
         $recordModel = new \app\admin\model\Record();
-
+        
         $user_id = $request['read_user_id'];
         $by = $request['by'] ?: '';
-
+        
         $map = [];
         $search = $request['search'];
         if (isset($request['search']) && $request['search']) {
@@ -138,7 +138,7 @@ class Log extends Common
             $list[$k]['contactsList'] = $relationArr['contactsList'];
             $list[$k]['contractList'] = $relationArr['contractList'];
             $list[$k]['customerList'] = $relationArr['customerList'];
-
+            
             if ($v['is_relation'] == 1) {
                 $list[$k]['bulletin']['customerNum'] = $v['save_customer'];
                 $list[$k]['bulletin']['businessNum'] = $v['save_business'];
@@ -148,7 +148,7 @@ class Log extends Common
             } else {
                 $list[$k]['bulletin'] = 0;
             }
-
+            
             $is_update = 0;
             $is_delete = 0;
             //3天内的日志可删,可修改
@@ -183,11 +183,11 @@ class Log extends Common
             $data['page']['firstPage'] = true;
             $data['page']['lastPage'] = false;
         }
-
+        
         return $data;
     }
-
-
+    
+    
     // 创建日志信息
     public function createData($param)
     {
@@ -209,7 +209,7 @@ class Log extends Common
         foreach ($arr as $value) {
             unset($param[$value]);
         }
-
+        
         if ($param['category_id'] == 1) {
             $param['title'] = date('Y-m-d') . '-日报';
         } else if ($param['category_id'] == 2) {
@@ -217,7 +217,7 @@ class Log extends Common
         } else if ($param['category_id'] == 3) {
             $param['title'] = date('Y-m-d') . '-月报';
         }
-
+        
         if ($this->data($param)->allowField(true)->save()) {
             $log_id = $this->log_id;
             //操作记录
@@ -231,7 +231,7 @@ class Log extends Common
                     return false;
                 }
             }
-
+            
             $temp = User::where(['structure_id' => ['in', $param['send_structure_ids']]])->column('id');
             (new Message())->send(
                 Message::LOG_SEND,
@@ -245,7 +245,7 @@ class Log extends Common
             $data = [];
             $data['log_id'] = $log_id;
             $data = $param;
-
+            
             if (count($fileArr)) {
                 $fileList = Db::name('AdminFile')->where('file_id in (' . implode(',', $fileArr) . ')')->select();
                 foreach ($fileList as $k => $v) {
@@ -258,20 +258,20 @@ class Log extends Common
             //发送部门
             $data['sendStructureList'] = $param['send_structure_ids'] ? $userModel->getListByStr($param['send_structure_ids']) : [];
             $data['log_id'] = $log_id;
-
+            
             $rdata['log_id'] = $log_id;
             $rdata['status'] = 1;
             $rdata['create_time'] = time();
             //关联业务
             Db::name('OaLogRelation')->insert($rdata);
-
+            
             //相关业务
             $relationArr = $recordModel->getListByRelationId('log', $log_id);
             $data['businessList'] = $relationArr['businessList'];
             $data['contactsList'] = $relationArr['contactsList'];
             $data['contractList'] = $relationArr['contractList'];
             $data['customerList'] = $relationArr['customerList'];
-
+            
             # 添加活动记录
             if (!empty($rdata['customer_ids']) || !empty($rdata['contacts_ids']) || !empty($rdata['business_ids']) || !empty($rdata['contract_ids'])) {
                 Db::name('crm_activity')->insert([
@@ -288,14 +288,14 @@ class Log extends Common
                     'contract_ids' => !empty($rdata['contract_ids']) ? trim($rdata['contract_ids'], ',') : '',
                 ]);
             }
-
+            
             return $data;
         } else {
             $this->error = '添加失败';
             return false;
         }
     }
-
+    
     /**
      * 编辑日志信息
      * @param
@@ -318,7 +318,7 @@ class Log extends Common
         $rdata['contacts_ids'] = $param['contacts_ids'] ? arrayToString($param['contacts_ids']) : '';
         $rdata['business_ids'] = $param['business_ids'] ? arrayToString($param['business_ids']) : '';
         $rdata['contract_ids'] = $param['contract_ids'] ? arrayToString($param['contract_ids']) : '';
-
+        
         $arr = ['customer_ids', 'contacts_ids', 'business_ids', 'contract_ids'];
         foreach ($arr as $value) {
             unset($param[$value]);
@@ -332,7 +332,7 @@ class Log extends Common
         unset($param['file']);
         $param['send_user_ids'] = $param['send_user_ids'] ? arrayToString($param['send_user_ids']) : '';
         $param['send_structure_ids'] = $param['send_structure_ids'] ? arrayToString($param['send_structure_ids']) : '';
-
+        
         if ($this->allowField(true)->save($param, ['log_id' => $log_id])) {
             //操作日志
             Db::name('AdminActionLog')->where(['action_id' => $log_id])->update(['join_user_ids' => $this->send_user_ids, 'structure_ids' => $this->send_structure_ids]);
@@ -373,7 +373,7 @@ class Log extends Common
             return false;
         }
     }
-
+    
     /**
      * 日志数据
      * @param  $id 日志ID
@@ -385,7 +385,7 @@ class Log extends Common
         $userModel = new \app\admin\model\User();
         $structureModel = new \app\admin\model\Structure();
         $commonModel = new \app\admin\model\Comment();
-
+        
         $map['log.log_id'] = $id;
         $data_view = db('oa_log')
             ->where($map)
@@ -396,7 +396,7 @@ class Log extends Common
             $this->error = '暂无此数据';
             return false;
         }
-
+        
         $relation = Db::name('OaLogRelation')->where('log_id =' . $id)->find();
         $BusinessModel = new \app\crm\model\Business(); //商机
         $dataInfo['businessList'] = $relation['business_ids'] ? $BusinessModel->getDataByStr($relation['business_ids']) : [];
@@ -406,7 +406,7 @@ class Log extends Common
         $dataInfo['contractList'] = $relation['contract_ids'] ? $ContractModel->getDataByStr($relation['contract_ids']) : [];
         $CustomerModel = new \app\crm\model\Customer();//客户
         $dataInfo['customerList'] = $relation['customer_ids'] ? $CustomerModel->getDataByStr($relation['customer_ids']) : [];
-
+        
         $dataInfo['create_user_info']['realname'] = $dataInfo['realname'] ?: '';
         $dataInfo['create_user_info']['id'] = $dataInfo['create_user_id'] ?: '';
         $dataInfo['create_user_info']['thumb_img'] = $dataInfo['thumb_img'] ? getFullPath($dataInfo['thumb_img']) : '';
@@ -430,7 +430,7 @@ class Log extends Common
         $dataInfo['replyList'] = $commonModel->read($param);
         return $dataInfo;
     }
-
+    
     /**
      * 日志删除
      *

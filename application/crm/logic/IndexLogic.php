@@ -23,6 +23,10 @@ class IndexLogic extends Common
         '12' => 'december',
     ];
 
+    /**
+     * @param $param
+     * @return array
+     */
     public function index($param)
     {
         $adminModel = new \app\admin\model\Admin();
@@ -69,17 +73,16 @@ class IndexLogic extends Common
         $contract_auth_user_ids = $userModel->getUserByPer('crm', 'contract', 'index');
         $receivables_auth_user_ids = $userModel->getUserByPer('crm', 'receivables', 'index');
         $record_auth_user_ids = $userModel->getUserByPer('crm', 'activity', 'index');
-
         $resCount = queryCache(
             $this->getCountSql([
                 'start_time' => $between_time[0],
                 'end_time' => $between_time[1],
-                'customer_auth_user_ids' => array_intersect($userIds, $customer_auth_user_ids),
-                'contacts_auth_user_ids' => array_intersect($userIds, $contacts_auth_user_ids),
-                'business_auth_user_ids' => array_intersect($userIds, $business_auth_user_ids),
-                'contract_auth_user_ids' => array_intersect($userIds, $contract_auth_user_ids),
-                'receivables_auth_user_ids' => array_intersect($userIds, $receivables_auth_user_ids),
-                'record_auth_user_ids' => array_intersect($userIds, $record_auth_user_ids),
+                'customer_auth_user_ids' => array_intersect($userIds, $customer_auth_user_ids) ? :[-1],
+                'contacts_auth_user_ids' => array_intersect($userIds, $contacts_auth_user_ids) ? :[-1],
+                'business_auth_user_ids' => array_intersect($userIds, $business_auth_user_ids) ? :[-1],
+                'contract_auth_user_ids' => array_intersect($userIds, $contract_auth_user_ids) ? :[-1],
+                'receivables_auth_user_ids' => array_intersect($userIds, $receivables_auth_user_ids) ? :[-1],
+                'record_auth_user_ids' => array_intersect($userIds, $record_auth_user_ids) ? :[-1],
             ])
         );
 

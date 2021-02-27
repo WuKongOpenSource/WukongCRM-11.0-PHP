@@ -147,7 +147,7 @@ class work extends ApiCommon
         $workInfo = $workModel->getDataById($this->param['work_id']);
 
         # 是否是公开项目
-        $userId  = empty($workInfo['is_open'])  ? $this->userInfo['id'] : 0;
+        $userId  = $this->userInfo['id'];
         $groupId = !empty($workInfo['is_open']) ? $workInfo['group_id'] : 0;
 
         # 项目成员
@@ -632,5 +632,25 @@ class work extends ApiCommon
 
         return resultArray(['data' => '操作成功！']);
     }
+    
+    /**
+     * 项目排序
+     *
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/2/23 0023 15:27
+     */
+//    public function workStart(){
+//        $param=$this->param;
+//        $userInfo=$this->userInfo;
+//        $param['work']=serialize($param);
+//        $param['user_id']=$userInfo['id'];
+//        $workStart=new WorkLogic();
+//        $res=$workStart->workStart($param);
+//        if(!$res){
+//            return resultArray(['error'=>'操作失败']);
+//        }
+//        return resultArray(['data'=>'操作成功']);
+//    }
 }
  

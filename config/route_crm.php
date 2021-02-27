@@ -233,6 +233,8 @@ return [
     'crm/receivables/system' => ['crm/receivables/system', ['method' => 'POST']],
     // 【回款】菜单数量
     'crm/receivables/count' => ['crm/receivables/count', ['method' => 'POST']],
+    //【回款】导出
+    'crm/receivables/excelExport' => ['crm/receivables/excelExport', ['method' => 'POST']],
 
     // 【回款计划】列表
     'crm/receivables_plan/index' => ['crm/receivables_plan/index', ['method' => 'POST']],

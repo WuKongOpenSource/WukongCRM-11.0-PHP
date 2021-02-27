@@ -380,13 +380,6 @@ ALTER TABLE `5kcrm_oa_examine` ADD COLUMN `last_user_id` varchar(200) not null d
 ALTER TABLE `5kcrm_oa_announcement` ADD COLUMN `is_read` tinyint(2) not null default 0  comment '1表示已读 0表示未读';
 ALTER TABLE `5kcrm_oa_examine_category` ADD COLUMN `icon` varchar(255) NOT NULL  COMMENT '类型图标和颜色';
 
-UPDATE `5kcrm_oa_examine_category` SET `category_id`='1', `title`='普通审批', `remark`='普通审批', `create_user_id`='1', `status`='1', `is_sys`='1', `user_ids`='', `structure_ids`='', `create_time`='1612576450', `update_time`='1612576450', `is_deleted`='0', `delete_time`='0', `delete_user_id`='0', `flow_id`='65' ,`icon`='wk wk-leave,#00CAAB' WHERE (`category_id`='1');
-UPDATE `5kcrm_oa_examine_category` SET `category_id`='2', `title`='请假审批', `remark`='请假审批', `create_user_id`='1', `status`='1', `is_sys`='1', `user_ids`='', `structure_ids`='', `create_time`='1612518097', `update_time`='1612518097', `is_deleted`='0', `delete_time`='0', `delete_user_id`='0', `flow_id`='63' ,`icon`='wk wk-l-record,#3ABCFB' WHERE (`category_id`='2');
-UPDATE `5kcrm_oa_examine_category` SET `category_id`='3', `title`='出差审批', `remark`='出差审批', `create_user_id`='1', `status`='1', `is_sys`='1', `user_ids`='', `structure_ids`='', `create_time`='1548911542', `update_time`='1548911542', `is_deleted`='0', `delete_time`='0', `delete_user_id`='0', `flow_id`='1' ,`icon`='wk wk-trip,#3ABCFB' WHERE (`category_id`='3');
-UPDATE `5kcrm_oa_examine_category` SET `category_id`='4', `title`='加班审批', `remark`='加班审批', `create_user_id`='1', `status`='1', `is_sys`='1', `user_ids`='', `structure_ids`='', `create_time`='1548911542', `update_time`='1548911542', `is_deleted`='0', `delete_time`='0', `delete_user_id`='0', `flow_id`='1' ,`icon`='wk wk-overtime,#FAAD14' WHERE (`category_id`='4');
-UPDATE `5kcrm_oa_examine_category` SET `category_id`='5', `title`='差旅报销', `remark`='差旅报销', `create_user_id`='1', `status`='1', `is_sys`='1', `user_ids`='', `structure_ids`='', `create_time`='1548911542', `update_time`='1548911542', `is_deleted`='0', `delete_time`='0', `delete_user_id`='0', `flow_id`='1' ,`icon`='wk wk-reimbursement,#3ABCFB' WHERE (`category_id`='5');
-UPDATE `5kcrm_oa_examine_category` SET `category_id`='6', `title`='借款申请', `remark`='借款申请', `create_user_id`='1', `status`='1', `is_sys`='1', `user_ids`='', `structure_ids`='', `create_time`='1548911542', `update_time`='1548911542', `is_deleted`='0', `delete_time`='0', `delete_user_id`='0', `flow_id`='1' ,`icon`='wk wk-go-out,#FF6033' WHERE (`category_id`='6');
-
 INSERT INTO `5kcrm_admin_rule` VALUES ('154', '0', '其他设置', 'other_rule', '2', '105', '0');
 INSERT INTO `5kcrm_admin_rule` VALUES ('155', '0', '日志欢迎语', 'welcome', '3', '154', '0');
 INSERT INTO `5kcrm_admin_rule` VALUES ('156', '0', '设置欢迎语', 'setWelcome', '3', '154', '0');

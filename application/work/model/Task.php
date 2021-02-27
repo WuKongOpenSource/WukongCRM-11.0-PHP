@@ -50,6 +50,7 @@ class Task extends Common
         $workModel = model('Work');
         $userModel = new \app\admin\model\User();
         $work_id = $request['work_id'];
+        $map=[];
         $ret = $workModel->checkWork($work_id, $user_id);
         if (!$ret) {
             $this->error = $workModel->getError();
@@ -68,11 +69,7 @@ class Task extends Common
         } else {
             $newList = $classList['list'];
         }
-
-        if ($request['main_user_id']) {
-            $map['main_user_id'] = ['in', $request['main_user_id']];
-        }
-        //截止时间
+        
         if ($request['stop_time_type']) {
             if ($request['stop_time_type'] == '5') { //没有截至日期
                 $map['stop_time'] = '0';
@@ -104,6 +101,7 @@ class Task extends Common
                 $map['stop_time'] = ['between', [$timeAry[0], $timeAry[1]]];
             }
         }
+      
         if ($request['lable_id']) {
             $taskIds = [];
             $task_ids = [];
@@ -125,18 +123,20 @@ class Task extends Common
             }
             $map['task_id'] = ['in', $task_ids];
         }
+        
         $data = array();
         foreach ($newList as $key => $value) {
             $data[$key]['class_id'] = $value['class_id'] ?: -1;
             $data[$key]['class_name'] = $value['name'];
-
+           
             $map['status'] = $map['status'] ?: ['in', ['1', '5']];
+           
             $map['ishidden'] = 0;
             $map['work_id'] = $request['work_id'];
             $map['class_id'] = $value['class_id'];
             $map['pid'] = 0;
             $map['is_archive'] = 0;
-
+            $map['main_user_id']=$request['main_user_id'];
             $taskList = [];
             $resTaskList = $this->getTaskList($map);
             $data[$key]['count'] = $resTaskList['count'];
@@ -414,7 +414,7 @@ class Task extends Common
             unset($param[$value]);
         }
         $main_user_id = $param['main_user_id'] ?: $param['create_user_id'];
-
+        $param['owner_user_id'] = ','.$main_user_id.','; //参与人
         $param['main_user_id'] = $main_user_id; //负责人
         $param['start_time']   = !empty($param['start_time']) ? strtotime($param['start_time']) : 0;
         $param['stop_time']    = !empty($param['stop_time'])  ? strtotime($param['stop_time'])  : 0;
@@ -443,14 +443,14 @@ class Task extends Common
                 //操作日志
                 actionLog($task_id, '', '', '新建了任务');
                 //抄送站内信
-//                (new Message())->send(
-//                    Message::TASK_ALLOCATION,
-//                    [
-//                        'title' => $param['name'],
-//                        'action_id' => $task_id
-//                    ],
-//                    $param['owner_user_id']
-//                );
+                (new Message())->send(
+                    Message::TASK_ALLOCATION,
+                    [
+                        'title' => $param['name'],
+                        'action_id' => $task_id
+                    ],
+                    trim(',',$param['owner_user_id'])
+                );
             }
 
             # 添加活动记录
@@ -642,14 +642,14 @@ class Task extends Common
                 //设置负责人
                 $userdet = $userModel->getDataById($param['main_user_id']);
                 $data['after'] = '设定' . $userdet['realname'] . '为主要负责人！';
-//                (new Message())->send(
-//                    Message::TASK_ALLOCATION,
-//                    [
-//                        'title' => $taskInfo['name'],
-//                        'action_id' => $param['task_id']
-//                    ],
-//                    $param['main_user_id']
-//                );
+                (new Message())->send(
+                    Message::TASK_ALLOCATION,
+                    [
+                        'title' => $taskInfo['name'],
+                        'action_id' => $param['task_id']
+                    ],
+                   $param['main_user_id']
+                );
                 break;
         }
 
@@ -899,15 +899,17 @@ class Task extends Common
      */
     public function getTaskList($request)
     {
-        $search = $request['search'];
+       
+        $search = $request['search']?:'';
         $whereStr = $request['whereStr'] ?: [];
         $lable_id = $request['lable_id'] ?: '';
+        $main_user_id = $request['main_user_id'] ?: '';
         $taskSearch = !empty($request['taskSearch']) ? $request['taskSearch'] : '';
         $isArchive = !empty($request['is_archive']) ? $request['is_archive'] : 0;
-        unset($request['search']);
-        unset($request['whereStr']);
-        unset($request['lable_id']);
-        unset($request['taskSearch']);
+//        unset($request['search']);
+//        unset($request['whereStr']);
+//        unset($request['lable_id']);
+        unset($request['main_user_id']);
         $request = $this->fmtRequest($request);
         $requestMap = $request['map'] ?: [];
         $userModel = new \app\admin\model\User();
@@ -924,6 +926,13 @@ class Task extends Common
         }
         $dataCount = db('task')->alias('task')->where($map)->where($whereStr)->where($taskSearch)->count();
         $taskList = [];
+        $logWhere='';
+        if ($main_user_id) {
+            foreach ($main_user_id as $key => $value) {
+                $logWhere.= '( task.owner_user_id like "%,' . $value . ',%") OR ';
+            }
+            if (!empty($logWhere)) $logWhere = '(' . rtrim($logWhere, 'OR ') . ')';
+        }
         if ($dataCount) {
             $taskList = db('task')
                 ->alias('task')
@@ -932,6 +941,7 @@ class Task extends Common
                 ->field('task.task_id,task.name,task.main_user_id,task.is_top,task.work_id,task.lable_id,task.priority,task.stop_time,task.status,task.pid,task.create_time,task.owner_user_id,u.realname as main_user_name,u.thumb_img,w.name as work_name,color')
                 ->where($map)
                 ->where($whereStr)
+                ->where($logWhere)
                 ->where($taskSearch)
                 ->order('task.status asc,task.order_id asc')
                 ->select();
@@ -1036,7 +1046,6 @@ class Task extends Common
                 ->where($labelWhere)
                 ->order($order)
                 ->select();
-
             foreach ($taskList as $key => $value) {
                 if ($value['pid'] > 0) {
                     $p_det = $this->field('task_id,name')->where(['task_id' => $value['pid']])->find();
@@ -1084,35 +1093,38 @@ class Task extends Common
 
         # 今天
         if ($type == 1) {
-            $result = '(task.stop_time > 0 AND task.stop_time <= ' . strtotime(date('Y-m-d 23:59:59')) . ')';
+            $result = '(task.stop_time >= ' . strtotime(date('Y-m-d 00:00:00')) . ' AND task.stop_time <= ' . strtotime(date('Y-m-d 23:59:59')) . ')';
         }
 
         # 明天
         if ($type == 2) {
             $tomorrow = date("Y-m-d 23:59:59", strtotime("+1 day"));
-            $result = '(task.stop_time > 0 AND task.stop_time <= ' . strtotime($tomorrow) . ')';
+            $start = date("Y-m-d 00:00:00", strtotime("+1 day"));
+            $result = '(task.stop_time >= ' . strtotime($start) . ' AND task.stop_time <= ' . strtotime($tomorrow) . ')';
         }
 
         # 本周
         if ($type == 3) {
             $week = mktime(23, 59, 59, date("m"), date("d") - date("w") + 7, date("Y"));
-            $result = '(task.stop_time > 0 AND task.stop_time <= ' . $week . ')';
+            $start_week=mktime(0, 0, 0, date('m'), date('d') - date('w') + 1, date('Y'));
+            $result = '(task.stop_time >= ' . $start_week . ' AND task.stop_time <= ' . $week . ')';
         }
 
         # 本月
         if ($type == 4) {
+            $timestamp = mktime(0, 0, 0, date('m'), 1, date('Y'));
             $month = mktime(23, 59, 59, date("m"), date("t"), date("Y"));
-            $result = '(task.stop_time > 0 AND task.stop_time <= ' . $month . ')';
+            $result = '(task.stop_time > ' . $timestamp . ' AND task.stop_time <= ' . $month . ')';
         }
 
         # 未设置截止日期
         if ($type == 5) {
-            $result = $result = '(task.stop_time = 0)';;
+            $result = '(task.stop_time = 0)';;
         }
 
         # 已延期
         if ($type == 6) {
-            $result = '(task.status = 2 OR task.stop_time >= ' . time() . ')';
+            $result = '(task.status = 2 OR task.stop_time < ' . time() . ')'.'AND task.stop_time <> 0 AND task.status = 1';
         }
 
         # 今日更新

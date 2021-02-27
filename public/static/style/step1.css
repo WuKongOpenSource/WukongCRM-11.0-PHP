@@ -15,14 +15,18 @@
 table {
   width: 100%;
   border: 1px solid #e1e1e1;
-  border-collapse: collapse;
+  /* border-collapse: collapse; */
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius:5px;
+  overflow: hidden;
 }
 .table tr {
   height: 34px;
   text-align: center;
 }
 th, td {
-  border: 1px solid #e1e1e1;
+  border-bottom: 1px solid #f7f7f7;
   width: 30%;
 }
 th:first-child, td:first-child, th:last-child, td:last-child {
@@ -31,8 +35,9 @@ th:first-child, td:first-child, th:last-child, td:last-child {
 
 th {
   font-weight: normal;
-  background-color: #3e84e9;
-  color: white;
+  background-color: #f7f7f7;
+  /* color: white; */
+  font-weight: 600;
 }
 
 

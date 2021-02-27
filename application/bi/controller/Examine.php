@@ -122,10 +122,11 @@ class Examine extends ApiCommon
         unset($where['create_time']);
         unset($where['create_user_id']);
         unset($where['create_user_id']);
-        $where['check_status'] = 'all';
+//        $where['check_status'] = 'all';
         $where['page'] = $param['page'];
         $where['limit'] = $param['limit'];
         $where['user_id'] = $user_id;
+        $where['bi_types'] = 'bi';
         $where['between_time'] = array($start_time,$end_time);
         $list = $examineModel->getDataList($where);
 

@@ -85,7 +85,7 @@ class Contacts extends Common
 			if (!is_array($map['contacts.owner_user_id'][1])) {
 				$map['contacts.owner_user_id'][1] = [$map['contacts.owner_user_id'][1]];
 			}
-			if ($map['contacts.owner_user_id'][0] == 'neq') {
+			if (in_array($map['contacts.owner_user_id'][0], ['neq', 'notin'])) {
 				$auth_user_ids = array_diff($auth_user_ids, $map['contacts.owner_user_id'][1]) ? : [];	//取差集	
 			} else {
 				$auth_user_ids = array_intersect($map['contacts.owner_user_id'][1], $auth_user_ids) ? : [];	//取交集	
@@ -107,7 +107,8 @@ class Contacts extends Common
 		//列表展示字段
 		$indexField = $fieldModel->getIndexField('crm_contacts', $user_id, 1) ? : array('name');
 		$userField = $fieldModel->getFieldByFormType('crm_contacts', 'user'); //人员类型
-		$structureField = $fieldModel->getFieldByFormType('crm_contacts', 'structure');  //部门类型			
+		$structureField = $fieldModel->getFieldByFormType('crm_contacts', 'structure');  //部门类型
+        $datetimeField = $fieldModel->getFieldByFormType('crm_contacts', 'datetime'); //日期时间类型
 
 		//排序
 		if ($order_type && $order_field) {
@@ -130,7 +131,7 @@ class Contacts extends Common
         			->where($searchMap)
         			->where($authMap)
         			->where($customerWhere)
-        			->count('contacts_id'); 
+        			->count('contacts_id');
 		if ($getCount == 1) {
 			$data['dataCount'] = $dataCount ? : 0;
 	        return $data;
@@ -144,7 +145,6 @@ class Contacts extends Common
 				->where($customerWhere)
         		->limit($request['offset'], $request['length'])
         		->field('contacts.*,customer.name as customer_name')
-        		->field(implode(',',$indexField).',customer.name as customer_name')
         		->orderRaw($order)
         		->select();
         
@@ -154,11 +154,16 @@ class Contacts extends Common
         	$list[$k]['customer_id_info']['customer_id'] = $v['customer_id'] ? : '';
         	$list[$k]['customer_id_info']['name'] = $v['customer_name'] ? : '';
 			foreach ($userField as $key => $val) {
-        		$list[$k][$val.'_info'] = isset($v[$val]) ? $userModel->getListByStr($v[$val]) : [];
+			    $usernameField  = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
+                $list[$k][$val] = implode($usernameField, ',');
         	}
 			foreach ($structureField as $key => $val) {
-        		$list[$k][$val.'_info'] = isset($v[$val]) ? $structureModel->getDataByStr($v[$val]) : [];
-        	} 
+			    $structureNameField = !empty($v[$val]) ? db('admin_structure')->whereIn('id', stringToArray($v[$val]))->column('name') : [];
+                $list[$k][$val]     = implode($structureNameField, ',');
+        	}
+            foreach ($datetimeField as $key => $val) {
+                $list[$k][$val] = !empty($v[$val]) ? date('Y-m-d H:i:s', $v[$val]) : null;
+            }
 
 			//权限
 			$permission = [];
@@ -172,9 +177,6 @@ class Contacts extends Common
 	        $permission['is_update'] = $is_update;
 	        $permission['is_delete'] = $is_delete;
 	        $list[$k]['permission']	= $permission;
-
-            # 下次联系时间
-            $list[$k]['next_time'] = !empty($v['next_time']) ? date('Y-m-d H:i:s', $v['next_time']) : null;
 
             # 关注
             $starWhere = ['user_id' => $user_id, 'target_id' => $v['contacts_id'], 'type' => 'crm_contacts'];
@@ -227,9 +229,6 @@ class Contacts extends Common
             $param['primary'] = 1;
         }
 
-        # 处理下次联系时间
-        if (!empty($param['next_time'])) $param['next_time'] = strtotime($param['next_time']);
-
 		//处理部门、员工、附件、多选类型字段
 		$arrFieldAtt = $fieldModel->getArrayField('crm_contacts');
 		foreach ($arrFieldAtt as $k=>$v) {
@@ -249,7 +248,7 @@ class Contacts extends Common
                 'create_user_id'   => $param['create_user_id'],
                 'update_time'      => time(),
                 'create_time'      => time(),
-                'customer_ids'      => $param['customer_id']
+                'customer_ids'     => $param['customer_id']
             ]);
 
             # 处理商机首要联系人
@@ -319,9 +318,6 @@ class Contacts extends Common
 			return false;
 		}
 
-        # 处理下次联系时间
-        if (!empty($param['next_time'])) $param['next_time'] = strtotime($param['next_time']);
-
 		//处理部门、员工、附件、多选类型字段
 		$arrFieldAtt = $fieldModel->getArrayField('crm_contacts');
 		foreach ($arrFieldAtt as $k=>$v) {
@@ -382,7 +378,11 @@ class Contacts extends Common
         # 处理决策人显示问题
         $dataInfo['decision'] = !empty($dataInfo['decision']) && $dataInfo['decision'] == '是' ? '是' : '';
         # 处理时间格式
-        $dataInfo['next_time']   = !empty($dataInfo['next_time'])   ? date('Y-m-d H:i:s', $dataInfo['next_time'])   : null;
+        $fieldModel = new \app\admin\model\Field();
+        $datetimeField = $fieldModel->getFieldByFormType('crm_contacts', 'datetime'); //日期时间类型
+        foreach ($datetimeField as $key => $val) {
+            $dataInfo[$val] = !empty($dataInfo[$val]) ? date('Y-m-d H:i:s', $dataInfo[$val]) : null;
+        }
         $dataInfo['create_time'] = !empty($dataInfo['create_time']) ? date('Y-m-d H:i:s', $dataInfo['create_time']) : null;
         $dataInfo['update_time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
         $dataInfo['last_time']   = !empty($dataInfo['last_time'])   ? date('Y-m-d H:i:s', $dataInfo['last_time'])   : null;

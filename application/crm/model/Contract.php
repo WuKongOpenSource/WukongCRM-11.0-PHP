@@ -99,7 +99,7 @@ class Contract extends Common
 				if (!is_array($map['contract.owner_user_id'][1])) {
 					$map['contract.owner_user_id'][1] = [$map['contract.owner_user_id'][1]];
 				}				
-				if ($map['contract.owner_user_id'][0] == 'neq') {
+				if (in_array($map['contract.owner_user_id'][0], ['neq', 'notin'])) {
 					$auth_user_ids = array_diff($auth_user_ids, $map['contract.owner_user_id'][1]) ? : [];	//取差集	
 				} else {
 					$auth_user_ids = array_intersect($map['contract.owner_user_id'][1], $auth_user_ids) ? : [];	//取交集
@@ -127,6 +127,7 @@ class Contract extends Common
 		//人员类型
 		$userField = $fieldModel->getFieldByFormType('crm_contract', 'user');
 		$structureField = $fieldModel->getFieldByFormType('crm_contract', 'structure');  //部门类型
+        $datetimeField = $fieldModel->getFieldByFormType('crm_contract', 'datetime'); //日期时间类型
 		//排序
 		if ($order_type && $order_field) {
 			$order = $fieldModel->getOrderByFormtype('crm_contract','contract',$order_field,$order_type);
@@ -186,11 +187,16 @@ class Contract extends Common
         	$list[$k]['create_user_name'] = !empty($list[$k]['create_user_id_info']['realname']) ? $list[$k]['create_user_id_info']['realname'] : '';
             $list[$k]['owner_user_name'] = !empty($list[$k]['owner_user_id_info']['realname']) ? $list[$k]['owner_user_id_info']['realname'] : '';
 			foreach ($userField as $key => $val) {
-        		$list[$k][$val.'_info'] = isset($v[$val]) ? $userModel->getListByStr($v[$val]) : [];
+                $usernameField  = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
+                $list[$k][$val] = implode($usernameField, ',');
         	}
 			foreach ($structureField as $key => $val) {
-        		$list[$k][$val.'_info'] = isset($v[$val]) ? $structureModel->getDataByStr($v[$val]) : [];
+                $structureNameField = !empty($v[$val]) ? db('admin_structure')->whereIn('id', stringToArray($v[$val]))->column('name') : [];
+                $list[$k][$val]     = implode($structureNameField, ',');
         	}
+            foreach ($datetimeField as $key => $val) {
+                $list[$k][$val] = !empty($v[$val]) ? date('Y-m-d H:i:s', $v[$val]) : null;
+            }
         	$list[$k]['business_id_info']['business_id'] = $v['business_id'];
         	$list[$k]['business_id_info']['name'] = $v['business_name'];
         	$list[$k]['customer_id_info']['customer_id'] = $v['customer_id'];
@@ -226,6 +232,9 @@ class Contract extends Common
             $list[$k]['create_time'] = !empty($v['create_time']) ? date('Y-m-d H:i:s', $v['create_time']) : null;
             $list[$k]['update_time'] = !empty($v['update_time']) ? date('Y-m-d H:i:s', $v['update_time']) : null;
             $list[$k]['last_time']   = !empty($v['last_time'])   ? date('Y-m-d H:i:s', $v['last_time'])   : null;
+            $list[$k]['order_date'] = ($v['order_date']!='0000-00-00') ? $v['order_date'] : null;
+            $list[$k]['start_time'] = ($v['start_time']!='0000-00-00') ? $v['start_time'] : null;
+            $list[$k]['end_time'] = ($v['end_time']!='0000-00-00') ? $v['end_time'] : null;
             # 签约人姓名
             $orderNames = Db::name('admin_user')->whereIn('id', trim($v['order_user_id'], ','))->column('realname');
             $list[$k]['order_user_name'] = implode(',', $orderNames);
@@ -488,6 +497,11 @@ class Contract extends Common
         $orderNames = Db::name('admin_user')->whereIn('id', trim($dataInfo['order_user_id'], ','))->column('realname');
         $dataInfo['order_user_name'] = implode(',', $orderNames);
         # 处理时间根式
+        $fieldModel = new \app\admin\model\Field();
+        $datetimeField = $fieldModel->getFieldByFormType('crm_contract', 'datetime'); //日期时间类型
+        foreach ($datetimeField as $key => $val) {
+            $dataInfo[$val] = !empty($dataInfo[$val]) ? date('Y-m-d H:i:s', $dataInfo[$val]) : null;
+        }
         $dataInfo['next_time']   = !empty($dataInfo['next_time'])   ? date('Y-m-d H:i:s', $dataInfo['next_time'])   : null;
         $dataInfo['create_time'] = !empty($dataInfo['create_time']) ? date('Y-m-d H:i:s', $dataInfo['create_time']) : null;
         $dataInfo['update_time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
@@ -510,10 +524,10 @@ class Contract extends Common
     	foreach ($ids as $id) {
     		$contractInfo = [];
     		$contractInfo = db('crm_contract')->where(['contract_id' => $id])->find();
-			if (in_array($contractInfo['check_status'],['0','1'])) {
-	            $errorMessage[] = '合同：'.$contractInfo['name'].'"转移失败，错误原因：审批中，无法转移；';
-	            continue;
-	        }	     		
+//			if (in_array($contractInfo['check_status'],['0','1'])) {
+//	            $errorMessage[] = '合同：'.$contractInfo['name'].'"转移失败，错误原因：审批中，无法转移；';
+//	            continue;
+//	        }
 			//团队成员
 	        $teamData = [];
             $teamData['type'] = $type; //权限 1只读2读写
@@ -529,7 +543,19 @@ class Contract extends Common
 	        if (!db('crm_contract')->where(['contract_id' => $id])->update($data)) {
 				$errorMessage[] = '合同：'.$contractInfo['name'].'"转移失败，错误原因：数据出错；';
 	            continue;				      	
-	        }
+	        } else {
+                $contractArray = [];
+                $teamContract = db('crm_contract')->field(['owner_user_id', 'ro_user_id', 'rw_user_id'])->where('contract_id', $id)->find();
+                if (!empty($teamContract['ro_user_id'])) {
+                    $contractRo = arrayToString(array_diff(stringToArray($teamContract['ro_user_id']), [$teamContract['owner_user_id']]));
+                    $contractArray['ro_user_id'] = $contractRo;
+                }
+                if (!empty($teamContract['rw_user_id'])) {
+                    $contractRo = arrayToString(array_diff(stringToArray($teamContract['rw_user_id']), [$teamContract['owner_user_id']]));
+                    $contractArray['rw_user_id'] = $contractRo;
+                }
+                db('crm_contract')->where('contract_id', $id)->update($contractArray);
+            }
     	}
     	if ($errorMessage) {
 			return $errorMessage;

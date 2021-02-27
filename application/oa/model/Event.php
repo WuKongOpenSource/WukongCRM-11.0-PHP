@@ -30,7 +30,7 @@ class Event extends Common
         'start_time' => 'timestamp',
         'end_time' => 'timestamp',
     ];
-
+    
     /**
      * [getDataList 日程list]
      * @param     [by]                       $by [查询时间段类型]
@@ -42,7 +42,7 @@ class Event extends Common
         $userModel = new \app\admin\model\User();
         $recordModel = new \app\admin\model\Record();
         $user_id = $param['user_id'];
-
+        
         //默认本账户or 自定义用户id
         if ($param['start_time'] && $param['end_time']) {
             $start_time = $param['start_time'];
@@ -51,38 +51,35 @@ class Event extends Common
             $start_time = mktime(0, 0, 0, date('m'), 1, date('Y'));
             $end_time = mktime(23, 59, 59, date('m'), date('t'), date('Y'));
         }
-
+        
         $where = '( ( start_time BETWEEN ' . $start_time . ' AND ' . $end_time . ' ) AND ( create_user_id = ' . $user_id . ' or owner_user_ids like "%,' . $user_id . ',%" ) ) 
         OR ( ( end_time BETWEEN ' . $start_time . ' AND ' . $end_time . ' ) AND  ( create_user_id = ' . $user_id . ' or owner_user_ids like "%,' . $user_id . ',%" ) ) 
         OR ( start_time < ' . $start_time . ' AND end_time > ' . $end_time . ' AND ( create_user_id = ' . $user_id . ' or owner_user_ids like "%,' . $user_id . ',%" ) )';
         $event_date = Db::name('OaEvent')->where($where)->select();
-
-        foreach ($event_date as $k => $v) {
+        foreach ($event_date as $k=>$v) {
             $event_date[$k]['create_user_info'] = $userModel->getUserById($v['create_user_id']);
-            $event_date[$k]['ownerList'] = $userModel->getDataByStr($v['owner_user_ids']) ?: [];
-
-            $relationArr = [];
+            $event_date[$k]['ownerList'] = $userModel->getDataByStr($v['owner_user_ids']) ? : [];
+        
+            $relationArr= [];
             $relationArr = $recordModel->getListByRelationId('event', $v['event_id']);
             $event_date[$k]['businessList'] = $relationArr['businessList'];
             $event_date[$k]['contactsList'] = $relationArr['contactsList'];
             $event_date[$k]['contractList'] = $relationArr['contractList'];
             $event_date[$k]['customerList'] = $relationArr['customerList'];
-            $event_date[$k]['type'] = 'event';
+        
             $event_date[$k]['remindtype'] = (int)$v['remindtype'];
             $noticeInfo = Db::name('OaEventNotice')->where(['event_id' => $v['event_id']])->find();
             $is_repeat = 0;
             if ($noticeInfo) {
                 $is_repeat = 1;
             }
-            $color = db('admin_oa_schedule')->where('schedule_id', $v['schedule_id'])->find();
-            $event_date[$k]['color'] = $color['color'];
             $event_date[$k]['is_repeat'] = $is_repeat;
             $event_date[$k]['stop_time'] = $noticeInfo ? $noticeInfo['stop_time'] : '';
             $event_date[$k]['noticetype'] = $noticeInfo ? $noticeInfo['noticetype'] : '';
             if ($noticeInfo['noticetype'] == '2') {
-                $event_date[$k]['repeat'] = $noticeInfo['repeated'] ? explode('|||', $noticeInfo['repeated']) : [];
+                $event_date[$k]['repeat'] = $noticeInfo['repeated'] ? explode('|||',$noticeInfo['repeated']) : [];
             } else {
-                $event_date[$k]['repeat'] = '';
+                $event_date[$k]['repeat'] =  '';
             }
             //权限
             $is_update = 0;
@@ -93,17 +90,15 @@ class Event extends Common
             }
             $permission['is_update'] = $is_update;
             $permission['is_delete'] = $is_delete;
-            $event_date[$k]['permission'] = $permission;
-
+            $event_date[$k]['permission']	= $permission;
             $event_date[$k]['start_time'] = !empty($v['start_time']) ? $v['start_time'] * 1000 : null;
             $event_date[$k]['end_time'] = !empty($v['end_time']) ? $v['end_time'] * 1000 : null;
-
+    
             $event_date[$k]['type_id'] = $v['schedule_id'];
         }
-
-        return $event_date ?: [];
+        return $event_date ? : [];
     }
-
+    
     /**
      * 系统自定义类型数据（任务）
      *
@@ -116,7 +111,7 @@ class Event extends Common
     public function eventTask($param)
     {
         $user_id = $param['user_id'];
-
+        
         // 默认本账户or 自定义用户id
         if ($param['start_time'] && $param['end_time']) {
             $start_time = $param['start_time'];
@@ -129,7 +124,7 @@ class Event extends Common
             '((stop_time BETWEEN ' . $start_time . ' AND ' . $end_time . ' ) AND ( create_user_id = ' . $user_id . ' or owner_user_id like "%,' . $user_id . ',%")) 
           OR ((stop_time > ' . $start_time . ' AND stop_time <' . $end_time . ') AND ( create_user_id = ' . $user_id . ' or owner_user_id like "%,' . $user_id . ',%"))
           OR ((stop_time > ' . $start_time . ' AND stop_time >' . $end_time . ') AND ( create_user_id = ' . $user_id . ' or owner_user_id like "%,' . $user_id . ',%"))';
-
+        
         //分配的任务 负责人或参与人是当前用户
         $event_date = db('task')->where(['stop_time' => ['>', 0], 'ishidden' => ['=', 0]])->where($between_time)
             ->field('task_id,name,start_time,stop_time')->select();
@@ -142,7 +137,7 @@ class Event extends Common
         }
         return $event_date;
     }
-
+    
     /**
      * 系统自定义类型数据（客户）
      *
@@ -157,8 +152,8 @@ class Event extends Common
         $userModel = new \app\admin\model\User();
         $recordModel = new \app\admin\model\Record();
         $user_id = $param['user_id'];
-
-
+        
+        
         //默认本账户or 自定义用户id
         if ($param['start_time'] && $param['end_time']) {
             $start_time = $param['start_time'];
@@ -174,7 +169,7 @@ class Event extends Common
         $between_time = '((next_time BETWEEN ' . $start_time . ' AND ' . $end_time . ') AND ( create_user_id = ' . $user_id . ' or owner_user_id = ' . $user_id . '))
         OR ((next_time > ' . $start_time . ' AND next_time <' . $end_time . ') AND ( create_user_id = ' . $user_id . ' or owner_user_id =' . $user_id . '))
         OR ((next_time > ' . $start_time . ' AND next_time > ' . $end_time . ') AND ( create_user_id = ' . $user_id . ' or owner_user_id = ' . $user_id . '))';
-        $event_date = db('crm_customer')->where(['next_time'=> ['>', 0],'owner_user_id'=>['<>',0]])->where($between_time)->where('')
+        $event_date = db('crm_customer')->where(['next_time' => ['>', 0], 'owner_user_id' => ['<>', 0]])->where($between_time)->where('')
             ->field('next_time as start_time,customer_id,name ')->group('start_time')->select();
         $item = [];
         foreach ($event_date as $k2 => $v) {
@@ -233,10 +228,10 @@ class Event extends Common
             $event_date[$k4]['stop_time'] = !empty($v['start_time']) ? strtotime($v['start_time']) * 1000 : null;
             $item[] = $v['start_time'] ? $v['start_time'] : '';
         }
-
+        
         $list_data['receivables'] = $item ? array_values(array_unique($item)) : [];
         //需联系的线索 next_time
-
+        
         $between_time = '(( next_time BETWEEN ' . $start_time . ' AND ' . $end_time . ')AND ( create_user_id = ' . $user_id . ' or owner_user_id = ' . $user_id . '  ))
     
         OR ((next_time > ' . $start_time . ' AND next_time <' . $end_time . ') AND ( create_user_id = ' . $user_id . ' or owner_user_id = ' . $user_id . ' ))
@@ -256,14 +251,14 @@ class Event extends Common
             $event_date[$k5]['stop_time'] = !empty($v['start_time']) ? $v['start_time'] * 1000 : null;
             $item[] = $v['start_time'] ? date('Y-m-d', $v['start_time']) : '';
         }
-
+        
         $list_data['leads'] = $item ? array_values(array_unique($item)) : [];
         //需联系的商机 next_time
         $between_time =
             '((next_time BETWEEN ' . $start_time . ' AND ' . $end_time . ' ) AND ( create_user_id = ' . $user_id . ' or owner_user_id = ' . $user_id . '  )) 
           OR ((next_time > ' . $start_time . ' AND next_time <' . $end_time . ') AND ( create_user_id = ' . $user_id . ' or owner_user_id = ' . $user_id . ' ))
           OR ((next_time > ' . $start_time . ' AND next_time >' . $end_time . ') AND ( create_user_id = ' . $user_id . ' or owner_user_id = ' . $user_id . ' ))';
-
+        
         $event_date = db('crm_business')->where($between_time)->where('next_time', '>', 0)->field('next_time as start_time,business_id,name ')->select();
         unset($item);
         foreach ($event_date as $k6 => $v) {
@@ -273,10 +268,10 @@ class Event extends Common
             $event_date[$k6]['start_time'] = !empty($v['start_time']) ? strtotime($v['start_time']) * 1000 : null;
             $event_date[$k6]['stop_time'] = !empty($v['start_time']) ? strtotime($v['start_time']) * 1000 : null;
             $item[] = $v['start_time'] ? date('Y-m-d', $v['start_time']) : '';
-
+            
         }
         $list_data['businessNext'] = $item ? array_values(array_unique($item)) : [];
-
+        
         //需要联系的客户 next_time crm_customer
         $return_time = date('Y-m-d', $start_time);
         $return_end = date('Y-m-d', $end_time);
@@ -292,7 +287,7 @@ class Event extends Common
             ->field('deal_date as start_time,business_id,name')
             ->group('start_time')
             ->select();
-
+        
         unset($item);
         foreach ($event_date as $k7 => $v) {
             $event_date[$k7]['color'] = 7;
@@ -305,7 +300,7 @@ class Event extends Common
         $list_data['business'] = $item ? array_values(array_unique($item)) : [];
         return $list_data ?: [];
     }
-
+    
     /**
      * 日历上显示
      * @return array
@@ -316,7 +311,7 @@ class Event extends Common
     public function listStatus($param)
     {
         $userId = $param['user_id'];
-
+        
         if ($param['start_time'] && $param['end_time']) {
             $start_time = $param['start_time'];
             $end_time = $param['end_time'];
@@ -324,7 +319,7 @@ class Event extends Common
             $start_time = mktime(0, 0, 0, date('m'), 1, date('Y'));
             $end_time = mktime(23, 59, 59, date('m'), date('t'), date('Y'));
         }
-
+        
         $list = Db::name('oa_event')->where(['end_time' => ['>', 0], 'start_time' => ['>', 0]])
             ->where(function ($query) use ($userId) {
                 $query->whereOr('create_user_id', $userId);
@@ -336,7 +331,7 @@ class Event extends Common
         }
         return $list;
     }
-
+    
     /**
      * 类型列表
      * @return array|void
@@ -367,7 +362,7 @@ class Event extends Common
         $data['list'] = $list;
         return $data;
     }
-
+    
     /**
      * 修改展示类型
      * @param $param
@@ -395,11 +390,11 @@ class Event extends Common
                             ->whereIn('schedule_id', arrayToString($param['schedule_id']))
                             ->update(['type' => 1]);
                     }
-
+                    
                 } else {
                     db('admin_oa_schedule_relation')->where('user_id', $param['user_id'])->insert(['schedule_id' => $v, 'user_id' => $param['user_id'], 'type' => 1, 'create_time' => time()]);
                 }
-
+                
             } else {
                 db('admin_oa_schedule_relation')->where('user_id', $param['user_id'])->insert(['schedule_id' => $v, 'user_id' => $param['user_id'], 'type' => 1, 'create_time' => time()]);
             }
@@ -407,7 +402,7 @@ class Event extends Common
         $data = [];
         return $data;
     }
-
+    
     /**
      * 创建日程信息
      *
@@ -428,27 +423,27 @@ class Event extends Common
         $param['create_time'] = time();
         $param['update_time'] = time();
         unset($param['user_id']);
-
+        
         # 关联数据
         $relation = [];
         if (!empty($param['customer_ids'])) $relation['customer_ids'] = arrayToString($param['customer_ids']);
         if (!empty($param['contacts_ids'])) $relation['contacts_ids'] = arrayToString($param['contacts_ids']);
         if (!empty($param['business_ids'])) $relation['business_ids'] = arrayToString($param['business_ids']);
         if (!empty($param['contract_ids'])) $relation['contract_ids'] = arrayToString($param['contract_ids']);
-
+        
         # 提醒数据
         $notice = $param['notice'];
-
+        
         # 删除多余字段
         unset($param['customer_ids']);
         unset($param['contacts_ids']);
         unset($param['business_ids']);
         unset($param['contract_ids']);
         unset($param['notice']);
-
+        
         if ($this->allowField(true)->save($param)) {
             $eventId = $this->event_id;
-
+            
             # 提醒
             if (!empty($notice)) {
                 $noticeData = [];
@@ -467,18 +462,18 @@ class Event extends Common
                 }
                 if (!empty($noticeData)) Db::name('oa_event_notice')->insertAll($noticeData);
             }
-
+            
             # 关联数据
             if (!empty($relation)) {
                 $relation['event_id'] = $eventId;
                 $relation['status'] = 1;
                 $relation['create_time'] = time();
-
+                
                 Db::name('oa_event_relation')->insert($relation);
             }
-
+            
             actionLog($eventId, $param['owner_user_ids'], '', '创建了日程');
-
+            
             $data['event_id'] = $eventId;
             // 站内信
             $item = Db::name('oa_event_notice')->where('event_id', $eventId)->select();
@@ -500,18 +495,18 @@ class Event extends Common
                     ],
                     stringToArray($param['owner_user_ids'])
                 );
-
+                
             }
-
+            
             return $data;
         } else {
             $this->error = '添加失败';
             return false;
         }
-
-
+        
+        
     }
-
+    
     /**
      * 即将到期合同列表
      * @param $param
@@ -562,13 +557,13 @@ class Event extends Common
                 $event_date[$k]['return_date'] = $v['return_date'] ? $v['return_date'] : null;
             }
         }
-
+        
         $data = [];
         $data['list'] = $event_date;
         $data['countData'] = $count;
         return $data;
     }
-
+    
     /**
      * 续联系客户
      * @param $param
@@ -605,7 +600,7 @@ class Event extends Common
         $data['countData'] = $count;
         return $data;
     }
-
+    
     /**
      * 续联系客户
      * @param $param
@@ -642,7 +637,7 @@ class Event extends Common
         $data['countData'] = $count;
         return $data;
     }
-
+    
     /**
      * 计划回款
      * @param $param
@@ -659,7 +654,7 @@ class Event extends Common
         //需要联系的客户 next_time crm_customer
         $between_time['business.next_time'] = ['between', [$return_time, $return_end]];
         $between_time['business.create_user_id|business.owner_user_id'] = ['eq', $user_id];
-
+        
         $event_date = db('crm_business')
             ->alias('business')
             ->join('__ADMIN_USER__ user', 'user.id = business.owner_user_id', 'LEFT')
@@ -682,7 +677,7 @@ class Event extends Common
         $data['countData'] = $count;
         return $data;
     }
-
+    
     /**
      * 预计成交商机
      * @param $param
@@ -719,7 +714,7 @@ class Event extends Common
         $data['countData'] = $count;
         return $data;
     }
-
+    
     /**
      * 公共时间处理
      * @param $param
@@ -728,8 +723,8 @@ class Event extends Common
     {
         $userModel = new \app\admin\model\User();
         $recordModel = new \app\admin\model\Record();
-
-
+        
+        
         //默认本账户or 自定义用户id
         if ($param['start_time'] && $param['end_time']) {
             $start_time = $param['start_time'];
@@ -744,7 +739,7 @@ class Event extends Common
         $data = [$start_time, $end_time];
         return $data;
     }
-
+    
     /**
      * 编辑日程信息
      *
@@ -776,35 +771,35 @@ class Event extends Common
         $param['end_time'] = !empty($param['end_time']) ? strtotime($param['end_time']) : $todayTime[1];
         $param['update_time'] = time();
         unset($param['user_id']);
-
+        
         # 关联数据
         $relation = [];
         if (!empty($param['customer_ids'])) $relation['customer_ids'] = arrayToString($param['customer_ids']);
-        if (!empty($param['contacts_ids'])) $relation['contacts_ids'] = arrayToString($param['customer_ids']);
-        if (!empty($param['business_ids'])) $relation['business_ids'] = arrayToString($param['customer_ids']);
-        if (!empty($param['contract_ids'])) $relation['contract_ids'] = arrayToString($param['customer_ids']);
-
-
+        if (!empty($param['contacts_ids'])) $relation['contacts_ids'] = arrayToString($param['contacts_ids']);
+        if (!empty($param['business_ids'])) $relation['business_ids'] = arrayToString($param['business_ids']);
+        if (!empty($param['contract_ids'])) $relation['contract_ids'] = arrayToString($param['contract_ids']);
+        
+        
         # 提醒数据
         $notice = $param['notice'];
-
+        
         # 删除多余字段
         unset($param['customer_ids']);
         unset($param['contacts_ids']);
         unset($param['business_ids']);
         unset($param['contract_ids']);
         unset($param['notice']);
-
+        
         if ($this->allowField(true)->save($param, ['event_id' => $event_id])) {
             $eventId = $this->event_id;
             actionLog($event_id, $param['owner_user_ids'], '', '修改了日程');
             $list = db('oa_event_notice')->where('event_id', $eventId)->select();
-            $item = Db::name('OaEventNotice')->where(['event_id' => $eventId])->delete();
-            if (!$item) {
+            if ($list) {
                 foreach ($list as $k => $v) {
                     Db::name('admin_message')->where(['type' => 9, 'action_id' => $v['id']])->delete();
                 }
             }
+            $item = Db::name('OaEventNotice')->where(['event_id' => $eventId])->delete();
             # 提醒
             if (!empty($notice)) {
                 $noticeData = [];
@@ -813,7 +808,7 @@ class Event extends Common
                     if ($value['type'] == 1) $startTime = $param['start_time'] - ($value['number'] * 60);
                     if ($value['type'] == 2) $startTime = $param['start_time'] - ($value['number'] * 60 * 60);
                     if ($value['type'] == 3) $startTime = $param['start_time'] - ($value['number'] * 60 * 60 * 24);
-
+                    
                     $noticeData[] = [
                         'event_id' => $eventId,
                         'noticetype' => $value['type'],
@@ -822,47 +817,54 @@ class Event extends Common
                         'stop_time' => $param['end_time']
                     ];
                 }
-                if (!empty($noticeData)) Db::name('oa_event_notice')->insertAll($noticeData);
-            }
-
-            if (!$item) {
-                $item = Db::name('OaEventNotice')->where('event_id', $eventId)->select();
-                foreach ($item as $val) {
-                    if ($value['noticetype'] == '1') { //分
-                        $dd = strtotime($param['start_time']) - ($val['number'] * 60);
-                    } else if ($val['noticetype'] == '2') { //时
-                        $dd = strtotime($param['start_time']) - ($val['number'] * 60 * 60);
-                    } else if ($val['noticetype'] == '3') {//天
-                        $dd = strtotime($param['start_time']) - ($val['number'] * 60 * 60 * 24);
+                if (!empty($noticeData)) {
+                    $item = Db::name('oa_event_notice')->insertAll($noticeData);
+                    if ($item) {
+                       
+                        $item = Db::name('oa_event_notice')->where('event_id', $eventId)->select();
+                        foreach ($item as $val) {
+                            if ($value['noticetype'] == '1') { //分
+                                $dd = strtotime($param['start_time']) - ($val['number'] * 60);
+                            } else if ($val['noticetype'] == '2') { //时
+                                $dd = strtotime($param['start_time']) - ($val['number'] * 60 * 60);
+                            } else if ($val['noticetype'] == '3') {//天
+                                $dd = strtotime($param['start_time']) - ($val['number'] * 60 * 60 * 24);
+                            }
+                            // 站内信
+                            (new Message())->send(
+                                Message::EVENT_MESSAGE,
+                                [
+                                    'title' => $param['title'],
+                                    'action_id' => $val['id'],
+                                    'advance_time' => $dd ?: 0
+                                ],
+                                stringToArray($param['owner_user_ids'])
+                            );
+            
+                        }
                     }
-                    // 站内信
-                    (new Message())->send(
-                        Message::EVENT_MESSAGE,
-                        [
-                            'title' => $param['title'],
-                            'action_id' => $val['id'],
-                            'advance_time' => $dd ?: 0
-                        ],
-                        array_diff(stringToArray($param['owner_user_ids']), stringToArray($dataInfo['owner_user_ids']))
-                    );
-
                 }
             }
-            $data['event_id'] = $event_id;
-            Db::name('OaEventRelation')->where(['event_id' => $event_id])->update([
-                'customer_ids' => trim($relation['customer_ids'], ','),
-                'contacts_ids' => trim($relation['contacts_ids'], ','),
-                'business_ids' => trim($relation['business_ids'], ','),
-                'contract_ids' => trim($relation['contract_ids'], ','),
-            ]);
             
+           
+            $data['event_id'] = $event_id;
+            if (Db::name('OaEventRelation')->where(['event_id' => $event_id])->find()) {
+                Db::name('OaEventRelation')->where(['event_id' => $event_id])->update($relation);
+            } else {
+                if (!empty($relation)) {
+                    $relation['event_id'] = $eventId;
+                    $relation['status'] = 1;
+                    $relation['create_time'] = time();
+                    Db::name('OaEventRelation')->where(['event_id' => $event_id])->insert($relation);
+                }
+            }
             return $data;
         } else {
             $this->error = '编辑失败';
             return false;
         }
     }
-
+    
     /**
      * 日程数据
      *
@@ -876,25 +878,25 @@ class Event extends Common
     {
         # 日程数据
         $eventData = Db::name('oa_event')->where('event_id', $eventId)->find();
-
+        
         # 颜色类型
         $eventData['color'] = Db::name('admin_oa_schedule')->where('schedule_id', $eventData['schedule_id'])->value('color');
-
+        
         # 创建人信息
         $eventData['create_user_name'] = Db::name('admin_user')->where('id', $eventData['create_user_id'])->value('realname');
-
+        
         # 参与人信息
         $eventData['owner_user_info'] = Db::name('admin_user')->field(['id', 'realname'])->whereIn('id', trim($eventData['owner_user_ids'], ','))->select();
-
+        
         # 处理日程的日期数据
         $eventData['start_time'] = !empty($eventData['start_time']) ? date('Y-m-d H:i:s', $eventData['start_time']) : '';
         $eventData['end_time'] = !empty($eventData['end_time']) ? date('Y-m-d H:i:s', $eventData['end_time']) : '';
         $eventData['create_time'] = !empty($eventData['create_time']) ? date('Y-m-d H:i:s', $eventData['create_time']) : '';
         $eventData['update_time'] = !empty($eventData['update_time']) ? date('Y-m-d H:i:s', $eventData['update_time']) : '';
-
+        
         # 日程提醒数据
         $noticeData = Db::name('oa_event_notice')->where('event_id', $eventId)->select();
-
+        
         # 整理日程提醒数据
         $eventData['notice'] = [];
         foreach ($noticeData as $key => $value) {
@@ -903,10 +905,10 @@ class Event extends Common
                 'value' => $value['number']
             ];
         }
-
+        
         # 关联客户数据
         $relationData = Db::name('oa_event_relation')->where('event_id', $eventId)->find();
-
+        
         # 关联的客户数据
         $eventData['customer'] = [];
         if (!empty($relationData['customer_ids'])) {
@@ -927,10 +929,10 @@ class Event extends Common
         if (!empty($relationData['contract_ids'])) {
             $eventData['contract'] = Db::name('crm_contract')->field(['contract_id', 'name'])->whereIn('contract_id', trim($relationData['contract_ids'], ','))->select();
         }
-
+        
         return $eventData;
     }
-
+    
     //根据ID 删除日程
     public function delDataById($param)
     {
@@ -939,12 +941,12 @@ class Event extends Common
             $this->error = '数据不存在或已删除';
             return false;
         }
-
+        
         if ($dataInfo['create_user_id'] != $param['user_id']) {
             $this->error = '没有编辑权限';
             return false;
         }
-
+        
         $map['event_id'] = $param['event_id'];
         $map['create_user_id'] = $param['user_id'];
         $flag = $this->where($map)->delete();

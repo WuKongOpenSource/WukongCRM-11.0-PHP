@@ -182,10 +182,6 @@ class Field extends Model
         if ($param['types'] == 'crm_customer') {
             $map['field'] = array('not in', ['deal_status']);
         }
-        if ($param['types'] == 'crm_visit') {
-            $map['types'] = array('in', ['', $types]);
-            $map['field'] = ['not in', ['create_user_id', 'update_time', 'create_time']];
-        }
         $list = Db::name('AdminField')->where($map)->order('order_id')->select();
         foreach ($list as $k => $v) {
             $list[$k]['setting'] = $v['setting'] ? explode(chr(10), $v['setting']) : [];
@@ -655,7 +651,7 @@ class Field extends Model
             }
 
         } else {
-            $field_list = $this->where($map)->field('field,types,name,form_type,default_value,is_unique,is_null,input_tips,setting')->order($order)->select();
+            $field_list = $this->where($map)->where( 'is_hidden',0)->field('field,types,name,form_type,default_value,is_unique,is_null,input_tips,setting,is_hidden')->order($order)->select();
 
             //客户
             if (in_array($param['types'], ['crm_customer'])) {
@@ -754,7 +750,16 @@ class Field extends Model
                     ];
                 } elseif ($v['form_type'] == 'user') {
                     $value = $userModel->getListByStr($dataInfo[$v['field']]) ?: [];
-                } elseif ($v['form_type'] == 'structure') {
+                    if (empty($value)) $default_value = $userModel->getListByStr($param['user_id']) ? : [];
+                } elseif ($v['form_type'] == 'single_user') {
+                    # 单用户
+                    $userInfo = $userModel->getListByStr($dataInfo[$v['field']]);
+                    $value = !empty($userInfo[0]) ? $userInfo[0] : [];
+                    if (empty($value)) {
+                        $userInfo = $userModel->getListByStr($param['user_id']);
+                        $default_value = !empty($userInfo[0]) ? $userInfo[0] : [];
+                    }
+                }elseif ($v['form_type'] == 'structure') {
                     $value = $structureModel->getListByStr($dataInfo[$v['field']]) ?: [];
                 } elseif ($v['form_type'] == 'file') {
                     $fileIds = [];
@@ -882,7 +887,8 @@ class Field extends Model
         $userModel = new \app\admin\model\User();
         $user_id = $param['user_id'];
         $map['types'] = ['in', ['', $types]];
-        $map['form_type'] = ['not in', ['file', 'form', 'checkbox', 'structure', 'business_status']];
+        $map['form_type'] = ['not in', ['file', 'form', 'business_status']];
+        $map['is_hidden'] = 0;
         $field_list = db('admin_field')
             ->where($map)
             ->whereOr(['types' => ''])
@@ -1026,12 +1032,16 @@ class Field extends Model
         $userLevel = isSuperAdministrators($user_id);
 
         $fieldList = $this->getFieldList($types, $types_id);
-
         $where = [];
         if ($userFieldData) {
             $fieldArr = [];
             $i = 0;
             foreach ($userFieldData as $k => $v) {
+                if (empty($fieldList[$k])) {
+                    unset($userFieldData[$k]);
+                    continue;
+                }
+
                 if (empty($v['is_hide'])) {
                     $fieldArr[$i]['field'] = $k;
                     $fieldArr[$i]['name'] = $fieldList[$k]['name'];
@@ -1081,8 +1091,9 @@ class Field extends Model
                 'form_type' => ['not in', ['file', 'form']],
                 'field' => ['not in', $unField],
                 'types_id' => ['eq', $types_id],
+                'is_hidden'=>0
             ])
-            ->field(['field', 'name', 'form_type'])
+            ->field(['field', 'name', 'form_type,is_hidden'])
             ->order('order_id asc')
             ->select();
 
@@ -1192,7 +1203,6 @@ class Field extends Model
         } else {
             $listArr = $dataList;
         }
-
         $typesArray = explode('_', $types);
         $type = array_pop($typesArray);
         if (isset($this->orther_field_list[$types])) {
@@ -1257,6 +1267,11 @@ class Field extends Model
                 if ($unFormType) $data['form_type'] = array('not in', $unFormType);
                 $field_arr = $this->fieldSearch($data);
         }
+        if ($types == 'crm_visit') {
+            foreach ($field_arr AS $key => $value) {
+                if ($value['name'] == '负责人') unset($field_arr[(int)$key]);
+            }
+        }
         return $field_arr;
     }
 
@@ -1315,9 +1330,12 @@ class Field extends Model
 
         $where = [];
         $where[$field] = ['eq', $val];
-        if ($id) {
-            //为编辑时的验重
-            $where[$dataModel->getpk()] = ['neq', $id];
+            if ($id) {
+                //为编辑时的验重
+                $where[$dataModel->getpk()] = ['neq', $id];
+            }
+        if($types=='crm_product'){
+            $where['delete_user_id'] = 0;
         }
         if ($res = $dataModel->where($where)->find()) {
             $this->error = '该数据已存在，请修改后提交！';
@@ -1378,7 +1396,7 @@ class Field extends Model
             case 'userStr' :
                 $val = explode(',', $val);
                 $val = count($userModel->getUserNameByArr($val)) > 1 ? ArrayToString($userModel->getUserNameByArr($val)) : implode(',', $userModel->getUserNameByArr($val));
-                break;                
+                break;
             case 'structure' :
                 $val = ArrayToString($structureModel->getStructureNameByArr($val));
                 break;
@@ -1648,6 +1666,7 @@ class Field extends Model
                         break;
                     case 'owner_user_id' :
                         $data[$key]['fieldName'] = 'owner_user_name';
+                        $data[$key]['name'] = '回访人';
                         break;
                     case 'contacts_id' :
                         $data[$key]['fieldName'] = 'contacts_name';

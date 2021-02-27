@@ -23,8 +23,8 @@ class Examine extends Common
     protected $createTime = 'create_time';
     protected $updateTime = 'update_time';
     protected $autoWriteTimestamp = true;
-    private $statusArr = ['待审核','审核中','审核通过','已拒绝','已撤回'];
-
+    private $statusArr = ['待审核', '审核中', '审核通过', '已拒绝', '已撤回'];
+    
     /**
      * [getDataList 审批list]
      * @param     [string]                   $map [查询条件]
@@ -38,11 +38,13 @@ class Examine extends Common
         $userModel = new \app\admin\model\User();
         $fileModel = new \app\admin\model\File();
         $recordModel = new \app\admin\model\Record();
-
+        
         $examine_by = $request['examine_by']; //1待我审批 2我已审批 all 全部
         $user_id = $request['user_id'];
+        $bi = $request['bi_types'];
         $check_status = $request['check_status']; //0 待审批 2 审批通过 4 审批拒绝 all 全部
         unset($request['by']);
+        unset($request['bi_types']);
         unset($request['user_id']);
         unset($request['check_status']);
         unset($request['examine_by']);
@@ -56,8 +58,8 @@ class Examine extends Common
         }
         unset($map['search']);
         //审批类型
-        $map['examine.category_id'] = $map['examine.category_id'] ? : array('gt', 0);
-
+        $map['examine.category_id'] = $map['examine.category_id'] ?: array('gt', 0);
+        
         $map_str = '';
         $logmap = '';
         switch ($examine_by) {
@@ -71,7 +73,9 @@ class Examine extends Common
                 $map['check_user_id'] = [['like', '%,' . $user_id . ',%']];
                 break; //待审
             case '2' :
-                $map['flow_user_id'] = [['like', '%,' . $user_id . ',%'], ['eq', $user_id], 'or'];
+                $map_str = "(( check_user_id LIKE '%," . $user_id . ",%' OR check_user_id = " . $user_id . " )
+                 OR ( flow_user_id LIKE '%," . $user_id . ",%'  OR `flow_user_id` = " . $user_id . " ) )";
+//                $map['flow_user_id'] = [['like', '%,' . $user_id . ',%'], ['eq', $user_id], 'or'];
                 break; //已审
             default:
                 $map['examine.create_user_id'] = $user_id;
@@ -85,9 +89,9 @@ class Examine extends Common
             $map['examine.create_time'] = array('between', array($start_time, $end_time));
         }
         unset($map['examine.between_time']);
-
+        
         //审核状态 0 待审批 2 审批通过 4 审批拒绝 all 全部
-        if ($check_status) {
+        if (isset($check_status)) {
             if ($check_status == 'all') {
                 $map['examine.check_status'] = ['egt', 0];
                 if (isSuperAdministrators($user_id)) {
@@ -95,13 +99,20 @@ class Examine extends Common
                 }
             } elseif ($check_status == 4) {
                 $map['examine.check_status'] = ['eq', 3];
+            } elseif ($check_status == 0) {
+                $map['examine.check_status'] = ['<=', 1];
             } else {
                 $map['examine.check_status'] = $check_status;
-            }            
-        } else {
-            $map['examine.check_status'] = ['egt', 0];
+            }
+        }else{
+            if ($examine_by == 'all') {
+                $map['examine.check_status'] = ['egt', 0];
+            } elseif ($examine_by == 1) {
+                $map['examine.check_status'] = ['elt', 1];
+            } elseif($examine_by == 2) {
+                $map['examine.check_status'] = ['egt', 2];
+            }
         }
-        
         $join = [
             ['__ADMIN_USER__ user', 'user.id = examine.create_user_id', 'LEFT'],
             ['__OA_EXAMINE_CATEGORY__ examine_category', 'examine_category.category_id = examine.category_id', 'LEFT'],
@@ -111,7 +122,7 @@ class Examine extends Common
             ->where($map_str)
             ->where($map)
             ->join($join);
-
+        
         $list = $list_view
             ->page($request['page'], $request['limit'])
             ->field('examine.*,user.realname,user.thumb_img,examine_category.title as category_name,examine_category.category_id as examine_config,examine_category.icon as examineIcon')
@@ -123,7 +134,7 @@ class Examine extends Common
             ->join($join)
             ->count('examine_id');
         $admin_user_ids = $userModel->getAdminId();
-
+        
         foreach ($list as $k => $v) {
             $list[$k]['create_user_info'] = $userModel->getUserById($v['create_user_id']);
             $causeCount = 0;
@@ -131,10 +142,10 @@ class Examine extends Common
             $duration = $v['duration'] ?: '0.0';
             $money = $v['money'] ?: '0.00';
             if (in_array($v['category_id'], ['3', '5'])) {
-                $causeCount = db('oa_examine_travel')->where(['examine_id' => $v['examine_id']])->count() ? : 0;
+                $causeCount = db('oa_examine_travel')->where(['examine_id' => $v['examine_id']])->count() ?: 0;
                 if ($v['category_id'] == 3) $causeTitle = $causeCount . '个行程,共' . $duration . '天';
                 if ($v['category_id'] == 5) $causeTitle = $causeCount . '个报销事项,共' . $money . '元';
-
+                
                 //附件
                 $fileList = [];
                 $imgList = [];
@@ -152,11 +163,11 @@ class Examine extends Common
                 }
                 $list[$k]['fileList'] = $fileList ?: [];
                 $list[$k]['imgList'] = $imgList ?: [];
-
+                
             }
             $list[$k]['causeTitle'] = $causeTitle;
-            $list[$k]['causeCount'] = $causeCount ? : 0;
-
+            $list[$k]['causeCount'] = $causeCount ?: 0;
+            
             //关联业务
             $relationArr = [];
             $relationArr = $recordModel->getListByRelationId('examine', $v['examine_id']);
@@ -164,7 +175,7 @@ class Examine extends Common
             $list[$k]['contactsList'] = $relationArr['contactsList'];
             $list[$k]['contractList'] = $relationArr['contractList'];
             $list[$k]['customerList'] = $relationArr['customerList'];
-
+            
             //附件
             $fileList = [];
             $imgList = [];
@@ -182,7 +193,7 @@ class Examine extends Common
             }
             $list[$k]['fileList'] = $fileList ?: [];
             $list[$k]['imgList'] = $imgList ?: [];
-
+            
             //创建人或管理员有撤销权限
             $permission = [];
             $is_recheck = 0;
@@ -195,7 +206,7 @@ class Examine extends Common
                     $is_recheck = 1;
                 }
             }
-
+            
             //创建人（失败、撤销状态时可编辑）
             if ($v['create_user_id'] == $user_id && in_array($v['check_status'], ['3', '4'])) {
                 $is_update = 1;
@@ -210,25 +221,25 @@ class Examine extends Common
             if ($examineFlowData['config'] == 1) {
                 //固定审批流
                 $examineStepModel = new \app\admin\model\ExamineStep();
-                $nextStepData = $examineStepModel->nextStepUser($user_id, $examineFlowData['flow_id'], 'oa_examine', 0, 0, 0);
-                $is_check = $nextStepData['next_user_ids'] ? 1 : 0;
+//                $nextStepData = $examineStepModel->nextStepUser($user_id, $examineFlowData['flow_id'], 'oa_examine', 0, 0, 0);
+                $is_check = in_array($user_id, stringToArray($v['check_user_id'])) && in_array($v['check_status'], [0, 1]) ? 1 : 0;
                 $is_end = 1;
             } else {
                 $is_end = 0;
-                if ($v['check_user_id'] == (',' . $user_id . ',')) {
+                if ($v['check_user_id'] == (',' . $user_id . ',') && in_array($v['check_status'], [0, 1])) {
                     $is_check = 1;
-                }else{
+                } else {
                     $is_check = 0;
                 }
-            }            
-            if ($v['last_user_id'] == 0) {
-                $user_name = $userModel->getListByStr(stringToArray($v['check_user_id']));
-                $list[$k]['examine_name'] = $user_name[0]['realname'];
-            } else {
-                $user_name = $userModel->getListByStr(stringToArray($v['last_user_id']));
-                $list[$k]['examine_name'] = $user_name[0]['realname'];
             }
-
+            if($v['check_status']==4){
+                $usernames = db('admin_user')->whereIn('id', stringToArray($user_id))->column('realname');
+            }else{
+                $usernames = db('admin_user')->whereIn('id', stringToArray($v['check_user_id']))->column('realname');
+            }
+            
+            $list[$k]['examine_name'] = implode($usernames, '，');
+            
             $permission['is_check'] = $is_check;
             $permission['is_delete'] = $is_delete;
             $permission['is_recheck'] = $is_recheck;
@@ -236,12 +247,13 @@ class Examine extends Common
             $list[$k]['permission'] = $permission;
             $list[$k]['config'] = $is_end;
             $list[$k]['check_status_info'] = $this->statusArr[(int)$v['check_status']];
-            $list[$k]['create_time'] = date('Y-m-d H:i:s', $v['create_time']);
+            $list[$k]['create_time'] = !empty($v['create_time']) ? date('Y-m-d H:i:s', $v['create_time']) : null;
+            $list[$k]['update_time'] = !empty($v['update_time']) ? date('Y-m-d H:i:s', $v['update_time']) : null;
         }
         $data = [];
         $data['page']['list'] = $list;
         $data['page']['dataCount'] = $dataCount ?: 0;
-
+        
         if ($request['page'] != 1 && (int)($request['page'] * $request['limit']) >= (int)$dataCount) {
             $data['page']['firstPage'] = false;
             $data['page']['lastPage'] = true;
@@ -254,7 +266,7 @@ class Examine extends Common
         }
         return $data;
     }
-
+    
     /**
      * 创建审批信息
      * @param
@@ -279,9 +291,9 @@ class Examine extends Common
             $this->error = $validate->getError();
             return false;
         }
-
+        
         $categoryInfo = $examineCategoryModel->getDataById($param['category_id']);
-
+        
         $fileArr = $param['file_id']; //接收表单附件
         unset($param['file_id']);
         $param['start_time'] = $param['start_time'] ? strtotime($param['start_time']) : 0;
@@ -309,7 +321,7 @@ class Examine extends Common
                 $rdata['status'] = 1;
                 $rdata['create_time'] = time();
                 Db::name('OaExamineRelation')->insert($rdata);
-
+                
                 //处理差旅相关
                 $resTravel = true;
                 if (in_array($param['category_id'], ['3', '5']) && $param['cause']) {
@@ -329,11 +341,11 @@ class Examine extends Common
                     ],
                     $send_user_id
                 );
-
-
+                
+                
                 $data = [];
                 $data['examine_id'] = $this->examine_id;
-
+                
                 # 添加活动记录
                 if (!empty($rdata['customer_ids']) || !empty($rdata['contacts_ids']) || !empty($rdata['business_ids']) || !empty($rdata['contract_ids'])) {
                     Db::name('crm_activity')->insert([
@@ -350,7 +362,7 @@ class Examine extends Common
                         'contract_ids' => !empty($rdata['contract_ids']) ? trim($rdata['contract_ids'], ',') : '',
                     ]);
                 }
-
+                
                 return $data;
             } else {
                 $this->error = $examineDataModel->getError();
@@ -361,7 +373,7 @@ class Examine extends Common
             return false;
         }
     }
-
+    
     /**
      * 编辑审批信息
      *
@@ -387,14 +399,14 @@ class Examine extends Common
             $this->error = '数据不存在或已删除';
             return false;
         }
-
+        
         //过滤不能修改的字段
         $unUpdateField = ['create_user_id', 'is_deleted', 'delete_time'];
         foreach ($unUpdateField as $v) {
             unset($param[$v]);
         }
         $categoryInfo = $examineCategoryModel->getDataById($dataInfo['category_id']);
-
+        
         //验证
         $fieldModel = new \app\admin\model\Field();
         $validateArr = $fieldModel->validateField($this->name, $dataInfo['category_id']); //获取自定义字段验证规则
@@ -404,7 +416,7 @@ class Examine extends Common
             $this->error = $validate->getError();
             return false;
         }
-
+        
         $fileArr = $param['file_id']; //接收表单附件
         unset($param['file_id']);
         $param['start_time'] = $param['start_time'] ? strtotime($param['start_time']) : 0;
@@ -422,7 +434,7 @@ class Examine extends Common
                         return false;
                     }
                 }
-
+                
                 //站内信
                 $send_user_id = stringToArray($param['check_user_id']);
                 if ($send_user_id) {
@@ -435,7 +447,7 @@ class Examine extends Common
                         $send_user_id
                     );
                 }
-
+                
                 //相关业务
                 $rdata = [];
                 $rdata['customer_ids'] = $param['oaExamineRelation']['customer_ids'] ? arrayToString($param['oaExamineRelation']['customer_ids']) : [];
@@ -443,7 +455,7 @@ class Examine extends Common
                 $rdata['business_ids'] = $param['oaExamineRelation']['business_ids'] ? arrayToString($param['oaExamineRelation']['business_ids']) : [];
                 $rdata['contract_ids'] = $param['oaExamineRelation']['contract_ids'] ? arrayToString($param['oaExamineRelation']['contract_ids']) : [];
                 Db::name('OaExamineRelation')->where('examine_id = ' . $examine_id)->update($rdata);
-
+                
                 //处理差旅相关
                 $resTravel = true;
                 if (in_array($dataInfo['category_id'], ['3', '5']) && $param['cause']) {
@@ -465,10 +477,10 @@ class Examine extends Common
                         $send_user_id
                     );
                 }
-
+                
                 $data = [];
                 $data['examine_id'] = $examine_id;
-
+                
                 # 删除活动记录
                 Db::name('crm_activity')->where(['activity_type' => 9, 'activity_type_id' => $examine_id])->delete();
                 # 添加活动记录
@@ -487,7 +499,7 @@ class Examine extends Common
                         'contract_ids' => !empty($rdata['contract_ids']) ? trim($rdata['contract_ids'], ',') : '',
                     ]);
                 }
-
+                
                 return $data;
             } else {
                 $this->error = $examineDataModel->getError();
@@ -498,7 +510,7 @@ class Examine extends Common
             return false;
         }
     }
-
+    
     /**
      * 审批数据
      * @param  $id 审批ID
@@ -516,7 +528,7 @@ class Examine extends Common
             ->where($map)
             ->alias('examine')
             ->join('__OA_EXAMINE_CATEGORY__ examine_category', 'examine_category.category_id = examine.category_id', 'LEFT');
-
+        
         $dataInfo = $data_view
             ->field('examine.*,examine_category.title as category_name,examine_category.icon as examineIcon')
             ->find();
@@ -534,7 +546,7 @@ class Examine extends Common
         // foreach ($fieldList as $k=>$v) {
         // 	$dataInfo[$v] = $fieldModel->getFormValueByField($v, $dataInfo[$v]);
         // }
-
+        
         //关联业务
         $relationArr = [];
         $relationArr = $recordModel->getListByRelationId('examine', $id);
@@ -542,7 +554,7 @@ class Examine extends Common
         $dataInfo['contactsList'] = $relationArr['contactsList'];
         $dataInfo['contractList'] = $relationArr['contractList'];
         $dataInfo['customerList'] = $relationArr['customerList'];
-
+        
         $travelList = [];
         if (in_array($dataInfo['category_id'], ['3', '5'])) {
             //行程、费用明细
@@ -574,7 +586,7 @@ class Examine extends Common
             }
         }
         $dataInfo['travelList'] = $travelList;
-
+        
         //附件
         $fileList = [];
         $imgList = [];
@@ -596,7 +608,7 @@ class Examine extends Common
         $dataInfo['examine_id'] = $id;
         return $dataInfo;
     }
-
+    
     /**
      * 审批差旅数据保存
      * @param examine_id 审批ID
@@ -615,7 +627,7 @@ class Examine extends Common
             unset($v['files']);
             $newData = $v;
             $newData['examine_id'] = $examine_id;
-
+            
             $fileArr = $v['file_id']; //接收表单附件
             unset($newData['file_id']);
             unset($newData['fileList']);
@@ -643,7 +655,7 @@ class Examine extends Common
         }
         return true;
     }
-
+    
     /**
      * 审批差旅数据编辑
      * @param examine_id 审批ID
@@ -657,7 +669,7 @@ class Examine extends Common
         }
         $oldTravelIds = db('oa_examine_travel')->where(['examine_id' => $examine_id])->column('travel_id');
         $oldTravelFileIds = db('oa_examine_travel_file')->where(['travel_id' => ['in', $oldTravelIds]])->column('r_id');
-
+        
         $successRes = true;
         foreach ($data as $k => $v) {
             $newData = [];

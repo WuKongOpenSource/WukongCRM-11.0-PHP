@@ -276,11 +276,6 @@ class Business extends ApiCommon
                 $errorMessage[] = $businessInfo['name'].'"转移失败，错误原因：无权限；';
                 continue;
             }
-            $resBusiness = db('crm_business')->where(['business_id' => $business_id])->update($data);
-            if (!$resBusiness) {
-                $errorMessage[] = $businessInfo['name'].'"转移失败，错误原因：数据出错；';
-                continue;
-            }
 
             //团队成员
             teamUserId(
@@ -291,7 +286,25 @@ class Business extends ApiCommon
                 $is_remove,
                 0
             );
-                
+
+            $resBusiness = db('crm_business')->where(['business_id' => $business_id])->update($data);
+            if (!$resBusiness) {
+                $errorMessage[] = $businessInfo['name'].'"转移失败，错误原因：数据出错；';
+                continue;
+            } else {
+                $businessArray = [];
+                $teamBusiness = db('crm_business')->field(['owner_user_id', 'ro_user_id', 'rw_user_id'])->where('business_id', $business_id)->find();
+                if (!empty($teamBusiness['ro_user_id'])) {
+                    $businessRo = arrayToString(array_diff(stringToArray($teamBusiness['ro_user_id']), [$teamBusiness['owner_user_id']]));
+                    $businessArray['ro_user_id'] = $businessRo;
+                }
+                if (!empty($teamBusiness['rw_user_id'])) {
+                    $businessRo = arrayToString(array_diff(stringToArray($teamBusiness['rw_user_id']), [$teamBusiness['owner_user_id']]));
+                    $businessArray['rw_user_id'] = $businessRo;
+                }
+                db('crm_business')->where('business_id', $business_id)->update($businessArray);
+            }
+
             //修改记录
             updateActionLog($userInfo['id'], 'crm_business', $business_id, '', '', '将商机转移给：'.$ownerUserName);       
         }

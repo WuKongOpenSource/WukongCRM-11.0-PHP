@@ -214,12 +214,6 @@ class Contract extends ApiCommon
         if (!in_array($dataInfo['check_status'], ['3', '4', '5', '6'])) {
             return resultArray(['error' => '当前状态为审批中或已审批通过，不可编辑']);
         }
-
-        if ($param['is_draft'] || (!empty($param['check_status']) && $param['check_status'] == 5)) {
-            //保存为草稿
-            $param['check_status'] = 5; //草稿(未提交)
-            $param['check_user_id'] = $param['check_user_id'] ? ','.$param['check_user_id'].',' : '';
-        } else {
             if (($examineStatus != false && $examineStatus != 'false') || $examineStatus == 1) {
                 //将合同审批状态至为待审核，提交后重新进行审批
                 //审核判断（是否有符合条件的审批流）
@@ -244,7 +238,7 @@ class Contract extends ApiCommon
                 } else {
                     $check_user_id = $param['check_user_id'] ? ','.$param['check_user_id'].',' : '';
                 }
-                if ($param['is_draft']) {
+                if ($param['is_draft'] || (!empty($param['check_status']) && $param['check_status'] == 5)) {
                     //保存为草稿
                     $param['check_status'] = 5;
                     $param['check_user_id'] = $param['check_user_id'] ? ','.$param['check_user_id'].',' : '';
@@ -257,7 +251,7 @@ class Contract extends ApiCommon
                 }
                 $param['flow_user_id'] = '';
             }
-        }
+        
 
         if ($contractModel->updateDataById($param, $param['id'])) {
             //将审批记录至为无效
@@ -314,7 +308,7 @@ class Contract extends ApiCommon
                 $isDel = false;
                 $errorMessage[] = '名称为'.$data['name'].'的合同删除失败,错误原因：当前合同已作废，非超级管理员，不可删除';
             }
-            if (!in_array($data['check_status'],['0','4','5','6']) && !in_array(1,$adminTypes)) {
+            if (!in_array($data['check_status'], [4, 5]) && !in_array(1,$adminTypes)) {
                 $isDel = false;
                 $errorMessage[] = '名称为'.$data['name'].'的合同删除失败,错误原因：当前状态为审批中或已审批通过，不可删除';
             }
@@ -335,9 +329,9 @@ class Contract extends ApiCommon
                 return resultArray(['error' => $contractModel->getError()]);
             }
             //删除跟进记录
-            $recordModel->delDataByTypes('crm_contract',$delIds);
+            $recordModel->delDataByTypes(6,$delIds);
             //删除关联附件
-            $fileModel->delRFileByModule(6,$delIds);
+            $fileModel->delRFileByModule('crm_contract',$delIds);
             //删除关联操作记录
             $actionRecordModel->delDataById(['types'=>'crm_contract','action_id'=>$delIds]);
             // 删除回款记录
@@ -395,15 +389,10 @@ class Contract extends ApiCommon
                 $errorMessage[] = $contractInfo['name'].'"转移失败，错误原因：无权限；';
                 continue;
             }
-            if (in_array($contractInfo['check_status'],['0','1'])) {
-                $errorMessage[] = $contractInfo['name'].'"转移失败，错误原因：待审或审批中，无法转移；';
-                continue;
-            }            
-            $resContract = db('crm_contract')->where(['contract_id' => $contract_id])->update($data);
-            if (!$resContract) {
-                $errorMessage[] = $contractInfo['name'].'"转移失败，错误原因：数据出错；';
-                continue;
-            }
+//            if (in_array($contractInfo['check_status'],['0','1'])) {
+//                $errorMessage[] = $contractInfo['name'].'"转移失败，错误原因：待审或审批中，无法转移；';
+//                continue;
+//            }
 
             //团队成员
             teamUserId(
@@ -411,9 +400,29 @@ class Contract extends ApiCommon
                 $contract_id,
                 $type,
                 [$contractInfo['owner_user_id']],
-                $is_remove,
+                ($is_remove == 1) ? 1 : '',
                 0
             );
+
+            $resContract = db('crm_contract')->where(['contract_id' => $contract_id])->update($data);
+            if (!$resContract) {
+                $errorMessage[] = $contractInfo['name'].'"转移失败，错误原因：数据出错；';
+                continue;
+            } else {
+                # 处理负责人重复显示在团队成员中的bug
+                $contractArray = [];
+                $teamContract = db('crm_contract')->field(['owner_user_id', 'ro_user_id', 'rw_user_id'])->where('contract_id', $contract_id)->find();
+                if (!empty($teamContract['ro_user_id'])) {
+                    $contractRo = arrayToString(array_diff(stringToArray($teamContract['ro_user_id']), [$teamContract['owner_user_id']]));
+                    $contractArray['ro_user_id'] = $contractRo;
+                }
+                if (!empty($teamContract['rw_user_id'])) {
+                    $contractRo = arrayToString(array_diff(stringToArray($teamContract['rw_user_id']), [$teamContract['owner_user_id']]));
+                    $contractArray['rw_user_id'] = $contractRo;
+                }
+                db('crm_contract')->where('contract_id', $contract_id)->update($contractArray);
+            }
+
             //修改记录
             updateActionLog($userInfo['id'], 'crm_contract', $contract_id, '', '', '将合同转移给：'.$ownerUserName);        
         }

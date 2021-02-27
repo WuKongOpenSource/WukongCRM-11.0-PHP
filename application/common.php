@@ -165,10 +165,29 @@ function where_arr($array = [], $m = '', $c = '', $a = '')
                 if (!empty($v['start'])) $v['start'] = date('Y-m-d', $v['start']);
                 if (!empty($v['end']))   $v['end']   = date('Y-m-d', $v['end']);
             }
-            if ($v['form_type'] == 'user') {
+            # 创建人、负责人、回访人（非自定义字段）
+            if ($v['form_type'] == 'user' && in_array($k, ['create_user_id', 'owner_user_id'])) {
                 if ($v['condition'] == 'is') $v['condition'] = 'contains';
             }
-            if ($types == 'contract') {
+            # 自定义字段的user、structure类型
+            if (($v['form_type'] == 'user' && !in_array($k, ['create_user_id', 'owner_user_id'])) || $v['form_type'] == 'structure') {
+                if ($v['condition'] == 'is') $v['condition'] = 'contains';
+                if ($v['condition'] == 'isNot') {
+                    return "(".$c.$k." not like '%".$v['value'][0]."%' OR ".$c.$k." is null)";
+                }
+            }
+            # 处理多选字段的精确搜索
+            if ($v['form_type'] == 'checkbox' && !empty($v['value'])) {
+                if ($v['condition'] == 'is' && count($v['value']) == 1) $v['value'][0] = ',' . $v['value'][0] . ',';
+                if ($v['condition'] == 'is' && count($v['value']) > 1) {
+                    $checkboxLike = '';
+                    foreach ($v['value'] AS $kk => $vv) {
+                        $checkboxLike .= $c.$k." like "."'%".$vv."%' AND ";
+                    }
+                    return "(".$checkboxLike."LENGTH(".$c.$k.") = LENGTH('".arrayToString($v['value'])."'))";
+                }
+            }
+            if ($types == 'contract' && !empty($v['value'])) {
                 switch ($k) {
                     case 'business_id' :
                         $k = 'name';
@@ -186,11 +205,11 @@ function where_arr($array = [], $m = '', $c = '', $a = '')
                         break;
                 }
             }
-            if ($types == 'receivables' && $v['name'] == '合同编号') {
+            if ($types == 'receivables' && $v['name'] == '合同编号' && !empty($v['value'])) {
                 $k = 'num';
                 $c = 'contract.';
             }
-            if ($types == 'receivables' && $k == 'plan_id') {
+            if ($types == 'receivables' && $k == 'plan_id' && !empty($v['value'])) {
                 $planIds = [];
                 foreach ($v['value'] AS $kk => $vv) {
                     $planIdArray = db('crm_receivables_plan')->whereLike('num', '%' . $vv . '%')->column('plan_id');
@@ -200,17 +219,21 @@ function where_arr($array = [], $m = '', $c = '', $a = '')
                 }
                 $v['value'] = array_unique($planIds);
             }
-            if ($types == 'invoice' && $v['type'] == 'invoice_status') {
+            if ($types == 'invoice' && $v['type'] == 'invoice_status' && !empty($v['value'])) {
                 foreach ($v['value'] AS $kk => $vv) {
                     if ($vv == '已开票') $v['value'][$kk] = 1;
                     if ($vv == '未开票') $v['value'][$kk] = 0;
                 }
             }
-            if ($types == 'visit' && $v['type'] == 'contract_name') {
+            if ($types == 'visit' && $v['type'] == 'contract_name' && !empty($v['value'])) {
                 $k = 'num';
                 $c = 'contract.';
             }
-            if ($k == 'check_status' && is_array($v) && in_array($v['value'][0], $checkStatusList)) {
+            if ($types == 'visit' && $v['type'] == 'contacts_name' && !empty($v['value'])) {
+                $k = 'name';
+                $c = 'contacts.';
+            }
+            if ($k == 'check_status' && is_array($v) && in_array($v['value'][0], $checkStatusList) && !empty($v['value'])) {
                 $v['value'] = $checkStatusArray[$v['value'][0]] ?: '0';
             }
             if (is_array($v)) {

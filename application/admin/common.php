@@ -170,3 +170,25 @@ function sendRequest($url, $params = array() , $headers = array()) {
     curl_close($ch);
     return $return;
 }
+
+/**
+ * 验证序列号
+ * @param 
+ * @return
+ */        
+function checkWkCode($wkcode) {
+    $pub = config('public_key');
+    $openssl_pub = openssl_pkey_get_public($pub);
+    // 验签
+    $resArr = openssl_public_decrypt(Hex2String($wkcode), $decrypted, $pub);
+    if(!$resArr) return false;
+    return $decrypted;
+}
+
+function Hex2String($hex){
+    $string = '';
+    for ($i=0; $i < strlen($hex); $i+=2){
+        $string .= chr(hexdec($hex[$i].$hex[$i+1]));
+    }
+    return $string;
+}

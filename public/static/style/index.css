@@ -1,5 +1,6 @@
 .container {
   padding: 20px;
+  border-radius: 10px;
 }
 .agreement-title {
   width: 100%;

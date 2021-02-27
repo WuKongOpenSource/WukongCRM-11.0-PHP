@@ -315,6 +315,8 @@ class Invoice extends ApiCommon
      */
     public function delete(InvoiceLogic $invoiceLogic)
     {
+        $actionRecordModel = new \app\admin\model\ActionRecord();
+        $fileModel = new \app\admin\model\File();
         $idArray  = $this->param['id'];
         $userinfo = $this->userInfo['id'];
 
@@ -326,7 +328,7 @@ class Invoice extends ApiCommon
         if (!isSuperAdministrators($userinfo['id'])) {
             $list = $invoiceLogic->getExamineStatus($idString, true);
             foreach ($list AS $key => $value) {
-                if (!in_array($value['check_status'], ['3', '4', '5', '6'])) {
+                if (!in_array($value['check_status'],  [4, 5])) {
                     $status = false;
                     break;
                 }
@@ -338,8 +340,9 @@ class Invoice extends ApiCommon
         if (!$invoiceLogic->delete($idArray)) return resultArray(['error' => '删除失败！']);
 
         # 删除附件
-        $fileModel = new \app\admin\model\File();
         $fileModel->delRFileByModule('crm_invoice', $idArray);
+        //删除关联操作记录
+        $actionRecordModel->delDataById(['types'=>'crm_invoice','action_id'=>$idArray]);
 
         return resultArray(['data' => '删除成功！']);
     }

@@ -316,7 +316,20 @@ class Customer extends ApiCommon
             if (!$resCustomer) {
                 $errorMessage[] = $customerInfo['name'].'转移失败，错误原因：数据出错；';
                 continue;
-            } 
+            } else {
+                # 处理转移时，负责人出现在只读和读写成员列表中
+                $customerArray = [];
+                $teamCustomer = db('crm_customer')->field(['owner_user_id', 'ro_user_id', 'rw_user_id'])->where('customer_id', $customer_id)->find();
+                if (!empty($teamCustomer['ro_user_id'])) {
+                    $customerRo = arrayToString(array_diff(stringToArray($teamCustomer['ro_user_id']), [$teamCustomer['owner_user_id']]));
+                    $customerArray['ro_user_id'] = $customerRo;
+                }
+                if (!empty($teamCustomer['rw_user_id'])) {
+                    $customerRo = arrayToString(array_diff(stringToArray($teamCustomer['rw_user_id']), [$teamCustomer['owner_user_id']]));
+                    $customerArray['rw_user_id'] = $customerRo;
+                }
+                db('crm_customer')->where('customer_id', $customer_id)->update($customerArray);
+            }
             
             if (in_array('crm_contacts',$types)) {
                 $contactsIds = [];
@@ -339,7 +352,7 @@ class Customer extends ApiCommon
                     if ($resBusiness !== true) {
                         $errorMessage = $errorMessage ? array_merge($errorMessage,$resBusiness) : $resBusiness;
                         continue;                        
-                    }                    
+                    }
                 }
             }
 
@@ -677,7 +690,7 @@ class Customer extends ApiCommon
         $file = request()->file('file');
         // $res = $excelModel->importExcel($file, $param, $this);
         $res = $excelModel->batchImportData($file, $param, $this);
-        return resultArray(['data' => '导入成功']);
+        return resultArray(['data' => $excelModel->getError()]);
     }
 
     /**

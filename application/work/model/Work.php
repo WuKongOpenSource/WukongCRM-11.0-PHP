@@ -75,6 +75,7 @@ class Work extends Common
 			$ownerData['work_id']        = $workId;
 			$ownerData['create_user_id'] = $createUserId;
 			$ownerData['owner_user_id']  = $ownerUserId;
+			$ownerData['group_id']       = !empty($param['group_id']) ? $param['group_id'] : 0;
             # 创建项目下的相关成员
 			$this->addOwner($ownerData);
 
@@ -129,6 +130,10 @@ class Work extends Common
             $ownerData['is_open']        = $param['is_open'];
             $ownerData['group_id']       = $param['group_id'];
             $this->addOwner($ownerData);
+        }
+        # 公开项目更新时的权限变更
+        if ($param['is_open'] == 1 && !empty($param['group_id']) && $param['group_id'] != $workInfo['group_id']) {
+            db('work_user')->where(['work_id' => $workInfo['work_id'], 'user_id' => ['neq', $workInfo['create_user_id']]])->update(['group_id' => $param['group_id']]);
         }
 		$resUpdata = $this->where($map)->update($param);
 		if ($resUpdata) {
@@ -307,7 +312,7 @@ class Work extends Common
 				$group_id = 1;
 			} else {
 				# 默认角色
-				$group_id = db('admin_group')->where(['pid' => 5, 'system' => 1])->order('id asc')->value('id');
+				$group_id = !empty($param['group_id']) ? $param['group_id'] : db('admin_group')->where(['pid' => 5, 'system' => 1])->order('id asc')->value('id');
 			}
 			$data['group_id'] = $group_id;
 			$saveData[] = $data;

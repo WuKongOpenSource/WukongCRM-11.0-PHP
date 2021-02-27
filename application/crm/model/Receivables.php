@@ -83,7 +83,7 @@ class Receivables extends Common
 			if (!is_array($map['receivables.owner_user_id'][1])) {
 				$map['receivables.owner_user_id'][1] = [$map['receivables.owner_user_id'][1]];
 			}
-			if ($map['receivables.owner_user_id'][0] == 'neq') {
+			if (in_array($map['receivables.owner_user_id'][0], ['neq', 'notin'])) {
 				$auth_user_ids = array_diff($auth_user_ids, $map['receivables.owner_user_id'][1]) ? : [];	//取差集	
 			} else {
 				$auth_user_ids = array_intersect($map['receivables.owner_user_id'][1], $auth_user_ids) ? : [];	//取交集
@@ -97,7 +97,8 @@ class Receivables extends Common
 		$indexField = $fieldModel->getIndexField('crm_receivables', $user_id, 1) ? : array('number');    
 		//人员类型
 		$userField = $fieldModel->getFieldByFormType('crm_receivables', 'user');
-		$structureField = $fieldModel->getFieldByFormType('crm_receivables', 'structure');  //部门类型	    			
+		$structureField = $fieldModel->getFieldByFormType('crm_receivables', 'structure');  //部门类型
+        $datetimeField = $fieldModel->getFieldByFormType('crm_receivables', 'datetime'); //日期时间类型
 
 		if ($request['order_type'] && $request['order_field']) {
 			$order = $fieldModel->getOrderByFormtype('crm_receivables','receivables',$order_field,$order_type);
@@ -134,7 +135,7 @@ class Receivables extends Common
 				->where($map)
 				->where($authMap)
         		->limit($request['offset'], $request['length'])
-				->field(implode(',',$indexField).',customer.name as customer_name,contract.name as contract_name,contract.num as contract_num,contract.money as contract_money')
+				->field('receivables.*,customer.name as customer_name,contract.name as contract_name,contract.num as contract_num,contract.money as contract_money')
 				->orderRaw($order)
 				->select();	
 
@@ -150,11 +151,16 @@ class Receivables extends Common
         	$list[$k]['contract_id_info']['money'] = $v['contract_money'] ? : '0.00';
         	$list[$k]['contract_money'] = $v['contract_money'] ? : '0.00';  
 			foreach ($userField as $key => $val) {
-        		$list[$k][$val.'_info'] = isset($v[$val]) ? $userModel->getListByStr($v[$val]) : [];
+                $usernameField  = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
+                $list[$k][$val] = implode($usernameField, ',');
         	}
 			foreach ($structureField as $key => $val) {
-        		$list[$k][$val.'_info'] = isset($v[$val]) ? $structureModel->getDataByStr($v[$val]) : [];
+                $structureNameField = !empty($v[$val]) ? db('admin_structure')->whereIn('id', stringToArray($v[$val]))->column('name') : [];
+                $list[$k][$val]     = implode($structureNameField, ',');
         	}
+            foreach ($datetimeField as $key => $val) {
+                $list[$k][$val] = !empty($v[$val]) ? date('Y-m-d H:i:s', $v[$val]) : null;
+            }
         	$list[$k]['check_status_info'] = $this->statusArr[$v['check_status']];
         	//期数
         	$plan_num = db('crm_receivables_plan')->where(['plan_id' => $v['plan_id']])->value('num');
@@ -403,6 +409,11 @@ class Receivables extends Common
         $dataInfo['contract_id_info'] = $dataInfo['contract_id'] ? db('crm_contract')->where(['contract_id' => $dataInfo['contract_id']])->field('contract_id,name,money')->find() : [];  		
 		$dataInfo['receivables_id'] = $id;
 		# 处理时间格式
+        $fieldModel = new \app\admin\model\Field();
+        $datetimeField = $fieldModel->getFieldByFormType('crm_receivables', 'datetime'); //日期时间类型
+        foreach ($datetimeField as $key => $val) {
+            $dataInfo[$val] = !empty($dataInfo[$val]) ? date('Y-m-d H:i:s', $dataInfo[$val]) : null;
+        }
         $dataInfo['create_time'] = !empty($dataInfo['create_time']) ? date('Y-m-d H:i:s', $dataInfo['create_time']) : null;
         $dataInfo['update_time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
 		return $dataInfo;

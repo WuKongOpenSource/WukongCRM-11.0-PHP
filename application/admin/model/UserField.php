@@ -147,7 +147,7 @@ class UserField extends Model
             $field_list[$v['field']]['name'] = $v['name'];
             $fieldArr[$k]['width'] = '';
         }
-       
+
         //已设置字段
         $value = $this->where(['types' => $types,'user_id' => $user_id])->value('datas');
         $value = $value ? json_decode($value, true) : [];
@@ -162,6 +162,8 @@ class UserField extends Model
             $a = 0;
             $b = 0;
             foreach ($value as $k=>$v) {
+                if (empty($field_list[$k]['name'])) continue;
+
                 if (empty($v['is_hide'])) {
                     $valueList[] = $k;
                     $value_list[$a]['field'] = $k; 
@@ -193,6 +195,16 @@ class UserField extends Model
         $data = [];
         $data['value_list'] = $value_list ? : []; //展示列
         $data['hide_list'] = $hide_list ? : []; //隐藏列
+
+        if ($types == 'crm_visit') {
+            foreach ($data['value_list'] AS $key => $value) {
+                if ($value['name'] == '负责人') $data['value_list'][$key]['name'] = '回访人';
+            }
+            foreach ($data['hide_list'] AS $key => $value) {
+                if ($value['name'] == '负责人') $data['hide_list'][$key]['name'] = '回访人';
+            }
+        }
+
         return $data ? : [];
     }    
 }

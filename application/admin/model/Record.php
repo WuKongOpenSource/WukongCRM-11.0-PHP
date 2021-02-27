@@ -609,7 +609,7 @@ class Record extends Common
 		}
 		$fileModel = new \app\admin\model\File();
 		$record_ids = db('crm_activity')->where(['activity_type' => $types,'activity_type_id' => ['in',$types_id]])->column('activity_id');
-        db('crm_activity')->where(['activity_type' => $types,'activity_type_id' => ['in',$types_id],'type'=>1])->delete();
+        db('crm_activity')->where(['activity_type' => $types,'activity_type_id' => ['in',$types_id]])->delete();
 		//删除关联附件
         $fileModel->delRFileByModule('crm_activity',$record_ids);
 		return true;

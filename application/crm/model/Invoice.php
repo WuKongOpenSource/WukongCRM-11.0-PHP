@@ -14,6 +14,7 @@ class Invoice extends Common
 {
     protected $name = 'crm_invoice';
     protected $pk   = 'invoice_id';
+    protected $dateFormat = "Y-m-d H:i:s";
 
     /**
      * 关联用户模型

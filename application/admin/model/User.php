@@ -47,7 +47,7 @@ class User extends Common
 			'name' => '手机号（登录名）',
 			'form_type' => 'mobile',
 			'is_null' => 1,
-			'is_unique' => 1
+//			'is_unique' => 1 //guogaobo 导入此字段会进行验重查询调用修改用户方法
 		],
 		[
 			'field' => 'password',
@@ -256,6 +256,10 @@ class User extends Common
 			}
 			$param = $temp;
 			$param['structure_id'] = 0;
+            if(db('admin_user')->where('username',$param['username'])->find()){
+                $this->error = '手机号已存在';
+                return false;
+            }
 		} else {
 			if (empty($param['group_id']) || !is_array($param['group_id'])) {
 				$this->error = '请至少勾选一个用户组';
@@ -269,7 +273,6 @@ class User extends Common
 			return false;
 		}
 		$syncModel = new \app\admin\model\Sync();
-
 		$this->startTrans();
 		try {
 			$salt = substr(md5(time()),0,4);
@@ -350,6 +353,7 @@ class User extends Common
 	 */
 	public function updateDataById($param, $id)
 	{
+	 
 		if ($param['user_id']) {
 			//修改个人信息
 			$data['email'] = $param['email'];
@@ -396,6 +400,7 @@ class User extends Common
 				$this->error = '直属上级不能是自己或下属';
 				return false;
 			}
+			p(2333);
 			if (db('admin_user')->where(['id' => ['neq',$id],'username' => $param['username']])->find()) {
 				$this->error = '手机号已存在';
 				return false;			
@@ -924,8 +929,6 @@ class User extends Common
         $authList['hrm']       = (Object)[];
         $authList['jxc']       = (Object)[];
         $authList['knowledge'] = (Object)[];
-
-        $authList['crm']['receivables']['excelexport'] = false;
 
         return $authList;
     }

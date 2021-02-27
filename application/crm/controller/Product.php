@@ -10,6 +10,7 @@ namespace app\crm\controller;
 use app\admin\controller\ApiCommon;
 use app\crm\model\Product as ProductModel;
 use app\admin\model\File as FileModel;
+use app\admin\model\ActionRecord as ActionRecordModel;
 use think\Db;
 use think\Hook;
 use think\Request;
@@ -294,6 +295,8 @@ class Product extends ApiCommon
                 ProductModel::commit();
                 // 删除关联附件
                 (new FileModel)->delRFileByModule('crm_product', $delIds);
+                // 操作记录
+                (new ActionRecordModel)->delDataById('crm_product', $delIds);
                 // 添加删除记录
                 actionLog($delIds, '', '', '');
                 return resultArray(['data' => '删除成功']);

@@ -535,7 +535,7 @@ class FieldGrantLogic
     {
         $content = [];
 
-        $visitList = Db::name('admin_field')->field(['name', 'field'])->where('types', 'crm_visit')->select();
+        $visitList = Db::name('admin_field')->field(['name', 'field'])->where(['type' => 'crm_visit', 'operating' => 0])->select();
 
         # 处理自定义字段
         foreach ($visitList AS $key => $value) {
@@ -551,14 +551,19 @@ class FieldGrantLogic
         }
 
         # 处理固定字段
-//        $content[] = ['name' => '回访时间', 'field' => 'visit_time', 'read' => 1, 'read_operation' => 1, 'write' => 1, 'write_operation' => 1, 'is_diy' => 0];
-        $content[] = ['name' => '负责人', 'field' => 'owner_user_id', 'read' => 1, 'read_operation' => 0, 'write' => 0, 'write_operation' => 0, 'is_diy' => 0];
-        $content[] = ['name' => '客户', 'field' => 'customer_id', 'read' => 1, 'read_operation' => 0, 'write' => 0, 'write_operation' => 0, 'is_diy' => 0];
-        $content[] = ['name' => '联系人', 'field' => 'contract_id', 'read' => 1, 'read_operation' => 1, 'write' => 1, 'write_operation' => 1, 'is_diy' => 0];
+        $content[] = ['name' => '回访编号', 'field' => 'number', 'read' => 1, 'read_operation' => 1, 'write' => 1, 'write_operation' => 1, 'is_diy' => 0];
+        $content[] = ['name' => '回访形式', 'field' => 'shape', 'read' => 1, 'read_operation' => 1, 'write' => 1, 'write_operation' => 1, 'is_diy' => 0];
+        $content[] = ['name' => '客户满意度', 'field' => 'satisfaction', 'read' => 1, 'read_operation' => 1, 'write' => 1, 'write_operation' => 1, 'is_diy' => 0];
+        $content[] = ['name' => '回访时间', 'field' => 'visit_time', 'read' => 1, 'read_operation' => 1, 'write' => 1, 'write_operation' => 1, 'is_diy' => 0];
+        $content[] = ['name' => '客户名称', 'field' => 'customer_id', 'read' => 1, 'read_operation' => 0, 'write' => 0, 'write_operation' => 0, 'is_diy' => 0];
+        $content[] = ['name' => '联系人', 'field' => 'contacts_id', 'read' => 1, 'read_operation' => 1, 'write' => 0, 'write_operation' => 0, 'is_diy' => 0];
+        $content[] = ['name' => '合同编号', 'field' => 'contract_id', 'read' => 1, 'read_operation' => 0, 'write' => 0, 'write_operation' => 0, 'is_diy' => 0];
+        $content[] = ['name' => '客户反馈', 'field' => 'feedback', 'read' => 1, 'read_operation' => 1, 'write' => 1, 'write_operation' => 1, 'is_diy' => 0];
+        $content[] = ['name' => '回访人', 'field' => 'owner_user_id', 'read' => 1, 'read_operation' => 0, 'write' => 1, 'write_operation' => 1, 'is_diy' => 0];
         $content[] = ['name' => '创建时间', 'field' => 'create_time', 'read' => 1, 'read_operation' => 0, 'write' => 0, 'write_operation' => 0, 'is_diy' => 0];
         $content[] = ['name' => '编辑时间', 'field' => 'update_time', 'read' => 1, 'read_operation' => 0, 'write' => 0, 'write_operation' => 0, 'is_diy' => 0];
         $content[] = ['name' => '创建人', 'field' => 'create_user_id', 'read' => 1, 'read_operation' => 0, 'write' => 0, 'write_operation' => 0, 'is_diy' => 0];
-        $content[] = ['name' => '合同', 'field' => 'contacts_id', 'read' => 1, 'read_operation' => 0, 'write' => 0, 'write_operation' => 0, 'is_diy' => 0];
+
 
         Db::name('admin_field_grant')->insert([
             'role_id'     => $roleId,

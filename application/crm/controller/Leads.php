@@ -226,7 +226,8 @@ class Leads extends ApiCommon
             $data['deal_time'] = time();
             $data['create_time'] = time();
             $data['update_time'] = time();
-            $data['next_time'] = $leadsInfo['next_time'] ? date('Y-m-d H:i:s', $leadsInfo['next_time']) : 0;
+            $data['next_time'] = $leadsInfo['next_time'];
+            if (empty($data['telephone'])) $data['telephone'] = 0;
             # 获取客户的时间
             $data['obtain_time'] = time();
             //权限判断
@@ -404,6 +405,9 @@ class Leads extends ApiCommon
         $file = request()->file('file');
         // $res = $excelModel->importExcel($file, $param);
         $res = $excelModel->batchImportData($file, $param, $this);
+        if (!$res) {
+            return resultArray(['error' => $excelModel->getError()]);
+        }
         return resultArray(['data' => $excelModel->getError()]);
     }
 

@@ -15,8 +15,8 @@ class TaskLogic
         $userModel = new \app\admin\model\User();
         $taskModel = new TaskModel();
         $recordModel = new \app\admin\model\Record();
-        $str = ','.$param['user_id'].',';
-
+        $str = ',' . $param['user_id'] . ',';
+        
         //自定义时间
         $map['t.stop_time'] = $param['dueDate'] ? strtotime($param['dueDate'] . ' +1 month -1 day') : ['>=', 0];
         $search = $param['search'];
@@ -34,14 +34,14 @@ class TaskLogic
         } else {
             $where['t.status'] = [['=', 1], ['=', 5], 'OR'];
         }
-
+        
         if ($param['main_user_id']) {
             $where['t.main_user_id'] = $param['main_user_id'];
         }
         //项目id
         $priority = ($param['priority'] || $param['priority'] == '0') ? $param['priority'] : ['in', [0, 1, 2, 3]];
-        $where['t.priority'] = $priority;        
-
+        $where['t.priority'] = $priority;
+        
         if ($param['work_id'] != 0) {
             $where['t.work_id'] = $param['work_id'];
             $taskList = db('task')
@@ -56,9 +56,9 @@ class TaskLogic
                 $where = [];
                 $where['ishidden'] = 0;
                 $where['pid'] = 0;
-                $where['whereStr'] = ' ( task.create_user_id =' . $param['user_id'] . ' or (  task.owner_user_id like "%,'.$param['user_id'].',%") or ( task.main_user_id = '.$param['user_id'].' ) )';
+                $where['whereStr'] = ' ( task.create_user_id =' . $param['user_id'] . ' or (  task.owner_user_id like "%,' . $param['user_id'] . ',%") or ( task.main_user_id = ' . $param['user_id'] . ' ) )';
                 if (!empty($this->param['search'])) {
-                    $where['taskSearch'] = ' and (task.name like "%'.$this->param['search'].'%" OR task.description like "%'.$this->param['search'].'%")';
+                    $where['taskSearch'] = ' and (task.name like "%' . $this->param['search'] . '%" OR task.description like "%' . $this->param['search'] . '%")';
                 }
                 # 截止日期
                 $timeWhere = $this->getTimeParam($param['time_type']);
@@ -76,12 +76,11 @@ class TaskLogic
                     ->join('AdminUser u', 'u.id = t.main_user_id', 'LEFT')
                     ->field('t.task_id,t.name as task_name,t.main_user_id,t.description,t.priority,t.stop_time,t.create_time,t.owner_user_id,t.start_time,t.create_user_id,u.realname as main_user_name,t.is_top')
                     ->where($where)
-                    ->where($whereStr)
                     ->where($timeWhere)
                     ->where($labelWhere)
                     ->order('t.task_id desc')
                     ->select();
-
+                
             } else {
                 ///下属任务
                 if ($param['mold'] == 1) {
@@ -96,21 +95,21 @@ class TaskLogic
                     if ($type != 0) {
                         switch ($type) {
                             case '1' :
-                                $type = 't.main_user_id in ('.$subStr.')';
+                                $type = 't.main_user_id in (' . $subStr . ')';
                                 break; //下属负责的
                             case '3' :
                                 //使用正则查询
                                 // SELECT * FROM 5kcrm_task WHERE owner_user_id REGEXP '(,1,|,2,|,3,)';
-                                $type = $subValue ? 't.owner_user_id REGEXP "('.$subValue.')"' : '';
+                                $type = $subValue ? 't.owner_user_id REGEXP "(' . $subValue . ')"' : '';
                                 break; //下属参与的
                         }
                     } else {
                         if (!$subValue) {
                             $type = 't.is_open = 1 AND (t.main_user_id in (' . $subStr . ') or t.create_user_id in (' . $subStr . '))';
                         } else {
-                            $type .= 't.is_open = 1 AND (t.main_user_id in (' . $subStr . ') or t.create_user_id in (' . $subStr . ') or t.owner_user_id REGEXP "('.$subValue.')")';
+                            $type .= 't.is_open = 1 AND (t.main_user_id in (' . $subStr . ') or t.create_user_id in (' . $subStr . ') or t.owner_user_id REGEXP "(' . $subValue . ')")';
                         }
-                    } 
+                    }
                     $map['t.pid'] = 0;
                     $map['t.ishidden'] = 0;
                     $taskList = Db::name('Task')
@@ -121,12 +120,12 @@ class TaskLogic
                         )
                         ->where(function ($query) use ($type) {
                             $query->where($type);
-                        })                    
+                        })
                         ->where($where)
                         ->where($map)
                         ->order('t.task_id desc')
-                        ->select();      
-                }  else {
+                        ->select();
+                } else {
                     $map['t.pid'] = 0;
                     // $map['t.work_id'] = 0;
                     if ($type != 0) {
@@ -135,15 +134,15 @@ class TaskLogic
                                 $type = 't.main_user_id =' . $param['user_id'] . '';
                                 break; //我负责的
                             case '3' :
-                                $type = 't.owner_user_id like "%,'.$param['user_id'].',%"';
+                                $type = 't.owner_user_id like "%,' . $param['user_id'] . ',%"';
                                 break; //我参与的
                         }
                     } else {
                         $adminIds = $userModel->getAdminId();
-                        if (in_array($param['user_id'],$adminIds)) {
-                            $type = 't.is_open = 1';  
+                        if (in_array($param['user_id'], $adminIds)) {
+                            $type = 't.is_open = 1';
                         } else {
-                            $type = 't.is_open = 1 AND (t.main_user_id =' . $param['user_id'] .' OR t.owner_user_id like "%,'.$param['user_id'].',%")';
+                            $type = 't.is_open = 1 AND (t.main_user_id =' . $param['user_id'] . ' OR t.owner_user_id like "%,' . $param['user_id'] . ',%")';
                         }
                     }
                     $where['t.ishidden'] = 0;
@@ -154,10 +153,9 @@ class TaskLogic
                         ->where($where)
                         ->where($type)
                         ->where($map)
-                        ->page($param['page'], $param['limit'])
                         ->order('t.task_id desc')
                         ->select();
-                }  
+                }
             }
         }
         foreach ($taskList as $key => $value) {
@@ -185,7 +183,7 @@ class TaskLogic
             //创建时间
             $taskList[$key]['create_time'] = $value['create_time'] ? date('Y-m-d H:i:s', $value['create_time']) : '';
             //开始时间
-            $taskList[$key]['start_time'] =  $value['start_time'] ? date('Y-m-d H:i:s', $value['start_time']) : '';
+            $taskList[$key]['start_time'] = $value['start_time'] ? date('Y-m-d H:i:s', $value['start_time']) : '';
             //结束时间
             $taskList[$key]['stop_time'] = $value['stop_time'] ? date('Y-m-d H:i:s', $value['stop_time']) : '';
             //优先级
@@ -217,14 +215,14 @@ class TaskLogic
         }
         return $taskList;
     }
-
+    
     /**
      * 任务导出
      * @param $param
      */
     public function excelExport($param)
     {
-
+        
         $data = $this->getDataList($param);
         $excelModel = new \app\admin\model\Excel();
         if ($param['work_id'] != 0) {
@@ -280,7 +278,7 @@ class TaskLogic
         }
         return $excelModel->taskExportCsv($file_name, $field_list, $title, $data);
     }
-
+    
     public function where($param)
     {
         $taskModel = new TaskModel();
@@ -289,11 +287,11 @@ class TaskLogic
         $workModel = new WorkModel();
         $userModel = new \app\admin\model\User();
         $work_id = $param['work_id'] ?: '';
-
+        
         if ($param['main_user_id']) {
             $map['t.main_user_id'] = ['in', $param['main_user_id']];
         }
-
+        
         //截止时间
         if ($param['stop_time_type']) {
             if ($param['stop_time_type'] == '5') { //没有截至日期
@@ -326,7 +324,7 @@ class TaskLogic
                 $map['t.stop_time'] = ['between', [$timeAry[0], $timeAry[1]]];
             }
         }
-
+        
         if ($param['lable_id']) {
             $taskIds = [];
             $task_ids = [];
@@ -339,7 +337,7 @@ class TaskLogic
                 $lableWhere['ishidden'] = 0;
                 $lableWhere['pid'] = 0;
                 $lableWhere['is_archive'] = 0;
-
+                
                 $task_id = $taskModel->where($lableWhere)->column('task_id');
                 if ($task_id && $task_ids) {
                     $task_ids = array_unique(array_filter(array_merge($task_ids, $task_id)));
@@ -349,12 +347,12 @@ class TaskLogic
             }
             $map['t.task_id'] = ['in', $task_ids];
         } else {
-
+            
             $map['t.task_id'] = $work_id;
         }
         return $map;
     }
-
+    
     /**
      * 获取截止日期参数
      * @param $type
@@ -363,46 +361,46 @@ class TaskLogic
     private function getTimeParam($type)
     {
         $result = [];
-
+        
         # 今天
         if ($type == 1) {
             $result = '(task.stop_time > 0 AND task.stop_time <= ' . strtotime(date('Y-m-d 23:59:59')) . ')';
         }
-
+        
         # 明天
         if ($type == 2) {
             $tomorrow = date("Y-m-d 23:59:59", strtotime("+1 day"));
             $result = '(task.stop_time > 0 AND task.stop_time <= ' . strtotime($tomorrow) . ')';
         }
-
+        
         # 本周
         if ($type == 3) {
             $week = mktime(23, 59, 59, date("m"), date("d") - date("w") + 7, date("Y"));
             $result = '(task.stop_time > 0 AND task.stop_time <= ' . $week . ')';
         }
-
+        
         # 本月
         if ($type == 4) {
             $month = mktime(23, 59, 59, date("m"), date("t"), date("Y"));
             $result = '(task.stop_time > 0 AND task.stop_time <= ' . $month . ')';
         }
-
+        
         # 未设置截止日期
         if ($type == 5) {
             $result = $result = '(task.stop_time = 0)';;
         }
-
+        
         # 已延期
         if ($type == 6) {
             $result = '(task.status = 2 OR task.stop_time >= ' . time() . ')';
         }
-
+        
         # 今日更新
         if ($type == 7) {
             $result = '(task.update_time >= ' . strtotime(date('Y-m-d 00:00:00')) . ' AND task.update_time <= ' . strtotime(date('Y-m-d 23:59:59')) . ')';
         }
-
+        
         return $result;
     }
-
+    
 }

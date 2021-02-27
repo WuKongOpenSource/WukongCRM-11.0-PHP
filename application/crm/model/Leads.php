@@ -90,7 +90,7 @@ class Leads extends Common
             if (!is_array($map['leads.owner_user_id'][1])) {
                 $map['leads.owner_user_id'][1] = [$map['leads.owner_user_id'][1]];
             }
-            if ($map['leads.owner_user_id'][0] == 'neq') {
+            if (in_array($map['leads.owner_user_id'][0], ['neq', 'notin'])) {
                 $auth_user_ids = array_diff($auth_user_ids, $map['leads.owner_user_id'][1]) ?: [];    //取差集
             } else {
                 $auth_user_ids = array_intersect($map['leads.owner_user_id'][1], $auth_user_ids) ?: [];    //取交集
@@ -104,6 +104,7 @@ class Leads extends Common
         $indexField = $fieldModel->getIndexField('crm_leads', $user_id, 1) ?: array('name');
         $userField = $fieldModel->getFieldByFormType('crm_leads', 'user'); //人员类型
         $structureField = $fieldModel->getFieldByFormType('crm_leads', 'structure');  //部门类型
+        $datetimeField = $fieldModel->getFieldByFormType('crm_leads', 'datetime'); //日期时间类型
 
         //排序
         if ($order_type && $order_field) {
@@ -139,10 +140,15 @@ class Leads extends Common
             $list[$k]['create_user_name'] = !empty($list[$k]['create_user_id_info']['realname']) ? $list[$k]['create_user_id_info']['realname'] : '';
             $list[$k]['owner_user_name'] = !empty($list[$k]['owner_user_id_info']['realname']) ? $list[$k]['owner_user_id_info']['realname'] : '';
             foreach ($userField as $key => $val) {
-                $list[$k][$val . '_info'] = isset($v[$val]) ? $userModel->getListByStr($v[$val]) : [];
+                $usernameField  = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
+                $list[$k][$val] = implode($usernameField, ',');
             }
             foreach ($structureField as $key => $val) {
-                $list[$k][$val . '_info'] = isset($v[$val]) ? $structureModel->getDataByStr($v[$val]) : [];
+                $structureNameField = !empty($v[$val]) ? db('admin_structure')->whereIn('id', stringToArray($v[$val]))->column('name') : [];
+                $list[$k][$val]     = implode($structureNameField, ',');
+            }
+            foreach ($datetimeField as $key => $val) {
+                $list[$k][$val] = !empty($v[$val]) ? date('Y-m-d H:i:s', $v[$val]) : null;
             }
             //权限
             $permission = [];
@@ -156,8 +162,6 @@ class Leads extends Common
             $permission['is_update'] = $is_update;
             $permission['is_delete'] = $is_delete;
             $list[$k]['permission'] = $permission;
-            # 下次联系时间
-            $list[$k]['next_time'] = !empty($v['next_time']) ? date('Y-m-d H:i:s', $v['next_time']) : null;
             # 关注
             $starWhere = ['user_id' => $user_id, 'target_id' => $v['leads_id'], 'type' => 'crm_leads'];
             $star = Db::name('crm_star')->where($starWhere)->value('star_id');
@@ -209,9 +213,6 @@ class Leads extends Common
         foreach ($arrFieldAtt as $k => $v) {
             $param[$v] = arrayToString($param[$v]);
         }
-
-        # 处理下次联系时间
-        if (!empty($param['next_time'])) $param['next_time'] = strtotime($param['next_time']);
 
         if ($this->data($param)->allowField(true)->isUpdate(false)->save()) {
             //修改记录
@@ -276,9 +277,6 @@ class Leads extends Common
             return false;
         }
 
-        # 处理下次联系时间
-        if (!empty($param['next_time'])) $param['next_time'] = strtotime($param['next_time']);
-
         //处理部门、员工、附件、多选类型字段
         $arrFieldAtt = $fieldModel->getArrayField('crm_leads');
         foreach ($arrFieldAtt as $k => $v) {
@@ -323,7 +321,11 @@ class Leads extends Common
         $starId = empty($userId) ? 0 : Db::name('crm_star')->where(['user_id' => $userId, 'target_id' => $id, 'type' => 'crm_leads'])->value('star_id');
         $dataInfo['star'] = !empty($starId) ? 1 : 0;
         # 处理时间格式处理
-        $dataInfo['next_time']   = !empty($dataInfo['next_time'])   ? date('Y-m-d H:i:s', $dataInfo['next_time'])   : null;
+        $fieldModel = new \app\admin\model\Field();
+        $datetimeField = $fieldModel->getFieldByFormType('crm_leads', 'datetime'); //日期时间类型
+        foreach ($datetimeField as $key => $val) {
+            $dataInfo[$val] = !empty($dataInfo[$val]) ? date('Y-m-d H:i:s', $dataInfo[$val]) : null;
+        }
         $dataInfo['create_time'] = !empty($dataInfo['create_time']) ? date('Y-m-d H:i:s', $dataInfo['create_time']) : null;
         $dataInfo['update_time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
         $dataInfo['last_time']   = !empty($dataInfo['last_time'])   ? date('Y-m-d H:i:s', $dataInfo['last_time'])   : null;

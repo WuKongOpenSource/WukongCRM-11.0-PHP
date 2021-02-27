@@ -33,7 +33,7 @@ class Task extends ApiCommon
         Hook::listen('check_auth', $action);
         $request = Request::instance();
         $a = strtolower($request->action());
-
+        
         if (!in_array($a, $action['permission'])) {
             parent::_initialize();
         }
@@ -48,7 +48,7 @@ class Task extends ApiCommon
             }
         }
     }
-
+    
     //判断任务(需创建人和负责人才能编辑删除)
     public function checkSub($task_id)
     {
@@ -62,7 +62,7 @@ class Task extends ApiCommon
             exit(json_encode(['code' => 102, 'error' => '没有权限']));
         }
     }
-
+    
     /**
      * 查看下属创建的任务
      * @param   //负责和参与
@@ -71,9 +71,9 @@ class Task extends ApiCommon
      */
     public function subTaskList()
     {
-
+    
     }
-
+    
     /**
      * 查看所有的项目
      * @param
@@ -88,7 +88,7 @@ class Task extends ApiCommon
         $data['count'] = $count;
         return resultArray(['data' => $data]);
     }
-
+    
     /**
      * 查看某个项目下任务列表
      * @param
@@ -104,7 +104,7 @@ class Task extends ApiCommon
         $list = $taskModel->getDataList($param, $userInfo['id']);
         return resultArray(['data' => $list]);
     }
-
+    
     /**
      * 查看我的任务
      * @param
@@ -137,7 +137,6 @@ class Task extends ApiCommon
         } else {
             $where['t.status'] = [['=', 1], ['=', 5], 'OR'];
         }
-
         if ($param['main_user_id']) {
             $where['t.main_user_id'] = $param['main_user_id'];
         }
@@ -154,25 +153,25 @@ class Task extends ApiCommon
                 $subArr[] = $v;
                 $subArr[] = '|';
             }
-            $subValue = $subList ? arrayToString($subArr) : '';       
+            $subValue = $subList ? arrayToString($subArr) : '';
             $where['t.ishidden'] = 0;
             $where['t.pid'] = 0;
             if ($type != 0) {
                 switch ($type) {
                     case '1' :
-                        $type = 't.main_user_id in ('.$subStr.')';
+                        $type = 't.main_user_id in (' . $subStr . ')';
                         break; //下属负责的
                     case '3' :
                         //使用正则查询
                         // SELECT * FROM 5kcrm_task WHERE owner_user_id REGEXP '(,1,|,2,|,3,)';
-                        $type = $subValue ? 't.owner_user_id REGEXP "('.$subValue.')"' : '';
+                        $type = $subValue ? 't.owner_user_id REGEXP "(' . $subValue . ')"' : '';
                         break; //下属参与的
                 }
             } else {
                 if (!$subValue) {
                     $type = 't.is_open = 1 AND (t.main_user_id in (' . $subStr . ') or t.create_user_id in (' . $subStr . '))';
                 } else {
-                    $type .= 't.is_open = 1 AND (t.main_user_id in (' . $subStr . ') or t.create_user_id in (' . $subStr . ') or t.owner_user_id REGEXP "('.$subValue.')")';
+                    $type .= 't.is_open = 1 AND (t.main_user_id in (' . $subStr . ') or t.create_user_id in (' . $subStr . ') or t.owner_user_id REGEXP "(' . $subValue . ')")';
                 }
             }
             // $where['t.work_id'] = 0;
@@ -195,13 +194,12 @@ class Task extends ApiCommon
                     $query->where($type);
                 })
                 ->count();
-
-            $completeCount = db('task') ->alias('t')->where($where)
+            $completeCount = db('task')->alias('t')
                 ->where($map)
                 ->where(function ($query) use ($type) {
                     $query->where($type);
-                })->where('t.status', 5)->count();
-
+                })
+                ->where($map)->where(['t.status' => 5, 't.ishidden' => 0, 'priority' => $priority])->count();
             foreach ($taskList as $k => $v) {
                 $temp = $v ?: [];
                 if ($v['pid']) {
@@ -217,7 +215,7 @@ class Task extends ApiCommon
                 $taskList[$k]['lableList'] = $v['lable_id'] ? $lableModel->getDataByStr($v['lable_id']) : [];
                 $taskList[$k]['main_user'] = $v['main_user_id'] ? $userModel->getUserById($v['main_user_id']) : array();
                 $taskList[$k]['relationCount'] = $taskModel->getRelationCount($v['task_id']);
-
+                
                 $taskList[$k]['create_time'] = date('Y-m-d', $v['create_time']) ?: '';
                 $taskList[$k]['update_time'] = date('Y-m-d', $v['update_time']) ?: '';
                 $taskList[$k]['start_time'] = $v['start_time'] == 0 ? null : date('Y-m-d', $v['start_time']);;
@@ -226,7 +224,7 @@ class Task extends ApiCommon
                 if (!empty($v['stop_time']) && (strtotime(date('Ymd')) + 86400 > $v['stop_time'])) $is_end = 1;
                 $taskList[$k]['is_end'] = $is_end;
             }
-
+            
         } else {
             $map['t.pid'] = 0;
             // $map['t.work_id'] = 0;
@@ -236,15 +234,15 @@ class Task extends ApiCommon
                         $type = 't.main_user_id =' . $userInfo['id'] . '';
                         break; //我负责的
                     case '3' :
-                        $type = 't.owner_user_id like "%,'.$userInfo['id'].',%"';
+                        $type = 't.owner_user_id like "%,' . $userInfo['id'] . ',%"';
                         break; //我参与的
                 }
             } else {
                 $adminIds = $userModel->getAdminId();
-                if (in_array($userInfo['id'],$adminIds)) {
-                    $type = 't.is_open = 1';  
+                if (in_array($userInfo['id'], $adminIds)) {
+                    $type = 't.is_open = 1';
                 } else {
-                    $type = 't.is_open = 1 AND (t.main_user_id =' . $userInfo['id'] .' OR t.owner_user_id like "%,'.$userInfo['id'].',%")';
+                    $type = 't.is_open = 1 AND (t.main_user_id =' . $userInfo['id'] . ' OR t.owner_user_id like "%,' . $userInfo['id'] . ',%")';
                 }
             }
             $where['t.ishidden'] = 0;
@@ -259,33 +257,35 @@ class Task extends ApiCommon
                 ->order('t.task_id desc')
                 ->select();
             $dataCount = db('task')->alias('t')->where($where)->where($type)->where($map)->count();
-            $completeCount = db('task')->alias('t')->where($where)->where($type)->where($map)->where('t.status', 5)->count();
+            $completeCount = db('task')->alias('t')
+                ->where($type)
+                ->where($map)->where(['t.status' => 5, 't.ishidden' => 0, 'priority' => $priority])->count();
             foreach ($taskList as $key => $value) {
                 $pname = '';
                 if ($value['pid']) {
-                    $pname = Db::name('Task')->where('task_id ='.$value['pid'])->value('name');
+                    $pname = Db::name('Task')->where('task_id =' . $value['pid'])->value('name');
                 }
-                $taskList[$key]['pname'] = $pname ? : '';
+                $taskList[$key]['pname'] = $pname ?: '';
                 $taskList[$key]['thumb_img'] = $value['thumb_img'] ? getFullPath($value['thumb_img']) : '';
-                $taskList[$key]['subcount'] = Db::name('Task')->where(['ishidden' => 0,'status' => 1,'pid' => $value['task_id']])->count(); //子任务
-                $taskList[$key]['subdonecount'] = Db::name('Task')->where(['ishidden' => 0,'status' => 5,'pid' => $value['task_id']])->count(); //已完成子任务
-                $taskList[$key]['commentcount'] = Db::name('AdminComment')->where(['type' => 'task','type_id' => $value['task_id']])->count();
-                $taskList[$key]['filecount'] = Db::name('WorkTaskFile')->where('task_id ='.$value['task_id'])->count();
+                $taskList[$key]['subcount'] = Db::name('Task')->where(['ishidden' => 0, 'status' => 1, 'pid' => $value['task_id']])->count(); //子任务
+                $taskList[$key]['subdonecount'] = Db::name('Task')->where(['ishidden' => 0, 'status' => 5, 'pid' => $value['task_id']])->count(); //已完成子任务
+                $taskList[$key]['commentcount'] = Db::name('AdminComment')->where(['type' => 'task', 'type_id' => $value['task_id']])->count();
+                $taskList[$key]['filecount'] = Db::name('WorkTaskFile')->where('task_id =' . $value['task_id'])->count();
                 $taskList[$key]['lableList'] = $value['lable_id'] ? $lableModel->getDataByStr($value['lable_id']) : [];
-
-                $taskList[$key]['create_time'] =  date('Y-m-d', $value['create_time']) ?: '';
-                $taskList[$key]['update_time'] =  date('Y-m-d', $value['update_time']) ?: '';
-                $taskList[$key]['start_time'] = $value['start_time']==0?null:date('Y-m-d', $value['start_time']);;
-                $taskList[$key]['stop_time'] = $value['stop_time']==0?null:date('Y-m-d', $value['stop_time']);
+                
+                $taskList[$key]['create_time'] = date('Y-m-d', $value['create_time']) ?: '';
+                $taskList[$key]['update_time'] = date('Y-m-d', $value['update_time']) ?: '';
+                $taskList[$key]['start_time'] = $value['start_time'] == 0 ? null : date('Y-m-d', $value['start_time']);;
+                $taskList[$key]['stop_time'] = $value['stop_time'] == 0 ? null : date('Y-m-d', $value['stop_time']);
                 //负责人信息
                 $taskList[$key]['main_user'] = $value['main_user_id'] ? $userModel->getDataById($value['main_user_id']) : array();
                 $taskList[$key]['relationCount'] = $taskModel->getRelationCount($value['task_id']);
                 $is_end = 0;
-                if (!empty($value['stop_time']) && (strtotime(date('Ymd'))+86399 > $value['stop_time'])) $is_end = 1;
+                if (!empty($value['stop_time']) && (strtotime(date('Ymd')) + 86399 > $value['stop_time'])) $is_end = 1;
                 $taskList[$key]['is_end'] = $is_end;
             }
         }
-
+        
         $data = [];
         $data['page']['list'] = $taskList ?: [];
         $data['page']['dataCount'] = $dataCount ?: 0;
@@ -302,7 +302,7 @@ class Task extends ApiCommon
         }
         return resultArray(['data' => $data]);
     }
-
+    
     /**
      * 任务列表导出
      * @return \think\response\Json|void
@@ -316,7 +316,7 @@ class Task extends ApiCommon
         $data = $TaskLogic->excelExport($param);
         return $data;
     }
-
+    
     /**
      * 获取任务详情
      * @param
@@ -338,7 +338,7 @@ class Task extends ApiCommon
             return resultArray(['error' => $taskmodel->getError()]);
         }
     }
-
+    
     /**
      * 任务编辑保存
      * @param
@@ -365,7 +365,7 @@ class Task extends ApiCommon
             return resultArray(['error' => $taskModel->getError()]);
         }
     }
-
+    
     /**
      * 解除关联关系
      * @param
@@ -403,7 +403,7 @@ class Task extends ApiCommon
             return resultArray(['error' => '操作失败']);
         }
     }
-
+    
     /**
      * 获取任务操作记录
      * @param
@@ -420,7 +420,7 @@ class Task extends ApiCommon
         $list = $taskModel->getTaskLogList($param) ?: [];
         return resultArray(['data' => $list]);
     }
-
+    
     /**
      * 优先级设置
      * @param
@@ -432,7 +432,7 @@ class Task extends ApiCommon
         $param = $this->param;
         $userInfo = $this->userInfo;
         $param['create_user_id'] = $userInfo['id'];
-
+        
         if (!isset($param['priority_id']) || !$param['task_id']) {
             return resultArray(['error' => '参数错误']);
         }
@@ -446,7 +446,7 @@ class Task extends ApiCommon
             return resultArray(['error' => '操作失败']);
         }
     }
-
+    
     /**
      * 参与人/参与部门编辑
      * @param
@@ -481,7 +481,7 @@ class Task extends ApiCommon
         }
         return resultArray(['error' => '修改失败']);
     }
-
+    
     /**
      * 单独删除参与人
      * @param
@@ -504,7 +504,7 @@ class Task extends ApiCommon
             return resultArray(['error' => $taskModel->getError()]);
         }
     }
-
+    
     /**
      * 单独删除参与部门
      * @param
@@ -527,7 +527,7 @@ class Task extends ApiCommon
             return resultArray(['error' => $taskModel->getError()]);
         }
     }
-
+    
     /**
      * 设置任务截止时间
      * @param
@@ -553,7 +553,7 @@ class Task extends ApiCommon
             return resultArray(['error' => $taskModel->getError()]);
         }
     }
-
+    
     /**
      * 添加删除标签
      * @param
@@ -584,7 +584,7 @@ class Task extends ApiCommon
             return resultArray(['error' => $taskModel->getError()]);
         }
     }
-
+    
     /**
      * 任务标题描述更新
      * @param
@@ -606,7 +606,7 @@ class Task extends ApiCommon
             return resultArray(['error' => $taskModel->getError()]);
         }
     }
-
+    
     /**
      * 任务标记结束
      * @param
@@ -646,7 +646,7 @@ class Task extends ApiCommon
         }
         return resultArray(['data' => '操作成功']);
     }
-
+    
     /**
      * 日历任务展示/月份
      * @param
@@ -666,7 +666,7 @@ class Task extends ApiCommon
             return resultArray(['error' => $taskModel->getError()]);
         }
     }
-
+    
     /**
      * 添加任务
      * @param
@@ -689,7 +689,7 @@ class Task extends ApiCommon
             return resultArray(['error' => $taskModel->getError()]);
         }
     }
-
+    
     /**
      * 删除主负责人
      * @param
@@ -717,7 +717,7 @@ class Task extends ApiCommon
         }
         return resultArray(['data' => '操作成功']);
     }
-
+    
     /**
      * 重命名任务
      * @param
@@ -740,7 +740,7 @@ class Task extends ApiCommon
             return resultArray(['error' => $workModel->getError()]);
         }
     }
-
+    
     /**
      * 删除任务
      * @param
@@ -765,7 +765,7 @@ class Task extends ApiCommon
             return resultArray(['error' => $workModel->getError()]);
         }
     }
-
+    
     /**
      * 归档任务 改变状态
      * @param
@@ -793,7 +793,7 @@ class Task extends ApiCommon
             return resultArray(['error' => $taskModel->getError()]);
         }
     }
-
+    
     /**
      * 恢复归档任务
      * @param
@@ -821,7 +821,7 @@ class Task extends ApiCommon
             return resultArray(['error' => $taskModel->getError()]);
         }
     }
-
+    
     /**
      * 归档任务列表
      * @param

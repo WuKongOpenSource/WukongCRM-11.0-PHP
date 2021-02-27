@@ -359,8 +359,9 @@ class ActivityLogic
         $fileModel = new \app\admin\model\File();
         foreach ($dataArray AS $key => $value) {
             # 用户信息 todo 有模型文件，时间问题，暂时将查询写在循环中
-            $realname = Db::name('admin_user')->where('id', $dataArray[$key]['create_user_id'])->value('realname');
-            $dataArray[$key]['create_user_name'] = $realname;
+            $realname = Db::name('admin_user')->where('id', $dataArray[$key]['create_user_id'])->find();
+            $dataArray[$key]['create_user_name'] = $realname['realname'];
+            $dataArray[$key]['thumb_img'] =  $realname['thumb_img'] ? getFullPath($realname['thumb_img']) : '';;
 
             # 附件信息
             if ($value['type'] = 1) {
@@ -785,7 +786,7 @@ class ActivityLogic
         # 审批
         if ($activityType == 9) {
             $categoryId       = Db::name('oa_examine')->where('examine_id', $activityTypeId)->value('category_id');
-            $activityTypeName = Db::name('oa_examine_category')->where('category_id', $categoryId);
+            $activityTypeName = Db::name('oa_examine_category')->where('category_id', $categoryId)->value('title');
         }
         # 日程
         if ($activityType == 10) {

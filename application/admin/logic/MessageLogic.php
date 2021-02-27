@@ -10,7 +10,7 @@ class MessageLogic
     {
         $where = '';
         switch ($label) {
-
+            
             case '1':  //任务
                 $where = array('in', [1, 2, 3]);//
                 break;
@@ -21,7 +21,7 @@ class MessageLogic
                 $where = array('in', [6, 7, 8]);
                 break;
             case '4':  //公告
-                $where = array('eq', 9);
+                $where = 9;
                 break;
             case '5' :  //日程
                 $where = 10;
@@ -36,14 +36,14 @@ class MessageLogic
         }
         return $where;
     }
-
+   
     public function getDataList($param)
     {
         $userId = $param['user_id'];
         unset($param['user_id']);
         //types 1表示已读 0表示未读
         if (isset($param['is_read'])) {
-            $where['m.read_time'] = ['=', 0];
+            $where['m.read_time'] = 0;
         }
         $where['m.to_user_id'] = $userId;
         $where['m.is_delete'] = ['eq', 1];
@@ -74,11 +74,11 @@ class MessageLogic
                 ->page($param['page'], $param['limit'])
                 ->order($order)
                 ->select();
+            $dataCount = db('admin_message')
+                ->alias('m')
+                ->join('__ADMIN_USER__ user', 'user.id=m.from_user_id', 'LEFT')
+                ->where($where)->count();
         }
-        $dataCount = db('admin_message')
-            ->alias('m')
-            ->join('__ADMIN_USER__ user', 'user.id=m.from_user_id', 'LEFT')
-            ->where($where)->count();
         //1表示已读 0表示未读
         foreach ($list as $k => $v) {
             if ($v['read_time'] == 0) {
@@ -90,48 +90,38 @@ class MessageLogic
             if ($v['type'] == 4) {
                 $content = db('admin_comment')
                     ->where(
-                        [   'status' => 1,
-                            'comment_id' => $v['action_id'],
+                        ['status' => 1,
+                            'type_id' => $v['action_id'],
                             'type' => ['like', '%' . $v['controller_name' . '%']],
                             'user_id' => $v['from_user_id']
                         ])
-                    ->find();
-                if (!empty($content)) {
-                    $list[$k]['content'] = $content['content'];
-                }
-            } elseif (in_array($v['type'], ['12', '15'])) {
+                    ->select();
+                $list[$k]['content'] = $content[$k]['content'];
+            } elseif (in_array($v['type'], ['7','12', '15',25])) {
                 $content = db('admin_examine_record')->where(['types_id' => $v['action_id'], 'types' => ['like', '%' . $v['controller_name' . '%']], 'check_user_id' => $v['from_user_id']])->field('content')->find();
                 if ($content['content']) {
                     $list[$k]['content'] = $content['content'];
                 }
             }
-            if ($v['type'] == 10) {
-                    $item = db('oa_event_notice')->where('id', $v['action_id'])->find();
-
-                    if ($item) {
-                        $noticetype = $item['noticetype'];
-                        if($item['noticetype'] == 1){
-                            $advance_time =$v['advance_time'] - ($item['number'] * 60);
-                        }elseif ($item['noticetype'] == 2){
-                            $advance_time =$v['advance_time'] - ($item['number'] * 60 * 60);
-                        }else{
-                            $advance_time = $v['advance_time'] - ($item['number'] * 60 * 60 * 24);
-                        }
-
-                        $time = time();
-                        if ($time == $advance_time ||$time>$advance_time) {
-                            $type['value']=$item['number'];
-                            $type['type']=$item['noticetype'];
-                            $list[$k]['content']= $type;
-                            $list[$k]['action_id'] = $item['event_id'];
-                        }
-                    }
-//                p(222);
+            if ($v['type'] == 10 && $v['advance_time'] < time()) {
+                $item = db('oa_event_notice')->where('id', $v['action_id'])->find();
+                if ($item) {
+                    $type['value'] = $item['number'];
+                    $type['type'] = $item['noticetype'];
+                    $list[$k]['content'] = $type;
+                    $list[$k]['action_id'] = $item['event_id'];
+                }
+            } elseif($v['type'] == 10 && $v['advance_time'] > time()) {
+                unset($list[$k]);
             }
+            $time=time();
             if (in_array($v['type'], ['17', '18', '19', '20', '27'])) {
                 $error_file_path = db('admin_import_record')->where('id', $v['action_id'])->find();
-                if($error_file_path['error_data_file_path']==''){
-                    $list[$k]['title'] = '';
+                $week = strtotime("+7 day", $error_file_path['create_time']);
+                if ($time > (int)$week && $error_file_path['error_data_file_path'] != '') {
+                    $list[$k]['valid'] = 0;
+                } else {
+                    $list[$k]['valid'] = 1;
                 }
                 $list[$k]['error_file_path'] = $error_file_path['error_data_file_path'];
             }
@@ -151,7 +141,7 @@ class MessageLogic
         }
         return $data;
     }
-
+    
     /**
      * 修改状态变为已读
      * @param $param
@@ -173,7 +163,7 @@ class MessageLogic
         $data['list'] = $list;
         return $data;
     }
-
+    
     /**
      * 删除
      *
@@ -190,7 +180,7 @@ class MessageLogic
         }
         return db('admin_message')->where(['message_id' => $param['message_id']])->update(['is_delete' => 2]);
     }
-
+    
     /**
      * 批量更新
      * @param $param
@@ -200,7 +190,7 @@ class MessageLogic
      */
     public function readAllMessage($param)
     {
-
+        
         $where = [
             'to_user_id' => $param['user_id'],
             'read_time' => 0
@@ -220,7 +210,7 @@ class MessageLogic
         $data['list'] = $list;
         return $data;
     }
-
+    
     /**
      * 批量删除已读
      * @param $param
@@ -244,7 +234,7 @@ class MessageLogic
         $data['list'] = $list;
         return $data;
     }
-
+    
     public function unreadCount($param)
     {
         $userId = $param['user_id'];
@@ -253,7 +243,7 @@ class MessageLogic
         $label = '';
         $where['to_user_id'] = ['eq', $userId];
         $where['is_delete'] = ['eq', 1];
-
+        
         $where['type'] = $this->label('');
         $allCount = db('admin_message')->where($where)->count();
         $where['type'] = $this->label(1);
@@ -265,10 +255,10 @@ class MessageLogic
         $where['type'] = 9;
         $announceCount = db('admin_message')->where($where)->count();
         $where['type'] = $this->label(5);
-        $eventCount = db('admin_message')->where($where)->where('advance_time', '>=', time())->count();
+        $eventCount = db('admin_message')->where($where)->where(['advance_time'=>['<', time()],'advance_time'=>['<>',0]])->count();
         $where['type'] = $this->label(6);
         $crmCount = db('admin_message')->where($where)->count();
-
+        
         $data = [];
         $data['allCount'] = $allCount ?: 0;
         $data['taskCount'] = $taskCount ?: 0;

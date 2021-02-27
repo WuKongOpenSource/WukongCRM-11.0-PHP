@@ -236,7 +236,9 @@ class Event extends ApiCommon
         $eventModel = model('Event');
 
         $data = $eventModel->getDataById($this->param['event_id']);
-
+        if(!$data['title']){
+            return resultArray(['error' => '日程已删除']);
+        }
         return resultArray(['data' => $data]);
     }
 

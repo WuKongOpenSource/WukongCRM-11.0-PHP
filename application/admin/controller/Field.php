@@ -84,7 +84,7 @@ class Field extends ApiCommon
      * 自定义字段数据
      */
     public function read()
-    {        
+    {
         $fieldModel = model('Field');
         $param = $this->param;
         $data = $fieldModel->getDataList($param);    
@@ -116,14 +116,22 @@ class Field extends ApiCommon
         $types_id   = $param['types_id'] ? : 0;
 //        $data['types'] = $param['types'];
 
-        $data        = $param['data'];
-        $saveParam   = []; # 新增数据
-        $updateParam = []; # 编辑数据
-        $delParam    = []; # 删除数据
-        $fieldIds    = []; # 删除数据（兼容前端11.*.*版本）
+        $data         = $param['data'];
+        $saveParam    = []; # 新增数据
+        $updateParam  = []; # 编辑数据
+        $delParam     = []; # 删除数据
+        $fieldIds     = []; # 删除数据（兼容前端11.*.*版本）
+        $errorMessage = []; # 错误数据
         $i = 0;
         foreach ($data AS $k => $v) {
             $i++;
+
+            # 必填的字段不可以隐藏
+            if (!empty($v['is_null']) && !empty($v['is_hidden'])) {
+                $errorMessage = '必填的字段不可以隐藏！';
+                break;
+            }
+
             if ($v['field_id']) {
                 if (isset($v['is_deleted']) && $v['is_deleted'] == '1') {
                     # 删除
@@ -143,8 +151,8 @@ class Field extends ApiCommon
             }
         }
 
-        # 错误数据
-        $errorMessage = [];
+        # 必填的字段不可以隐藏
+        if ($errorMessage) return resultArray(['error' => $errorMessage]);
 
         # 兼容前端11.*.*版本的删除条件处理，通过比较差异，来确定谁被前端给删除了 todo 这段代码需要写在新增上面，不然会把新增的给删除掉
         $oldFieldIds = Db::name('admin_field')->where('types', $types)->column('field_id');
@@ -170,7 +178,7 @@ class Field extends ApiCommon
         # 删除
         if (!empty($delParam)) {
             if (!$data = $fieldModel->delDataById($delParam)) {
-                $errorMessage[] = $fieldModel->getError();
+                if (!empty($fieldModel->getError())) $errorMessage[] = $fieldModel->getError();
             }
         }
 
@@ -312,12 +320,17 @@ class Field extends ApiCommon
                     case 'crm_visit' :
                         $visit = new \app\crm\model\Visit();
                         $dataInfo = $visit->getDataById(intval($param['action_id']));
+                        $fieldModel = new \app\admin\model\Field();
+                        $datetimeField = $fieldModel->getFieldByFormType('crm_visit', 'datetime'); //日期时间类型
+                        foreach ($datetimeField as $key => $val) {
+                            $dataInfo[$val] = !empty($dataInfo[$val]) ? date('Y-m-d H:i:s', $dataInfo[$val]) : null;
+                        }
                         //判断权限
                         $auth_user_ids = $userModel->getUserByPer('crm', 'visit', $param['action']);
                         //读写权限
                         $roPre = $userModel->rwPre($user_id, $dataInfo['ro_user_id'], $dataInfo['rw_user_id'], 'read');
                         $rwPre = $userModel->rwPre($user_id, $dataInfo['ro_user_id'], $dataInfo['rw_user_id'], 'update');
-                        if (!in_array($dataInfo['owner_user_id'],$auth_user_ids) && !$roPre && !$rwPre) {
+                        if (!in_array($user_id, stringToArray($dataInfo['owner_user_id'])) && !in_array($user_id,$auth_user_ids) && !$roPre && !$rwPre) {
                             header('Content-Type:application/json; charset=utf-8');
                             exit(json_encode(['code'=>102,'error'=>'无权操作']));
                         }
@@ -614,6 +627,10 @@ class Field extends ApiCommon
         $userFieldModel = model('UserField');
         $width = $param['width'] > 10 ? $param['width'] : '';
         $unField = array('pool_day','owner_user_name','is_lock','create_user_name');
+        switch ($param['field']) {
+        	case 'status_id_info' : $param['field'] = 'status_id';
+        		break;
+        }
         if (!in_array($param['field'],$unField)) {
             $res = $userFieldModel->setColumnWidth($param['types'], $param['field'], $width, $userInfo['id']);
             if (!$res) {

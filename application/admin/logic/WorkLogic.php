@@ -109,6 +109,13 @@ class WorkLogic
 
         if (!Db::name('admin_group')->where('id', $id)->delete()) return ['status' => false, 'error' => '操作失败！'];
 
+        # 将项目权限变更为只读权限
+        $readOnlyId = db('admin_group')->where(['title' => '只读', 'types' => 7, 'system' => 1])->value('id');
+        if (!empty($readOnlyId)) {
+            db('work')->where('group_id', $id)->update(['group_id' => $readOnlyId]);      # 处理公开项目的权限
+            db('work_user')->where('group_id', $id)->update(['group_id' => $readOnlyId]); # 处理私有项目的权限
+        }
+
         return ['status' => true];
     }
 }

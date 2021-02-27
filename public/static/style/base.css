@@ -10,6 +10,11 @@ html, body {
   background-color: #f2f2f2;
   font-family: 微软雅黑,Microsoft Yahei,LiHei Pro,Hiragino Sans,GBHelvetica Neue,Helvetica,Arial,PingFang SC,WenQuanYi Micro Hei,sans-serif;
 }
+body {
+  background-image: url('../img/bg.png');
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
 
 li {
   list-style: none;
@@ -72,7 +77,10 @@ li {
 .top {
   width: 790px;
   height: 65px;
-  margin: 0 auto;
+  margin:40px auto 20px auto;
+  border: 1px solid white;
+  border-radius: 5px ;
+  background-color: #fff ;
 }
 
 /* container */
@@ -81,6 +89,7 @@ li {
   min-height: 493px;
   background-color: white;
   border: 1px solid #e1e1e1;
+  border-radius:5px;
   margin: 0 auto;
 }
 
@@ -93,7 +102,7 @@ li {
   width: 820px;
   text-align: center;
   font-size: 15px;
-  color: #8c8c8c;
+  color: #fff;
   line-height: 30px;
   margin: 0 auto;
   padding: 30px 0;
@@ -112,6 +121,9 @@ li {
   text-align: center;
   margin: 20px 0;
   float: left;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .step.line {
   width: 10%;
@@ -122,12 +134,12 @@ li {
 .step .sort {
   width: 25px;
   height: 25px;
-  color: white;
+  color: #8c8c8c;
   line-height: 25px;
   text-align: center;
   font-size: 14px;
   border-radius: 50%;
-  background-color: #d1d1d1;
+  /* background-color: #d1d1d1; */
   margin-right: 5px;
   display: inline-block;
 }
@@ -139,13 +151,13 @@ li {
 }
 
 .step.active .sort {
-  background-color: #3e84e9;
+  background-color: #fff;
 }
 .step.active .desc {
-  color: #3e84e9;
+  color: black;
 }
 .step.active.line {
-  background-color: #3e84e9;
+  /* background-color: #fff; */
 }
 
 
@@ -156,7 +168,7 @@ li {
   line-height: 40px;
   font-size: 16px;
   color: #3e84e9;
-  border-radius: 40px;
+  border-radius: 5px;
   background-color: white;
   border: 1px solid #3e84e9;
   display: inline-block;
@@ -172,16 +184,44 @@ li {
   width: 100%;
   height: 54px;
   line-height: 54px;
-  background-color: #f7f7f7;
+  /* background-color: #f7f7f7; */
   padding: 0 26px;
-  border-bottom: 1px solid #e1e1e1;
+  /* border-bottom: 1px solid #e1e1e1; */
+  font-weight: 600;
 }
 .base-top .title {
-  color: #8c8c8c;
+  /* color: #8c8c8c; */
   font-size: 16px;
 }
 .base-top .version {
   font-size: 13px;
-  color: #d1d1d1;
+  color: #8c8c8c;
   float: right;
+}
+
+.base-des {
+  margin: 0 auto;
+  line-height: 35px;
+  width: 790px;
+  background-color: #fff;
+  padding: 0 40px;
+  margin-bottom: 20px;
+  color: #8c8c8c;
+}
+
+.base-a{
+  cursor: pointer;
+  user-select: none;
+  text-decoration: none;
+  color: #3e84e9;
+}
+ 
+#cover{ 
+  position:absolute;left:0px;top:0px;
+  background:rgba(0, 0, 0, 0.4);
+  width:100%;  /*宽度设置为100%，这样才能使隐藏背景层覆盖原页面*/
+  height:100%;
+  opacity:0.6;  /*非IE浏览器下设置透明度为60%*/
+  display:none; 
+  z-Index:99;
 }

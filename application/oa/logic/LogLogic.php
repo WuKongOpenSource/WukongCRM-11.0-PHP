@@ -38,15 +38,8 @@ class LogLogic extends Common
     public function getDataList($request)
     {
         $userModel = new \app\admin\model\User();
-        $structureModel = new \app\admin\model\Structure();
-        $fileModel = new \app\admin\model\File();
         $commonModel = new \app\admin\model\Comment();
-        $BusinessModel = new \app\crm\model\Business();
-        $ContactsModel = new \app\crm\model\Contacts();
-        $ContractModel = new \app\crm\model\Contract();
-        $CustomerModel = new \app\crm\model\Customer();
         $recordModel = new \app\admin\model\Record();
-
         $user_id = $request['read_user_id'];
         $by = $request['by'] ?: '';
 
@@ -78,44 +71,39 @@ class LogLogic extends Common
         }
         $requestData = $this->requestData();
         //获取权限范围内的员工
+        //获取权限范围内的员工
         $auth_user_ids = getSubUserId();
-        if ($request['send_user_id'] && !in_array(trim(arrayToString($request['send_user_id']), ','), $auth_user_ids)) {
-            $map['log.create_user_id'] = $user_id;
-        } else {
-            if ($request['send_user_id'] && in_array(trim(arrayToString($request['send_user_id']), ','), $auth_user_ids)) {
-                $map['log.create_user_id'] = ['in', trim(arrayToString($request['send_user_id']), ',')];
-                $map['log.send_user_ids'] = ['like', '%,' . $request['read_user_id'] . ',%'];
-            } else {
-                $dataWhere['user_id'] = $user_id;
-                $dataWhere['structure_id'] = $request['structure_id'];
-                $dataWhere['auth_user_ids'] = $auth_user_ids;
-                $logMap = '';
-                switch ($by) {
-                    case 'me' :
-                        $map['log.create_user_id'] = $user_id;
-                        break;
-                    case 'other':
-                        $logMap = function ($query) use ($dataWhere) {
-                            $query->where('log.send_user_ids', array('like', '%,' . $dataWhere['user_id'] . ',%'))
-                                ->whereOr('log.send_structure_ids', array('like', '%,' . $dataWhere['structure_id'] . ',%'));
-                        };
-                        break;
-                    default :
-                        $logMap = function ($query) use ($dataWhere) {
-                            $query->where('log.create_user_id', array('in', implode(',', $dataWhere['auth_user_ids'])))
-                                ->whereOr('log.send_user_ids', array('like', '%,' . $dataWhere['user_id'] . ',%'))
-                                ->whereOr('log.send_structure_ids', array('like', '%,' . $dataWhere['structure_id'] . ',%'));
-                        };
-                        break;
-                }
-            }
+        $dataWhere['user_id'] = $user_id;
+        $dataWhere['structure_id'] = $request['structure_id'];
+        $dataWhere['auth_user_ids'] = $auth_user_ids;
+        $logMap = '';
+        if ($request['send_user_id'] != '') {
+            $map['log.create_user_id'] = ['in', trim(arrayToString($request['send_user_id']), ',')];
+        }
+        switch ($by) {
+            case 'me' :
+                $map['log.create_user_id'] = $user_id;
+                break;
+            case 'other':
+                $logMap = function ($query) use ($dataWhere) {
+                    $query->where('log.send_user_ids', array('like', '%,' . $dataWhere['user_id'] . ',%'))
+                        ->whereOr('log.send_structure_ids', array('like', '%,' . $dataWhere['structure_id'] . ',%'));
+                };
+                break;
+            default :
+                $logMap = function ($query) use ($dataWhere) {
+                    $query->where('log.create_user_id', array('in', implode(',', $dataWhere['auth_user_ids'])))
+                        ->whereOr('log.send_user_ids', array('like', '%,' . $dataWhere['user_id'] . ',%'))
+                        ->whereOr('log.send_structure_ids', array('like', '%,' . $dataWhere['structure_id'] . ',%'));
+                };
+                break;
         }
         $list = Db::name('OaLog')
             ->where($map)
+            ->where($logMap)
             ->where($searchMap)
             ->alias('log')
             ->join('__ADMIN_USER__ user', 'user.id = log.create_user_id', 'LEFT')
-            ->page($request['page'], $request['limit'])
             ->field('log.*,user.realname')
             ->order('log.update_time desc')
             ->select();
@@ -651,11 +639,8 @@ class LogLogic extends Common
 
     /**
      * 销售简报跟进数量统计
-     * @param $param
-     * @return array
-     * @throws \think\db\exception\DataNotFoundException
-     * @throws \think\db\exception\ModelNotFoundException
-     * @throws \think\exception\DbException
+     *
+     * @param $param 参数
      */
     public function activityCount($param)
     {
@@ -665,17 +650,18 @@ class LogLogic extends Common
         if (empty($param['log_id'])) {
             $between_time = [$start_time['start_time'], $start_time['end_time']];
             $map['create_time'] = array('between', $between_time);
+            $map['create_user_id'] =$user_id;
         } else {
-
             $start_time = strtotime(date("Y-m-d", $item['create_time']));
             $end_time = strtotime(date("Y-m-d H:i:s", $item['create_time']));
             $between_time = [$start_time, $end_time];
             $map['create_time'] = array('between', $between_time);
+            $map['create_user_id'] =  $item['create_user_id'];
         }
         $map['status']=1;
         $typesList = ['1', '2', '3', '5', '6'];
             foreach ($typesList as $k => $v) {
-                $activityData = db('crm_activity')->where($map)->where(['create_user_id' => $item['create_user_id'], 'type' => 1, 'activity_type' => $v])->count();
+                $activityData = db('crm_activity')->where($map)->where(['type' => 1, 'activity_type' => $v])->count();
                 if($v==1){
                     $arr[$k]['types'] ='crm_leads';
                     $arr[$k]['activity_type'] =1;
@@ -693,7 +679,6 @@ class LogLogic extends Common
                     $arr[$k]['activity_type'] =6;
                 }
                 $arr[$k]['dataCount'] = $activityData;
-
             }
             $data = $arr;
         return $data;

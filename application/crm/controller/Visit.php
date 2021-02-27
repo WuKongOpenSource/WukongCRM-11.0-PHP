@@ -68,9 +68,8 @@ class Visit extends ApiCommon
             if (empty($numberInfo['number'])) return resultArray(['error' => '请填写回访编号！']);
             $param['number'] = $numberInfo['number'];
         }
-        $param['owner_user_id'] = $param['visit_user_id'] ? : $userInfo['id'];
+        $param['owner_user_id'] = $param['owner_user_id'] ? : $userInfo['id'];
         $param['create_user_id'] = $userInfo['id'];
-        $param['visit_user_id'] = $param['visit_user_id'] ? : $userInfo['id'];
         $param['update_time'] = time();
         $res = $Visit->createData($param);
         if ($res) {
@@ -119,8 +118,7 @@ class Visit extends ApiCommon
         $param = $this->param;
         $userInfo = $this->userInfo;
         $param['user_id'] = $userInfo['id'];
-        $param['owner_user_id'] = $param['visit_user_id'] ? : $userInfo['id'];
-        $param['visit_user_id'] = $param['visit_user_id'] ? : $userInfo['id'];        
+        $param['owner_user_id'] = $param['owner_user_id'] ? : $userInfo['id'];
         # 设置回访编号
         $numberInfo = [];
         if (empty($param['number'])) {
