@@ -45,7 +45,7 @@ class UserLogic
                         ->join('__ADMIN_STRUCTURE__ structure', 'structure.id = user.structure_id', 'LEFT')
                         ->where($where)
                         ->where($whereMap)
-                        ->field('user.id,user.thumb_img,user.realname,user.post,structure.name as structure_name,user.mobile')
+                        ->field('user.id,user.thumb_img,user.mobile,user.realname,user.post,structure.name as structure_name,user.mobile')
                         ->page($param['page'], $param['limit'])
                         ->select();
                     foreach ($list as $k => $v) {
@@ -70,7 +70,7 @@ class UserLogic
                 ->join('__ADMIN_STRUCTURE__ structure', 'structure.id = user.structure_id', 'LEFT')
                 ->where($where)
                 ->where($whereMap)
-                ->field('user.id,user.thumb_img,user.realname,user.post,structure.name as structure_name')
+                ->field('user.id,user.thumb_img,user.mobile,user.realname,user.post,structure.name as structure_name')
                 ->page($param['page'], $param['limit'])
                 ->select();
             $dataCount = Db::name('admin_user')
