@@ -1,4 +1,4 @@
-### 悟空CRM（9.0版本）
+### 悟空CRM（11.0版本）
 悟空软件长期为企业提供企业管理软件(CRM/HRM/OA/ERP等)的研发、实施、营销、咨询、培训、服务于一体的信息化服务。悟空软件以高科技为起点，以技术为核心、以完善的售后服务为后盾，秉承稳固与发展、求实与创新的精神，已为国内外上千家企业提供服务。
 
 悟空的发展受益于开源，也会回馈于开源。2019年，悟空CRM会继续秉承“拥抱开放、合作共赢、创造价值”的理念，在开源的道路上继续砥砺前行，和更多的社区开发者一起为国内外开源做出积极贡献。
@@ -9,7 +9,7 @@
 
 论坛：[http://bbs.72crm.net](http://bbs.72crm.net/)
 
-演示地址：[demo9.5kcrm.net](http://demo9.5kcrm.net/)(帐号：18888888888   密码：123456)
+演示地址：[demo11.5kcrm.net](http://demo11.5kcrm.net/)(帐号：18888888888   密码：123456a)
 
 QQ群交流群⑩群：[486745026](https:////shang.qq.com/wpa/qunwpa?idkey=f4687b809bf63f08f707aa1c56dee8dbcb9526237c429c4532222021d65bf83c)
 
@@ -19,11 +19,13 @@ QQ群交流群⑩群：[486745026](https:////shang.qq.com/wpa/qunwpa?idkey=f4687
 
 悟空CRM采用全新的前后端分离模式，本仓库代码中已集成前端vue打包后文件，可免去打包操作
 
-如需调整前端代码，请单独下载前端代码，前端代码在根目录的ux文件夹中
+如需调整前端代码，请单独下载前端代码，[查看11.0PHP版前端仓库](https://gitee.com/wukongcrm/P72crm_web)
+
+ **特别声明：如9.0版本升级至11.0版本，执行升级脚本前，请先备份数据库！！！** 
 
 ## 主要技术栈
 
-后端框架：ThinkPHP 5.0.2
+后端框架：ThinkPHP 5.0.24
 
 前端MVVM框架：Vue.JS 2.5.x 
 
@@ -33,18 +35,18 @@ QQ群交流群⑩群：[486745026](https:////shang.qq.com/wpa/qunwpa?idkey=f4687
 
 UI框架：Element-UI 2.6.3 
 
-悟空crm9.0的运行环境要求PHP5.6以上
+悟空crm11.0的运行环境要求PHP5.6以上
 
 
 ## 一键安装
 
 代码中已集成前端vue打包后文件，可免去打包操作：
 以本地（phpstudy集成环境）搭建举例：
-下载悟空CRM9.0开源版，在服务器根目录（www目录）下创建72crm文件夹，并放置代码； 浏览器访问
+下载悟空CRM11.0开源版，在服务器根目录（www目录）下创建72crm文件夹，并放置代码； 浏览器访问
 
 `http://localhost/72crm/index.php/admin/install/index.html `
 
-根据安装提示步骤，完成悟空CRM9.0 的部署安装
+根据安装提示步骤，完成悟空CRM11.0 的部署安装
 
 
 
@@ -58,7 +60,7 @@ UI框架：Element-UI 2.6.3
 值得注意的一点是：跨域的情况下，会有预请求OPTION的情况
 
 ### Server搭建 
-服务端使用的框架为thinkphp5.0.2，搭建前请确保拥有lamp/lnmp/wamp环境。
+服务端使用的框架为thinkphp5.0.24，搭建前请确保拥有lamp/lnmp/wamp环境。
 
 这里所说的搭建其实就是把server框架放入WEB运行环境，并使用80端口。
 导入服务端根文件夹数据库文件public/sql/5kcrm.sql，并修改config/database.php配置文件。
@@ -69,7 +71,7 @@ PHP >= 5.6.0
 ### 前端部署
 安装node.js 前端部分是基于node.js上运行的，所以必须先安装`node.js`，版本要求为6.0以上
 
-使用npm安装依赖 下载悟空CRM9.0前端代码； 可将代码放置在后端同级目录frontend，执行命令安装依赖：
+使用npm安装依赖 下载悟空CRM11.0前端代码； 可将代码放置在后端同级目录frontend，执行命令安装依赖：
 
     npm install
 
@@ -86,20 +88,19 @@ PHP >= 5.6.0
 
 ## 系统介绍
 
-以下为悟空CRM9.0 部分功能系统截图
+以下为悟空CRM11.0 部分功能系统截图
 
 
 
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g1.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g2.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g3.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g4.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g5.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g6.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g7.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g8.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g9.png)
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g10.png)
+![仪表盘](https://images.gitee.com/uploads/images/2021/0206/112721_6e50397d_345098.png "仪表盘.png")
+![客户列表](https://images.gitee.com/uploads/images/2021/0206/112822_4ab4eb50_345098.png "客户列表.png")
+![客户详情](https://images.gitee.com/uploads/images/2021/0206/112842_d69aff0f_345098.png "客户详情.png")
+![商机详情](https://images.gitee.com/uploads/images/2021/0206/112902_c38751fe_345098.png "商机详情.png")
+![任务详情](https://images.gitee.com/uploads/images/2021/0206/112924_175278e2_345098.png "任务详情.png")
+![商业智能](https://images.gitee.com/uploads/images/2021/0206/112938_0cbc95b7_345098.png "商业智能.png")
+![审批](https://images.gitee.com/uploads/images/2021/0206/113001_bfcbee0a_345098.png "审批.png")
+![自定义字段](https://images.gitee.com/uploads/images/2021/0206/113019_7894e7ed_345098.png "自定义字段.png")
+![字段授权](https://images.gitee.com/uploads/images/2021/0206/113030_cefa8932_345098.png "字段授权.png")
 
 
 
