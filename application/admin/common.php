@@ -173,11 +173,11 @@ function sendRequest($url, $params = array() , $headers = array()) {
 
 /**
  * 验证序列号
- * @param 
+ * @param
  * @return
- */        
+ */
 function checkWkCode($wkcode) {
-    $pub = config('public_key');
+    $pub = formatPubKey(config('public_key'));
     $openssl_pub = openssl_pkey_get_public($pub);
     // 验签
     $resArr = openssl_public_decrypt(Hex2String($wkcode), $decrypted, $pub);
@@ -191,4 +191,16 @@ function Hex2String($hex){
         $string .= chr(hexdec($hex[$i].$hex[$i+1]));
     }
     return $string;
+}
+
+//公钥格式处理
+function formatPubKey($pubKey) {
+    $fKey = "-----BEGIN PUBLIC KEY-----\n";
+    $len = strlen($pubKey);
+    for($i = 0; $i < $len; ) {
+        $fKey = $fKey . substr($pubKey, $i, 64) . "\n";
+        $i += 64;
+    }
+    $fKey .= "-----END PUBLIC KEY-----";
+    return $fKey;
 }
