@@ -76,7 +76,6 @@ class Customer extends ApiCommon
         if($param['excel_type']!=1){
             $param = $this->param;
         }
-
         # 排序参数
         $sortField = !empty($param['sort_field']) ? $param['sort_field'] : '';
         $sortValue = !empty($param['sort_value']) ? $param['sort_value'] : '';
@@ -88,10 +87,10 @@ class Customer extends ApiCommon
             $param['start_time'] = $timeArr[0];
             $param['end_time'] = $timeArr[1];
         } else {
-            if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
-            if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
+            if (!empty($param['start_time'])) $param['start_time'] = $param['start_time'] . ' 00:00:00';
+            if (!empty($param['end_time']))   $param['end_time']   =$param['end_time'] . ' 23:59:59';
         }
-
+       
         $data = $customerModel->getStatistics($param);
 
         # 排序
@@ -113,18 +112,15 @@ class Customer extends ApiCommon
         $userModel = new \app\admin\model\User();
         $adminModel = new \app\admin\model\Admin();
         $param = $this->param;
-
         $perUserIds = $userModel->getUserByPer('bi', 'customer', 'read'); //权限范围内userIds
         $whereArr   = $adminModel->getWhere($param, '', $perUserIds); //统计条件
         $userIds    = $whereArr['userIds'];
-
         # 处理无员工的情况
         if (empty($userIds)) return resultArray(['data' => []]);
 
         if (empty($param['type']) && empty($param['start_time'])) {
             $param['type'] = 'month';
         }
-
         if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
         if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
         $time = getTimeArray($param['start_time'], $param['end_time']);
@@ -141,7 +137,6 @@ class Customer extends ApiCommon
             $whereArr['end_time'] = $val['end_time'];
             $sql[] = $customerModel->getAddDealSql($whereArr);
         }
-
         $sql = implode(' UNION ALL ', $sql);
 
         $list = queryCache($sql);
@@ -161,7 +156,6 @@ class Customer extends ApiCommon
         $userModel = new \app\admin\model\User();
         $adminModel = new \app\admin\model\Admin();
         $param = $this->param;
-
         $perUserIds = $userModel->getUserByPer('bi', 'customer', 'read'); //权限范围内userIds
         $whereArr   = $adminModel->getWhere($param, '', $perUserIds); //统计条件
         $userIds    = $whereArr['userIds'];
@@ -213,7 +207,6 @@ class Customer extends ApiCommon
         if($param['excel_type']!=1){
             $param = $this->param;
         }
-
         # 排序参数
         $sortField = !empty($param['sort_field']) ? $param['sort_field'] : '';
         $sortValue = !empty($param['sort_value']) ? $param['sort_value'] : '';
@@ -273,7 +266,9 @@ class Customer extends ApiCommon
         # 排序
         if (!empty($result['list'])) $result['list'] = $this->sortCommon($result['list'], $sortField, $sortValue);
         //导出使用
-        if (!empty($param['excel_type'])) return $recordData;
+        if (!empty($param['excel_type'])) {
+            return $result;
+        }
         return resultArray(['data' => $result]);
     }
 
@@ -374,7 +369,7 @@ class Customer extends ApiCommon
         # 排序
         if (!empty($result['list'])) $result['list'] = $this->sortCommon($result['list'], $sortField, $sortValue);
         //导出使用
-        if (!empty($param['excel_type'])) return $result['list'];
+        if (!empty($param['excel_type'])) return $result;
         return resultArray(['data' => $result]);
     }
 
@@ -391,7 +386,6 @@ class Customer extends ApiCommon
         $userModel = new \app\admin\model\User();
         $adminModel = new \app\admin\model\Admin();
         $param = $this->param;
-
         $perUserIds = $userModel->getUserByPer('bi', 'customer', 'read'); //权限范围内userIds
         $whereArr   = $adminModel->getWhere($param, '', $perUserIds); //统计条件
         if (empty($whereArr['userIds'])) resultArray(['data' => []]);
@@ -492,7 +486,6 @@ class Customer extends ApiCommon
         $userModel         = new \app\admin\model\User();
         $adminModel        = new \app\admin\model\Admin();
         $param             = $this->param;
-
         $perUserIds = $userModel->getUserByPer('bi', 'customer', 'read'); //权限范围内userIds
         $whereArr   = $adminModel->getWhere($param, '', $perUserIds); //统计条件
         $userIds    = $whereArr['userIds'];
@@ -542,25 +535,25 @@ class Customer extends ApiCommon
     {
         $userModel = new \app\admin\model\User();
         $actionRecordModel = new \app\bi\model\ActionRecord();
+        $CustomerModel = new \app\crm\model\Customer();
         $adminModel = new \app\admin\model\Admin();
-        if($param['excel_type']!=1){
+        if ($param['excel_type'] != 1) {
             $param = $this->param;
         }
-
+        
         # 排序参数
         $sortField = !empty($param['sort_field']) ? $param['sort_field'] : '';
         $sortValue = !empty($param['sort_value']) ? $param['sort_value'] : '';
         unset($param['sort_field']);
         unset($param['sort_value']);
-
+    
         if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
-        if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
-
-        $perUserIds   = $userModel->getUserByPer('bi', 'customer', 'read'); //权限范围内userIds
-        $whereArr     = $adminModel->getWhere($param, '', $perUserIds); //统计条件
-        $userIds      = $whereArr['userIds'];
+        if (!empty($param['end_time'])) $param['end_time'] = strtotime($param['end_time'] . ' 23:59:59');
+    
+        $perUserIds = $userModel->getUserByPer('bi', 'customer', 'read'); //权限范围内userIds
+        $whereArr = $adminModel->getWhere($param, '', $perUserIds); //统计条件
+        $userIds = $whereArr['userIds'];
         $between_time = $whereArr['between_time'];
-
         $sql = CustomerModel::field([
             'COUNT(*)' => 'customer_num',
             'owner_user_id'
@@ -575,6 +568,33 @@ class Customer extends ApiCommon
         $customer_num_list = queryCache($sql);
         $customer_num_list = array_column($customer_num_list, null, 'owner_user_id');
 
+        $configModel = new \app\crm\model\ConfigData();
+        $configInfo = $configModel->getData();
+        $paramPool = [];
+        $paramPool['config'] = $configInfo['config'] ? : 0;
+        $paramPool['follow_day'] = $configInfo['follow_day'] ? : 0;
+        $paramPool['deal_day'] = $configInfo['deal_day'] ? : 0;
+        $paramPool['remind_config'] = $configInfo['remind_config'] ? : 0;
+        $customer_list='';
+        $action_record_list='';
+        if($paramPool['config']==1){
+            $sql = $CustomerModel
+                ->alias('customer')
+                ->field([
+                    'customer.create_user_id as user_id' ,
+                    'COUNT(customer.customer_id) as put_in'
+                ])
+                ->group('user_id')
+                ->where($CustomerModel->getWhereByPool())
+                ->where([
+                    'create_time' => ['BETWEEN', $between_time],
+                    'create_user_id' => ['IN', $userIds],
+                ])
+                ->fetchSql()
+                ->select();
+            $customer_list = queryCache($sql);
+            $customer_list = array_column($customer_list, null, 'user_id');
+        }
         $sql = $actionRecordModel
             ->field([
                 'user_id',
@@ -592,12 +612,13 @@ class Customer extends ApiCommon
             ->select();
         $action_record_list = queryCache($sql);
         $action_record_list = array_column($action_record_list, null, 'user_id');
-
+    
         $res = [];
         $receiveCount = 0; # 领取公海客户总数
         $putInCount = 0; # 进入公海客户总数
         foreach ($userIds as $val) {
-            $item['put_in'] = !empty($action_record_list[$val]['put_in']) ? (int)$action_record_list[$val]['put_in'] : 0;
+            $item['put'] = !empty($customer_list[$val]['put_in'])?(int)$customer_list[$val]['put_in']:0;
+            $item['put_in'] = !empty($customer_list[$val]['put_in']) ?  $item['put'] : (int)$action_record_list[$val]['put_in'] + $item['put'];
             $item['receive'] = !empty($action_record_list[$val]['receive']) ? (int)$action_record_list[$val]['receive'] : 0;
             $item['customer_num'] = !empty($customer_num_list[$val]['customer_num']) ? (int)$customer_num_list[$val]['customer_num'] : 0;
             $user_info = $userModel->getUserById($val);
@@ -634,7 +655,6 @@ class Customer extends ApiCommon
         if($param['excel_type']!=1){
             $param = $this->param;
         }
-
         $perUserIds = $userModel->getUserByPer('bi', 'customer', 'read'); //权限范围内userIds
         $whereData  = $adminModel->getWhere($param, '', $perUserIds); //统计条件
         $userIds    = $whereData['userIds'];
@@ -701,12 +721,13 @@ class Customer extends ApiCommon
      * @throws \think\db\exception\ModelNotFoundException
      * @throws \think\exception\DbException
      */
-    public function userCycleList()
+    public function userCycleList($param='')
     {
         $userModel = new \app\admin\model\User();
         $adminModel = new \app\admin\model\Admin();
-        $param = $this->param;
-
+        if($param['excel_type']!=1){
+            $param = $this->param;
+        }
         # 排序参数
         $sortField = !empty($param['sort_field']) ? $param['sort_field'] : '';
         $sortValue = !empty($param['sort_value']) ? $param['sort_value'] : '';
@@ -787,7 +808,7 @@ class Customer extends ApiCommon
         # 排序
         if (!empty($datas['users'])) $datas['users'] = $this->sortCommon($datas['users'], $sortField, $sortValue);
         //导出使用
-        if (!empty($param['excel_type'])) return $datas['list'];
+        if (!empty($param['excel_type'])) return $datas;
         return resultArray(['data' => $datas]);
     }
 
@@ -801,7 +822,9 @@ class Customer extends ApiCommon
     {
         $biCustomerModel = new \app\bi\model\Customer();
         $productModel = new \app\bi\model\Product();
-        $param = $this->param;
+        if($param['excel_type']!=1){
+            $param = $this->param;
+        }
         $list = $productModel->getDealByProduct($param);
         $datas = array();
         $cycleCount    = 0;
@@ -823,7 +846,8 @@ class Customer extends ApiCommon
         }
 
         $datas['total'] = ['product_name' => '总计', 'cycle' => $cycleCount, 'customer_num' => $customerCount];
-
+        //导出使用
+        if (!empty($param['excel_type'])) return $datas;
         return resultArray(['data' => $datas]);
     }
 
@@ -833,13 +857,15 @@ class Customer extends ApiCommon
      * @return
      * @author zhi
      */
-    public function addressCycle()
+    public function addressCycle($param='')
     {
         $userModel = new \app\admin\model\User();
         $customerModel = new \app\crm\model\Customer();
         $biCustomerModel = new \app\bi\model\Customer();
         $address_arr = \app\crm\model\Customer::$address;
-        $param = $this->param;
+        if($param['excel_type']!=1){
+            $param = $this->param;
+        }
         if (empty($param['type']) && empty($param['start_time'])) {
             $param['type'] = 'month';
         }
@@ -907,7 +933,9 @@ class Customer extends ApiCommon
         }
 
         $res['total'] = ['address' => '总计', 'cycle' => $cycleCount, 'customer_num' => $customerCount];
+        //导出使用
         
+        if (!empty($param['excel_type'])) return $res;
         return resultArray(['data' => $res]);
     }
 
@@ -919,9 +947,11 @@ class Customer extends ApiCommon
      * @throws \think\db\exception\ModelNotFoundException
      * @throws \think\exception\DbException
      */
-    public function addressAnalyse()
+    public function addressAnalyse($param='')
     {
-        $param = $this->param;
+        if($param['excel_type']!=1){
+            $param = $this->param;
+        }
         // $customerModel = new \app\crm\model\Customer();
         $userModel = new \app\admin\model\User();
         $address_arr = \app\crm\model\Customer::$address;
@@ -936,7 +966,7 @@ class Customer extends ApiCommon
 
         $perUserIds = $userModel->getUserByPer('bi', 'customer', 'read'); //权限范围内userIds
         $userIds    = $map_user_ids ? array_intersect($map_user_ids, $perUserIds) : $perUserIds; //数组交集
-
+    
         if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
         if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
         $time = getTimeArray($param['start_time'], $param['end_time']);
@@ -966,6 +996,8 @@ class Customer extends ApiCommon
             $item['dealCustomer'] = !empty($list[$val]['dealCustomer']) ? (int)$list[$val]['dealCustomer'] : 0;
             $data[] = $item;
         }
+        //导出使用
+        if (!empty($param['excel_type'])) return $res;
         return resultArray(['data' => $data]);
     }
 
@@ -983,7 +1015,6 @@ class Customer extends ApiCommon
         $userModel       = new \app\admin\model\User();
         $adminModel      = new \app\admin\model\Admin();
         $param           = $this->param;
-
         $perUserIds = $userModel->getUserByPer('bi', 'customer', 'read'); //权限范围内userIds
         $whereData = $adminModel->getWhere($param, '', $perUserIds); //统计条件
         $userIds = $whereData['userIds'];
@@ -1099,21 +1130,22 @@ class Customer extends ApiCommon
      * @throws \think\db\exception\ModelNotFoundException
      * @throws \think\exception\DbException
      */
-    public function customerSatisfaction(BiCustomerLogic $biCustomerLogic, $param='')
+    public function customerSatisfaction($param='')
     {
+        $adminModel      = new \app\admin\model\Admin();
+        $userModel = new \app\admin\model\User();
         $param = $this->param;
-
         $param['start_time'] = !empty($param['start_time']) ? strtotime($param['start_time']) : '';
         $param['end_time']   = !empty($param['end_time'])   ? strtotime($param['end_time'])   : '';
 
         if (!empty($param['type'])) {
             # 日期工具类
             $timeArr = getTimeByType($param['type']);
-            # 设置日期参数
+            # 设置日期参数pool
             $param['start_time'] = $timeArr[0];
             $param['end_time']   = $timeArr[1];
         }
-
+        $biCustomerLogic=new BiCustomerLogic();
         $data = $biCustomerLogic->getCustomerSatisfaction($param);
         //导出使用
         if (!empty($param['excel_type'])) return $data;
@@ -1130,13 +1162,12 @@ class Customer extends ApiCommon
      * @throws \think\db\exception\ModelNotFoundException
      * @throws \think\exception\DbException
      */
-    public function productSatisfaction(BiCustomerLogic $biCustomerLogic, $param='')
+    public function productSatisfaction($param='')
     {
         $param = $this->param;
-
+        $userInfo=$this->userInfo;
         $param['start_time'] = !empty($param['start_time']) ? strtotime($param['start_time']) : '';
         $param['end_time']   = !empty($param['end_time'])   ? strtotime($param['end_time'])   : '';
-
         if (!empty($param['type'])) {
             # 日期工具类
             $timeArr = getTimeByType($param['type']);
@@ -1144,7 +1175,8 @@ class Customer extends ApiCommon
             $param['start_time'] = $timeArr[0];
             $param['end_time'] = $timeArr[1];
         }
-
+    
+        $biCustomerLogic= new BiCustomerLogic();
         $data = $biCustomerLogic->getProductSatisfaction($param);
         //导出使用
         if (!empty($param['excel_type'])) return $data;
@@ -1182,6 +1214,7 @@ class Customer extends ApiCommon
                 break;
             case 'recordMode':
                 $list = $this->recordMode($param);
+                $list=$list['list'];
                 $type['type'] = '客户跟进方式分析';
                 break;
             case 'poolList':
@@ -1195,13 +1228,27 @@ class Customer extends ApiCommon
                 break;
             case 'customerSatisfaction':
                 $list = $this->customerSatisfaction($param);
-                $list=$list['list'];
                 $type['type'] = '员工客户满意度分析';
                 break;
             case 'productSatisfaction':
                 $list = $this->productSatisfaction($param);
-                $list=$list['list'];
                 $type['type'] = '产品满意度分析';
+                break;
+            case 'userCycleList':
+                $list = $this->userCycleList($param);
+                $list=$list['list'];
+                $type['type'] = '成交周期';
+                break;
+            case 'productCycle':
+                $list = $this->addressCycle($param);
+               
+                $list=$list['list'];
+                $type['type'] = '地区成交周期';
+                break;
+            case 'addressCycle':
+                $list = $this->productCycle($param);
+                $list=$list['list'];
+                $type['type'] = '地区成交周期';
                 break;
         }
 

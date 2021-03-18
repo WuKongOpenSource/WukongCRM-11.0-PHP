@@ -45,7 +45,6 @@ class Log extends ApiCommon
     public function statistics()
     {  
         $param  = $this->param;
-
         if ($param['type']) {
             $timeArr = getTimeByType($param['type']);
             $param['start_time'] = $timeArr[0];

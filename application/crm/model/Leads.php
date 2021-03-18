@@ -67,7 +67,7 @@ class Leads extends Common
             }
         }
         $searchMap = [];
-        if ($search) {
+        if ($search || $search == '0') {
             //普通筛选
             $searchMap = function ($query) use ($search) {
                 $query->where('leads.name', array('like', '%' . $search . '%'))
@@ -105,7 +105,11 @@ class Leads extends Common
         $userField = $fieldModel->getFieldByFormType('crm_leads', 'user'); //人员类型
         $structureField = $fieldModel->getFieldByFormType('crm_leads', 'structure');  //部门类型
         $datetimeField = $fieldModel->getFieldByFormType('crm_leads', 'datetime'); //日期时间类型
-
+        # 处理人员和部门类型的排序报错问题(前端传来的是包含_name的别名字段)
+        $temporaryField = str_replace('_name', '', $order_field);
+        if (in_array($temporaryField, $userField) || in_array($temporaryField, $structureField)) {
+            $order_field = $temporaryField;
+        }
         //排序
         if ($order_type && $order_field) {
             $order = $fieldModel->getOrderByFormtype('crm_leads', 'leads', $order_field, $order_type);
@@ -141,11 +145,11 @@ class Leads extends Common
             $list[$k]['owner_user_name'] = !empty($list[$k]['owner_user_id_info']['realname']) ? $list[$k]['owner_user_id_info']['realname'] : '';
             foreach ($userField as $key => $val) {
                 $usernameField  = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
-                $list[$k][$val] = implode($usernameField, ',');
+                $list[$k][$val.'_name'] = implode($usernameField, ',');
             }
             foreach ($structureField as $key => $val) {
                 $structureNameField = !empty($v[$val]) ? db('admin_structure')->whereIn('id', stringToArray($v[$val]))->column('name') : [];
-                $list[$k][$val]     = implode($structureNameField, ',');
+                $list[$k][$val.'_name'] = implode($structureNameField, ',');
             }
             foreach ($datetimeField as $key => $val) {
                 $list[$k][$val] = !empty($v[$val]) ? date('Y-m-d H:i:s', $v[$val]) : null;
@@ -213,6 +217,9 @@ class Leads extends Common
         foreach ($arrFieldAtt as $k => $v) {
             $param[$v] = arrayToString($param[$v]);
         }
+
+        # 设置今日需联系线索
+        if (!empty($param['next_time']) && $param['next_time'] >= strtotime(date('Y-m-d 00:00:00'))) $param['is_dealt'] = 0;
 
         if ($this->data($param)->allowField(true)->isUpdate(false)->save()) {
             //修改记录
@@ -282,7 +289,10 @@ class Leads extends Common
         foreach ($arrFieldAtt as $k => $v) {
             $param[$v] = arrayToString($param[$v]);
         }
-        $param['follow'] = '已跟进';
+
+        # 设置今日需联系线索
+        if (!empty($param['next_time']) && $param['next_time'] >= strtotime(date('Y-m-d 00:00:00'))) $param['is_dealt'] = 0;
+
         if ($this->update($param, ['leads_id' => $leads_id], true)) {
             //修改记录
             updateActionLog($param['user_id'], 'crm_leads', $leads_id, $dataInfo, $param);

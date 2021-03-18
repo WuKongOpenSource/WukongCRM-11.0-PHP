@@ -46,22 +46,23 @@ class InvoiceLogic
 
         $limit = $param['limit'];
         $getCount = $param['getCount'];
+        $userId   = $param['user_id'];
+        $invoiceIdArray = $param['invoiceIdArray']; // 待办事项提醒参数
+        $dealt = $param['dealt'];
 
         unset($param['getCount']);
         unset($param['limit']);
         unset($param['page']);
+        unset($param['user_id']);
+        unset($param['invoiceIdArray']);
+        unset($param['dealt']);
 
         $where = [];
         if ($search) {
             # 处理基本参数
-            $userId   = $param['user_id'];
+
             $scene_id = $param['scene_id'];
-            unset($param['user_id']);
             unset($param['scene_id']);
-//            unset($param['owner_user_id']);
-//            unset($param['check_status']);
-//            unset($param['check_user_id']);
-//            unset($param['flow_user_id']);
 
             $common = new Common();
 
@@ -97,9 +98,21 @@ class InvoiceLogic
             if ($where) $param = $where;
         }
 
+        # 待办事项查询参数
+        $dealtWhere = [];
+        if (!empty($invoiceIdArray)) $dealtWhere['invoice_id'] = ['in', $invoiceIdArray];
+
+        # 权限，不是待办事项，则加上列表权限
+        $auth = [];
+        if (empty($dealt)) {
+            $userModel = new \app\admin\model\User();
+            $authUserIds = $userModel->getUserByPer('crm', 'invoice', 'index');
+            $auth['owner_user_id'] = ['in', $authUserIds];
+        }
+
         # 查询数据
-        $list  = Invoice::with(['toCustomer', 'toContract', 'toAdminUser'])->field($field)->where($param)
-            ->limit($limit)->order('update_time', 'desc')->paginate($limit)->toArray();
+        $list = Invoice::with(['toCustomer', 'toContract', 'toAdminUser'])->field($field)->where($auth)
+            ->where($param)->where($dealtWhere)->limit($limit)->order('update_time', 'desc')->paginate($limit)->toArray();
 
         # 处理发票类型
 //        foreach ($list['data'] AS $key => $value) {

@@ -64,7 +64,7 @@ class Product extends Common
 			//默认场景
 			$sceneMap = $sceneModel->getDefaultData('crm_product', $user_id) ? : [];
 		}
-		if ($search) {
+		if ($search || $search == '0') {
 			//普通筛选
 			$sceneMap['name'] = ['condition' => 'contains','value' => $search,'form_type' => 'text','name' => '产品名称'];
 		}
@@ -103,7 +103,11 @@ class Product extends Common
 		$userField = $fieldModel->getFieldByFormType('crm_product', 'user'); //人员类型
 		$structureField = $fieldModel->getFieldByFormType('crm_product', 'structure');  //部门类型
         $datetimeField = $fieldModel->getFieldByFormType('crm_product', 'datetime'); //日期时间类型
-		
+        # 处理人员和部门类型的排序报错问题(前端传来的是包含_name的别名字段)
+        $temporaryField = str_replace('_name', '', $order_field);
+        if (in_array($temporaryField, $userField) || in_array($temporaryField, $structureField)) {
+            $order_field = $temporaryField;
+        }
 		//排序
 		if ($order_type && $order_field) {
 			$order = $fieldModel->getOrderByFormtype('crm_product','product',$order_field,$order_type);
@@ -133,12 +137,12 @@ class Product extends Common
         	$list[$k]['create_user_name'] = !empty($list[$k]['create_user_id_info']['realname']) ? $list[$k]['create_user_id_info']['realname'] : '';
             $list[$k]['owner_user_name'] = !empty($list[$k]['owner_user_id_info']['realname']) ? $list[$k]['owner_user_id_info']['realname'] : '';
         	foreach ($userField as $key => $val) {
-                $usernameField  = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
-                $list[$k][$val] = implode($usernameField, ',');
+                $usernameField = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
+                $list[$k][$val.'_name'] = implode($usernameField, ',');
         	}
 			foreach ($structureField as $key => $val) {
                 $structureNameField = !empty($v[$val]) ? db('admin_structure')->whereIn('id', stringToArray($v[$val]))->column('name') : [];
-                $list[$k][$val]     = implode($structureNameField, ',');
+                $list[$k][$val.'_name'] = implode($structureNameField, ',');
         	}
             foreach ($datetimeField as $key => $val) {
                 $list[$k][$val] = !empty($v[$val]) ? date('Y-m-d H:i:s', $v[$val]) : null;

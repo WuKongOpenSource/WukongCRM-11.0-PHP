@@ -8,6 +8,7 @@
 namespace app\crm\controller;
 
 use app\admin\controller\ApiCommon;
+use app\crm\traits\SearchConditionTrait;
 use app\crm\traits\StarTrait;
 use think\Hook;
 use think\Request;
@@ -15,7 +16,7 @@ use think\Db;
 
 class Contacts extends ApiCommon
 {
-    use StarTrait;
+    use StarTrait, SearchConditionTrait;
 
     /**
      * 用于判断权限
@@ -67,12 +68,11 @@ class Contacts extends ApiCommon
         $param['owner_user_id'] = $userInfo['id'];
         
         if ($data = $contactsModel->createData($param)) {
-            //关联 联系人与商机  客户添加与商机添加联系人可共用此接口
-            $business_id = $param['business_id']?$param['business_id']:0;
-            if($business_id != 0){
-                $data['cancel_or_relation'] = 1;// 1:关联 0取消
+            # 商机管理联系人
+            $business_id = $param['business_id'] ? $param['business_id'] : 0;
+            if (!empty($business_id)) {
                 $data['business_id'] = $business_id;
-                if ($res =  Db::name('crm_contacts_business')->data($data)->insert()) {
+                if ($res = Db::name('crm_contacts_business')->data($data)->insert()) {
                     return resultArray(['data' => '添加成功']);
                 } else {
                     return resultArray(['error' => Db::name('crm_contacts_business')->getError()]);
@@ -99,7 +99,7 @@ class Contacts extends ApiCommon
         //判断权限
         $auth_user_ids = $userModel->getUserByPer('crm', 'contacts', 'read');
         if (!in_array($data['owner_user_id'],$auth_user_ids)) {
-            $authData['dataAuth'] = 0;
+            $authData['dataAuth'] = (int)0;
             return resultArray(['data' => $authData]);
         }         
         if (!$data) {
@@ -494,8 +494,16 @@ class Contacts extends ApiCommon
 
         $contactsId = $this->param['contacts_id'];
 
+        $userInfo = $this->userInfo;
+
+        # 查询联系人和商机的关联表
+        $businessIds = Db::name('crm_contacts_business')->where('contacts_id', $contactsId)->column('business_id');
+
+        # 商机权限条件
+        $businessAuth = $this->getBusinessSearchWhere($userInfo['id']);
+
         # 商机
-        $businessCount = Db::name('crm_business')->where('contacts_id', $contactsId)->count();
+        $businessCount = Db::name('crm_business')->whereIn('business_id', $businessIds)->where($businessAuth)->count();
 
         # 附件
         $fileCount = Db::name('crm_contacts_file')->alias('contacts')->join('__ADMIN_FILE__ file', 'file.file_id = contacts.file_id', 'LEFT')->where('contacts_id', $contactsId)->count();

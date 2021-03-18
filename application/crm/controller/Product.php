@@ -99,7 +99,7 @@ class Product extends ApiCommon
         $auth_user_ids = $userModel->getUserByPer('crm', 'product', 'read');
         if (!in_array($data['owner_user_id'], $auth_user_ids)) {
             //无权限
-            $authData['dataAuth'] = 0;
+            $authData['dataAuth'] = (int)0;
             return resultArray(['data' => $authData]);
         }        
         if (!$data) {

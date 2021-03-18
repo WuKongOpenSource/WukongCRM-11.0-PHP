@@ -58,16 +58,14 @@ class Business extends ApiCommon
         if (empty($this->param['type_id'])) return resultArray(['error' => '请选择商机组！']);
 
         $businessModel = new \app\crm\model\Business();
-
         $param = $this->param;
-
         $sortField = !empty($param['sort_field']) ? $param['sort_field'] : '';
         $sortValue = !empty($param['sort_value']) ? $param['sort_value'] : '';
         unset($param['sort_field']);
         unset($param['sort_value']);
 
-        if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
-        if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
+        if (!empty($param['start_time'])) $param['start_time'] = $param['start_time'] . ' 00:00:00';
+        if (!empty($param['end_time']))   $param['end_time']   = $param['end_time'] . ' 23:59:59';
 
         $data = $businessModel->getFunnel($param);
         foreach ($data['list'] AS $key => $value) {
@@ -93,7 +91,6 @@ class Business extends ApiCommon
         $userModel     = new \app\admin\model\User();
         $adminModel    = new \app\admin\model\Admin();
         $param         = $this->param;
-
         $perUserIds = $userModel->getUserByPer('bi', 'business', 'read'); //权限范围内userIds
         $whereArr = $adminModel->getWhere($param, '', $perUserIds); //统计条件
         $userIds = $whereArr['userIds'];
@@ -109,7 +106,6 @@ class Business extends ApiCommon
             'owner_user_id' => !empty($userIds) ? implode(',',$userIds) : '9999999999'
         ];
         $sql = [];
-
         foreach ($time['list'] as $val) {
             $whereArr = $where;
             $whereArr['type'] = $val['type'];
@@ -136,9 +132,9 @@ class Business extends ApiCommon
         $businessModel = new \app\bi\model\Business();
         $crmBusinessModel = new \app\crm\model\Business();
         $userModel = new \app\admin\model\User();
+        $adminModel    = new \app\admin\model\Admin();
         $param = $this->param;
         unset($param['types']);
-
         # 日期条件
         if (!empty($param['type'])) {
             $param['start_time'] = strtotime($param['type'] . '-01 00:00:00');
@@ -166,8 +162,13 @@ class Business extends ApiCommon
             $dataList['list'][$k]['create_user_name'] = $create_user_id_info['realname'];
             $owner_user_id_info = isset($v['owner_user_id']) ? $userModel->getUserById($v['owner_user_id']) : [];
             $dataList['list'][$k]['owner_user_name'] = $owner_user_id_info['realname'];
-            $dataList['list'][$k]['business_stage'] = db('crm_business_status')->where('status_id',$v['status_id'])->value('name');//销售阶段
+                if($v['is_end']!=0){
+                    $dataList['list'][$k]['business_stage'] = db('crm_business_status')->where('status_id',$v['is_end'])->value('name');//销售阶段
+                }else{
+                    $dataList['list'][$k]['business_stage'] = db('crm_business_status')->where('status_id',$v['status_id'])->value('name');//销售阶段
+                }
             $dataList['list'][$k]['business_type'] = db('crm_business_type')->where('type_id',$v['type_id'])->value('name');//商机状态组
+            
         }
 
         # 排序
@@ -190,7 +191,6 @@ class Business extends ApiCommon
         $userModel = new \app\admin\model\User();
         $adminModel = new \app\admin\model\Admin(); 
         $param = $this->param;
-
         $perUserIds = $userModel->getUserByPer('bi', 'customer', 'read'); //权限范围内userIds
         $whereArr   = $adminModel->getWhere($param, '', $perUserIds); //统计条件
         $userIds    = $whereArr['userIds'];
@@ -203,21 +203,21 @@ class Business extends ApiCommon
         if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
         $time = getTimeArray($param['start_time'], $param['end_time']);
         $sql = db('crm_business')->alias('business')->field([
-                    "FROM_UNIXTIME(business.create_time, '{$time['time_format']}')" => 'type',
-                    'COUNT(business.business_id)' => 'business_num',
-                    'SUM(
+            "FROM_UNIXTIME(business.create_time, '{$time['time_format']}')" => 'type',
+            'COUNT(business.business_id)' => 'business_num',
+            'COUNT(
                             CASE WHEN
-                                `check_status` = 2
-                            THEN 1 ELSE 0 END
+                                `is_end` = 1
+                            THEN 1 ELSE NULL END
                         )' => 'business_end'
-                ])->join('__CRM_CONTRACT__ contract', 'contract.business_id = business.business_id', 'left')
-                ->where([
-                    'business.owner_user_id' => ['IN', $userIds],
-                    'business.create_time' => ['BETWEEN', $time['between']]
-                ])
-                ->group('type')
-                ->fetchSql()
-                ->select();
+        ])->join('__CRM_CONTRACT__ contract', 'contract.business_id = business.business_id', 'left')
+            ->where([
+                'business.owner_user_id' => ['IN', $userIds],
+                'business.create_time' => ['BETWEEN', $time['between']]
+            ])
+            ->group('type')
+            ->fetchSql()
+            ->select();
         $res = queryCache($sql);
         $res = array_column($res, null, 'type');
         foreach ($time['list'] as $key =>$val) {
@@ -246,42 +246,51 @@ class Business extends ApiCommon
         $businessModel = new \app\bi\model\Business();
         $crmBusinessModel = new \app\crm\model\Business();
         $userModel = new \app\admin\model\User();
+        $adminModel    = new \app\admin\model\Admin();
         $param = $this->param;
-
+        unset($param['types']);
         # 日期条件
-        if (!empty($param['date'])) {
-            $param['start_time'] = strtotime($param['date'] . '-01 00:00:00');
+        if (!empty($param['type'])) {
+            $param['start_time'] = strtotime($param['type'] . '-01 00:00:00');
             $endMonth = strtotime(date('Y-m-d', $param['start_time']) . " +1 month -1 day");
-            $param['end_time'] = strtotime(date('Y-m-d 23:59:59', $endMonth)) ;
+            $param['end_time'] = strtotime(date('Y-m-d 23:59:59', $endMonth));
             unset($param['type']);
+        } else {
+            if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
+            if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
         }
-
+    
         # 排序参数
         $sortField = !empty($param['sort_field']) ? $param['sort_field'] : '';
         $sortValue = !empty($param['sort_value']) ? $param['sort_value'] : '';
-
+    
         # 赢单条件
         $param['is_end'] = 1;
 
         $dataList = $businessModel->getDataList($param);
-        foreach ($dataList as $k => $v) {
+        foreach ($dataList['list'] as $k => $v) {
             $business_info = $crmBusinessModel->getDataById($v['business_id']);
-            $dataList[$k]['business_name'] = $business_info['name'];
-            $dataList[$k]['create_time'] = date('Y-m-d',strtotime($business_info['create_time']));
-            $dataList[$k]['customer_id'] = $v['customer_id'];
+            $dataList['list'][$k]['business_name'] = $business_info['name'];
+            $dataList['list'][$k]['create_time'] = date('Y-m-d',strtotime($business_info['create_time']));
+            $dataList['list'][$k]['customer_id'] = $v['customer_id'];
             $customer = db('crm_customer')->field('name')->where('customer_id',$v['customer_id'])->find();
-            $dataList[$k]['customer_name'] = $customer['name'];
+            $dataList['list'][$k]['customer_name'] = $customer['name'];
             $create_user_id_info = isset($v['create_user_id']) ? $userModel->getUserById($v['create_user_id']) : [];
-            $dataList[$k]['create_user_name'] = $create_user_id_info['realname'];
+            $dataList['list'][$k]['create_user_name'] = $create_user_id_info['realname'];
             $owner_user_id_info = isset($v['owner_user_id']) ? $userModel->getUserById($v['owner_user_id']) : [];
-            $dataList[$k]['owner_user_name'] = $owner_user_id_info['realname'];
-            $dataList[$k]['business_stage'] = db('crm_business_status')->where('status_id',$v['status_id'])->value('name');//销售阶段
-            $dataList[$k]['business_type'] = db('crm_business_type')->where('type_id',$v['type_id'])->value('name');//商机状态组
+            $dataList['list'][$k]['owner_user_name'] = $owner_user_id_info['realname'];
+            if($v['is_end']!=0){
+                $dataList['list'][$k]['business_stage'] = db('crm_business_status')->where('status_id',$v['is_end'])->value('name');//销售阶段
+            }else{
+                $dataList['list'][$k]['business_stage'] = db('crm_business_status')->where('status_id',$v['status_id'])->value('name');//销售阶段
+            }
+            $dataList['list'][$k]['business_type'] = db('crm_business_type')->where('type_id',$v['type_id'])->value('name');//商机状态组
+        
         }
-
+    
         # 排序
         if (!empty($dataList)) $dataList = $this->sortCommon($dataList, $sortField, $sortValue);
-
+    
         return resultArray(['data' => $dataList]);
     }
 }

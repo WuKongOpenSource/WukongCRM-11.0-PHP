@@ -305,6 +305,9 @@ class Users extends ApiCommon
         $param = $this->param;
         $userInfo = $this->userInfo;
         $userModel = model('User');
+
+        if (empty($param['new_pwd']) || empty($param['old_pwd'])) return resultArray(['error' => '密码不能为空！']);
+
         if ($param['id'] && (int)$param['id'] !== $userInfo['id']) {
             //权限判断
             if (!checkPerByAction('admin', 'users', 'update')) {

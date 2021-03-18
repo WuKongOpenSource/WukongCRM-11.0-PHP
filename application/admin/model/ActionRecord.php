@@ -36,6 +36,9 @@ class ActionRecord extends Common
 			if($leads_id){
 				$leads_dataList = db('admin_action_record')->where(['types' => 'crm_leads','action_id' => $leads_id])->order('id','desc')->select();
 				$dataList = array_merge($leads_dataList, $dataList);
+                # 对线索和客户的合并数据进行排序
+                $sortData = array_column($dataList, 'create_time');
+                array_multisort($sortData,SORT_DESC , $dataList);
 			}
 		}
 		$userModel = model('User');

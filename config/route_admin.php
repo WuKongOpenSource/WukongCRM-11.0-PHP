@@ -16,7 +16,11 @@ return [
     'admin/install/step3' => ['admin/install/step3', ['method' => 'GET']],
  	'admin/install/step4' => ['admin/install/step4', ['method' => 'POST|AJAX']],
     'admin/install/step5' => ['admin/install/step5', ['method' => 'GET']],
- 	'admin/install/progress' => ['admin/install/progress', ['method' => 'POST']], 	
+    'admin/install/step6' => ['admin/install/step6', ['method' => 'GET']],
+ 	'admin/install/progress' => ['admin/install/progress', ['method' => 'POST']],
+
+    // 升级公告
+    'admin/adminUser/readNotice' => ['admin/index/readNotice', ['method' => 'POST']],
 
     //子部门列表
     'admin/structures/subIndex' => ['admin/structures/subIndex', ['method' => 'POST']],

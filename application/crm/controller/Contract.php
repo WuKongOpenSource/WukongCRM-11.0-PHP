@@ -12,13 +12,14 @@ use app\admin\model\Message;
 use app\admin\model\User;
 use app\crm\model\NumberSequence;
 use app\crm\traits\AutoNumberTrait;
+use app\crm\traits\SearchConditionTrait;
 use think\Db;
 use think\Hook;
 use think\Request;
 
 class Contract extends ApiCommon
 {
-    use AutoNumberTrait;
+    use AutoNumberTrait, SearchConditionTrait;
 
     /**
      * 用于判断权限
@@ -149,7 +150,7 @@ class Contract extends ApiCommon
         $roPre = $userModel->rwPre($userInfo['id'], $data['ro_user_id'], $data['rw_user_id'], 'read');
         $rwPre = $userModel->rwPre($userInfo['id'], $data['ro_user_id'], $data['rw_user_id'], 'update');                
         if (!in_array($data['owner_user_id'],$auth_user_ids) && !$roPre && !$rwPre) {
-            $authData['dataAuth'] = 0;
+            $authData['dataAuth'] = (int)0;
             return resultArray(['data' => $authData]);
         }         
         if (!$data) {
@@ -771,6 +772,8 @@ class Contract extends ApiCommon
 
         $contractId = $this->param['contract_id'];
 
+        $userInfo = $this->userInfo;
+
         $contract = Db::name('crm_contract')->field(['owner_user_id', 'ro_user_id', 'rw_user_id'])->where('contract_id', $contractId)->find();
 
         # 团队
@@ -779,14 +782,20 @@ class Contract extends ApiCommon
         $contract['owner_user_id'] = [$contract['owner_user_id']];
         $teamCount = array_filter(array_unique(array_merge($contract['ro_user_id'], $contract['rw_user_id'], $contract['owner_user_id'])));
 
+        # 查询合同和产品的关联数据
+        $productIds = Db::name('crm_contract_product')->where('contract_id', $contractId)->column('product_id');
+
         # 产品
-        $productCount = Db::name('crm_contract_product')->where('contract_id', $contractId)->count();
+        $productAuth = $this->getProductSearchWhere();
+        $productCount = Db::name('crm_product')->whereIn('product_id', $productIds)->whereIn('owner_user_id', $productAuth)->count();
 
         # 回款
-        $receivablesCount = Db::name('crm_receivables')->where('contract_id', $contractId)->count();
+        $receivablesAuth = $this->getReceivablesSearchWhere();
+        $receivablesCount = Db::name('crm_receivables')->where('contract_id', $contractId)->whereIn('owner_user_id', $receivablesAuth)->count();
 
         # 回访
-        $visitCount = Db::name('crm_visit')->where('contract_id', $contractId)->count();
+        $visitAuth = $this->getVisitSearchWhere($userInfo['id']);
+        $visitCount = Db::name('crm_visit')->where('contract_id', $contractId)->where($visitAuth)->count();
 
         # 附件
         $fileCount = Db::name('crm_contract_file')->alias('contract')->join('__ADMIN_FILE__ file', 'file.file_id = contract.file_id', 'LEFT')->where('contract_id', $contractId)->count();

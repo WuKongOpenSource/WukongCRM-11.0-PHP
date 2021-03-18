@@ -110,8 +110,9 @@ class Install extends Controller
         $db_config['database'] = $param['databaseName'];
         $db_config['username'] = $param['databaseUser'];
         $db_config['password'] = $param['databasePwd'];        
-        $db_config['prefix'] = $param['databaseTable'];
-        
+        $db_config['prefix'] = '5kcrm_';
+//        $db_config['prefix'] = $param['databaseTable'];
+
         $username = $param['root'];
         $password = $param['pwd'];
         $wkcode = $param['wkcode'];
@@ -202,7 +203,26 @@ class Install extends Controller
         return resultArray(['data'=>'安装成功']);
     }
 
+    /**
+     * 安装成功界面
+     *
+     * @author fnqi
+     * @date 2021-03-11
+     * @return mixed
+     */
     public function step5()
+    {
+        return $this->fetch();
+    }
+
+    /**
+     * 安装超时界面
+     *
+     * @author fanqi
+     * @date 2021-03-11
+     * @return mixed
+     */
+    public function step6()
     {
         return $this->fetch();
     }

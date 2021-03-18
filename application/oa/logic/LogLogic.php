@@ -242,8 +242,9 @@ class LogLogic extends Common
         $between_time = [$start_time['start_time'], $start_time['end_time']];
         $map['owner_user_id'] = $user_id;
         $map['create_time'] = array('between', $between_time);
+        $map1['update_time'] = array('between', $between_time);
         $customerNum = Db::name('CrmCustomer')
-            ->where($map)
+            ->where($map1)
             ->count();
         $businessNum = Db::name('CrmBusiness')
             ->where($map)
@@ -307,7 +308,7 @@ class LogLogic extends Common
         switch ($type) {
             case '1':
                 if ($search) $map['customer.name'] = array('like', '%' . $search . '%');
-                $map['customer.create_time'] = array('between', $between_time);
+                $map['customer.update_time'] = array('between', $between_time);
                 $activityData = Db::name('CrmCustomer')
                     ->alias('customer')
                     ->join('__ADMIN_USER__ user', 'user.id = customer.owner_user_id', 'LEFT')
@@ -316,6 +317,7 @@ class LogLogic extends Common
                     ->where($customerMap)
                     ->order('customer.customer_id desc')
                     ->field('customer.customer_id,customer.name,customer.deal_status,customer.create_time,user.realname as owner_user_name,customer.last_time')
+                    ->page($param['page'],$param['limit'])
                     ->select();
                 $dataCount = Db::name('CrmCustomer')
                     ->alias('customer')
@@ -335,6 +337,7 @@ class LogLogic extends Common
                     ->where($map)
                     ->where($map2)
                     ->order('business.business_id desc')
+                    ->page($param['page'],$param['limit'])
                     ->field('business.business_id,business.name,status.name as status_name,business.create_time,user.realname as owner_user_name,business.last_time')
                     ->select();
                 $dataCount = Db::name('CrmBusiness')
@@ -354,6 +357,7 @@ class LogLogic extends Common
                     ->where($map)
                     ->where($map3)
                     ->order('contract.contract_id desc')
+                    ->page($param['page'],$param['limit'])
                     ->field('contract.contract_id,contract.name,contract.create_time,contract.check_status,u.realname as order_user_name')
                     ->select();
                 $dataCount = Db::name('CrmContract')
@@ -372,6 +376,7 @@ class LogLogic extends Common
                     ->field('receivables.receivables_id,receivables.number,receivables.return_time,user.realname as owner_user_name')
                     ->where($map)
                     ->where($map4)
+                    ->page($param['page'],$param['limit'])
                     ->order('receivables.receivables_id desc')
                     ->select();
                 $dataCount = Db::name('CrmReceivables')
@@ -929,11 +934,22 @@ class LogLogic extends Common
                 $imgList[] = $val;
             }
         }
+        $is_update = 0;
+        $is_delete = 0;
+        //创建人或负责人或管理员有撤销权限
+        if ($item['create_user_id'] == $param['user_id']) {
+            $is_update = 1;
+            $is_delete = 1;
+        }
         $param['type_id'] = $item['log_id'];
         $param['type'] = 'oa_log';
         $item['replyList'] = $commonModel->read($param);
         $item['fileList'] = $fileList ?: [];
         $item['imgList'] = $imgList ?: [];
+      
+        $permission['is_delete'] = $is_update;
+        $permission['is_update'] = $is_delete;
+        $item['permission'] = $permission;
         //相关业务
         $relationArr = $recordModel->getListByRelationId('log', $item['log_id']);
         $item['businessList'] = $relationArr['businessList'];

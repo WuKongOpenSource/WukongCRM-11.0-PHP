@@ -45,12 +45,14 @@ class Receivables extends Common
 		$order_field = $request['order_field'];
     	$order_type = $request['order_type'];
         $getCount = $request['getCount'];
+        $receivablesIdArray = $request['receivablesIdArray']; // 待办事项提醒参数
 		unset($request['scene_id']);
 		unset($request['search']);
 		unset($request['user_id']);
 		unset($request['order_field']);
 		unset($request['order_type']);
         unset($request['getCount']);
+        unset($request['receivablesIdArray']);
 
         $request = $this->fmtRequest( $request );
         $requestMap = $request['map'] ? : [];
@@ -67,9 +69,21 @@ class Receivables extends Common
                 $sceneMap = $sceneModel->getDefaultData('crm_receivables', $user_id) ? : [];
             }
         }
-		if ($search) {
-			//普通筛选
-			$sceneMap['number'] = ['condition' => 'contains','value' => $search,'form_type' => 'text','name' => '回款编号'];
+        $searchWhere = [];
+		if (!empty($search) || $search == '0') {
+            //普通筛选
+            $searchWhere = function ($query) use ($search) {
+                $query->where(function ($query) use ($search){
+                    $query->whereLike('customer.name', '%' . $search . '%');
+                })->whereOr(function ($query) use ($search) {
+                    $query->whereLike('receivables.number', '%' . $search . '%');
+                });
+            };
+//            if (db('crm_customer')->whereLike('name', '%' . $search . '%')->value('customer_id')) {
+//                $sceneMap['customer_name'] = ['condition' => 'contains', 'value' => $search, 'form_type' => 'text', 'name' => '客户名称'];
+//            } else {
+//                $sceneMap['number'] = ['condition' => 'contains','value' => $search,'form_type' => 'text','name' => '回款编号'];
+//            }
 		}
 		//优先级：普通筛选>高级筛选>场景
 		$map = $requestMap ? array_merge($sceneMap, $requestMap) : $sceneMap;
@@ -99,18 +113,21 @@ class Receivables extends Common
 		$userField = $fieldModel->getFieldByFormType('crm_receivables', 'user');
 		$structureField = $fieldModel->getFieldByFormType('crm_receivables', 'structure');  //部门类型
         $datetimeField = $fieldModel->getFieldByFormType('crm_receivables', 'datetime'); //日期时间类型
-
-		if ($request['order_type'] && $request['order_field']) {
-			$order = $fieldModel->getOrderByFormtype('crm_receivables','receivables',$order_field,$order_type);
-		} else {
-			$order = 'receivables.update_time desc';
-		}
+        # 处理人员和部门类型的排序报错问题(前端传来的是包含_name的别名字段)
+        $temporaryField = str_replace('_name', '', $order_field);
+        if (in_array($temporaryField, $userField) || in_array($temporaryField, $structureField)) {
+            $order_field = $temporaryField;
+        }
 		//排序
 		if ($order_type && $order_field) {
 			$order = $fieldModel->getOrderByFormtype('crm_receivables','receivables',$order_field, $order_type);
 		} else {
 			$order = 'receivables.update_time desc';
-		}		
+		}
+
+        # 待办事项查询参数
+        $dealtWhere = [];
+        if (!empty($receivablesIdArray)) $dealtWhere['receivables.receivables_id'] = ['in', $receivablesIdArray];
 
 		$readAuthIds = $userModel->getUserByPer('crm', 'receivables', 'read');
         $updateAuthIds = $userModel->getUserByPer('crm', 'receivables', 'update');
@@ -119,7 +136,7 @@ class Receivables extends Common
             ->alias('receivables')
             ->join('__CRM_CUSTOMER__ customer','receivables.customer_id = customer.customer_id','LEFT')
             ->join('__CRM_CONTRACT__ contract','receivables.contract_id = contract.contract_id','LEFT')
-            ->where($map)->where($authMap)->count('receivables_id');
+            ->where($searchWhere)->where($map)->where($authMap)->where($dealtWhere)->count('receivables_id');
         if (!empty($getCount) && $getCount == 1) {
             $data['dataCount'] = !empty($dataCount) ? $dataCount : 0;
             $data['extraData']['money'] = ['receivablesMoney' => $this->getReceivablesMoney($map, $authMap)];
@@ -131,9 +148,11 @@ class Receivables extends Common
 		$list = db('crm_receivables')
 				->alias('receivables')
 				->join('__CRM_CUSTOMER__ customer','receivables.customer_id = customer.customer_id','LEFT')		
-				->join('__CRM_CONTRACT__ contract','receivables.contract_id = contract.contract_id','LEFT')		
+				->join('__CRM_CONTRACT__ contract','receivables.contract_id = contract.contract_id','LEFT')
+                ->where($searchWhere)
 				->where($map)
 				->where($authMap)
+                ->where($dealtWhere)
         		->limit($request['offset'], $request['length'])
 				->field('receivables.*,customer.name as customer_name,contract.name as contract_name,contract.num as contract_num,contract.money as contract_money')
 				->orderRaw($order)
@@ -151,12 +170,12 @@ class Receivables extends Common
         	$list[$k]['contract_id_info']['money'] = $v['contract_money'] ? : '0.00';
         	$list[$k]['contract_money'] = $v['contract_money'] ? : '0.00';  
 			foreach ($userField as $key => $val) {
-                $usernameField  = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
-                $list[$k][$val] = implode($usernameField, ',');
+                $usernameField = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
+                $list[$k][$val.'_name'] = implode($usernameField, ',');
         	}
 			foreach ($structureField as $key => $val) {
                 $structureNameField = !empty($v[$val]) ? db('admin_structure')->whereIn('id', stringToArray($v[$val]))->column('name') : [];
-                $list[$k][$val]     = implode($structureNameField, ',');
+                $list[$k][$val.'_name'] = implode($structureNameField, ',');
         	}
             foreach ($datetimeField as $key => $val) {
                 $list[$k][$val] = !empty($v[$val]) ? date('Y-m-d H:i:s', $v[$val]) : null;
@@ -283,9 +302,22 @@ class Receivables extends Common
                 'create_user_id'   => $param['create_user_id'],
                 'update_time'      => time(),
                 'create_time'      => time(),
-                'customer_ids'     => $param['customer_id'],
-                'contract_ids'     => $param['contract_id']
+                'customer_ids'     => ',' . $param['customer_id'] . ',',
+                'contract_ids'     => ',' . $param['contract_id'] . ','
             ]);
+
+            # 创建待办事项的关联数据
+            $checkUserIds = db('crm_receivables')->where('receivables_id', $data['receivables_id'])->value('check_user_id');
+            $checkUserIdArray = stringToArray($checkUserIds);
+            $dealtData = [];
+            foreach ($checkUserIdArray AS $kk => $vv) {
+                $dealtData[] = [
+                    'types'    => 'crm_receivables',
+                    'types_id' => $data['receivables_id'],
+                    'user_id'  => $vv
+                ];
+            }
+            if (!empty($dealtData)) db('crm_dealt_relation')->insertAll($dealtData);
 
 			return $data;
 		} else {
@@ -376,6 +408,22 @@ class Receivables extends Common
 
 			$data = [];
 			$data['receivables_id'] = $receivables_id;
+
+            # 删除待办事项的关联数据
+            db('crm_dealt_relation')->where(['types' => ['eq', 'crm_receivables'], 'types_id' => ['eq', $data['receivables_id']]])->delete();
+            # 创建待办事项的关联数据
+            $checkUserIds = db('crm_receivables')->where('receivables_id', $data['receivables_id'])->value('check_user_id');
+            $checkUserIdArray = stringToArray($checkUserIds);
+            $dealtData = [];
+            foreach ($checkUserIdArray AS $kk => $vv) {
+                $dealtData[] = [
+                    'types'    => 'crm_receivables',
+                    'types_id' => $data['receivables_id'],
+                    'user_id'  => $vv
+                ];
+            }
+            if (!empty($dealtData)) db('crm_dealt_relation')->insertAll($dealtData);
+
 			return $data;
 		} else {
 			$this->error = '编辑失败';

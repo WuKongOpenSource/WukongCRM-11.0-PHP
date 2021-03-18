@@ -63,7 +63,7 @@ class Contacts extends Common
 			$sceneMap = $sceneModel->getDefaultData('crm_contacts', $user_id) ? : [];
 		}
 		$searchMap = [];
-		if ($search) {
+		if ($search || $search == '0') {
 			//普通筛选
 			$searchMap = function($query) use ($search){
 			        $query->where('contacts.name',array('like','%'.$search.'%'))
@@ -109,7 +109,11 @@ class Contacts extends Common
 		$userField = $fieldModel->getFieldByFormType('crm_contacts', 'user'); //人员类型
 		$structureField = $fieldModel->getFieldByFormType('crm_contacts', 'structure');  //部门类型
         $datetimeField = $fieldModel->getFieldByFormType('crm_contacts', 'datetime'); //日期时间类型
-
+        # 处理人员和部门类型的排序报错问题(前端传来的是包含_name的别名字段)
+        $temporaryField = str_replace('_name', '', $order_field);
+        if (in_array($temporaryField, $userField) || in_array($temporaryField, $structureField)) {
+            $order_field = $temporaryField;
+        }
 		//排序
 		if ($order_type && $order_field) {
 			$order = $fieldModel->getOrderByFormtype('crm_contacts','contacts',$order_field,$order_type);
@@ -147,7 +151,6 @@ class Contacts extends Common
         		->field('contacts.*,customer.name as customer_name')
         		->orderRaw($order)
         		->select();
-        
         foreach ($list as $k=>$v) {
         	$list[$k]['create_user_id_info'] = isset($v['create_user_id']) ? $userModel->getUserById($v['create_user_id']) : [];
         	$list[$k]['owner_user_id_info'] = isset($v['owner_user_id']) ? $userModel->getUserById($v['owner_user_id']) : [];
@@ -155,11 +158,11 @@ class Contacts extends Common
         	$list[$k]['customer_id_info']['name'] = $v['customer_name'] ? : '';
 			foreach ($userField as $key => $val) {
 			    $usernameField  = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
-                $list[$k][$val] = implode($usernameField, ',');
+                $list[$k][$val.'_name'] = implode($usernameField, ',');
         	}
 			foreach ($structureField as $key => $val) {
 			    $structureNameField = !empty($v[$val]) ? db('admin_structure')->whereIn('id', stringToArray($v[$val]))->column('name') : [];
-                $list[$k][$val]     = implode($structureNameField, ',');
+                $list[$k][$val.'_name'] = implode($structureNameField, ',');
         	}
             foreach ($datetimeField as $key => $val) {
                 $list[$k][$val] = !empty($v[$val]) ? date('Y-m-d H:i:s', $v[$val]) : null;
@@ -194,7 +197,6 @@ class Contacts extends Common
         $data = [];
         $data['list'] = $list;
         $data['dataCount'] = $dataCount ? : 0;
-
         return $data;
     }
 
@@ -248,7 +250,7 @@ class Contacts extends Common
                 'create_user_id'   => $param['create_user_id'],
                 'update_time'      => time(),
                 'create_time'      => time(),
-                'customer_ids'     => $param['customer_id']
+                'customer_ids'     => ',' . $param['customer_id'] . ','
             ]);
 
             # 处理商机首要联系人
@@ -376,7 +378,7 @@ class Contacts extends Common
         $starId = empty($userId) ? 0 : Db::name('crm_star')->where(['user_id' => $userId, 'target_id' => $id, 'type' => 'crm_contacts'])->value('star_id');
         $dataInfo['star'] = !empty($starId) ? 1 : 0;
         # 处理决策人显示问题
-        $dataInfo['decision'] = !empty($dataInfo['decision']) && $dataInfo['decision'] == '是' ? '是' : '';
+        $dataInfo['decision'] = !empty($dataInfo['decision']) && $dataInfo['decision'] == '是' ? '是' : '否';
         # 处理时间格式
         $fieldModel = new \app\admin\model\Field();
         $datetimeField = $fieldModel->getFieldByFormType('crm_contacts', 'datetime'); //日期时间类型

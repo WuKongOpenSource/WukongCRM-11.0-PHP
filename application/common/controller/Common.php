@@ -7,6 +7,7 @@
 
 namespace app\common\controller;
 
+use think\Cache;
 use think\Controller;
 use think\Request;
 
@@ -30,8 +31,8 @@ class Common extends Controller
         $this->param = $param;   
         $request = request();
         $header = $request->header();
-        $authKey = $header['authkey'];
-        $cache = cache('Auth_'.$authKey.$platform);
+        $authKey = trim($header['authkey']);
+        $cache = Cache::get('Auth_'.$authKey.$platform);
         if ($cache) $this->userInfo = $cache['userInfo'];
 
         $m = strtolower($request->module());

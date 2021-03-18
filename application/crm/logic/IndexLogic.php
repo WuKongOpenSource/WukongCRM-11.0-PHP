@@ -37,13 +37,17 @@ class IndexLogic extends Common
         $contractModel = new \app\crm\model\Contract();
         $receivablesModel = new \app\crm\model\Receivables();
         $activityModel = new \app\crm\model\Activity();
-
+        if($param['start_time'] && $param['end_time']){
+            $param['start_time']=$param['start_time'].'00:00:00';
+            $param['end_time']=$param['end_time'].'23:59:59';
+        }
         $whereArr = $adminModel->getWhere($param, 1, ''); //统计条件
         $lastArr = $adminModel->getWhere($param, 1, '', true); //统计条件
         $userIds = $whereArr['userIds'];
         $between_time = $whereArr['between_time'];
         $last_between_time = $lastArr['between_time'];
-
+      
+        
         $customerNum = 0; //新增客户
         $customerLastNum = 0; //上期对比
         $contactsNum = 0; //新增联系人
@@ -146,19 +150,30 @@ class IndexLogic extends Common
 
     public function getCountSql($param)
     {
+        $configModel = new \app\crm\model\ConfigData();
+        $configInfo = $configModel->getData();
+        $follow_day = $configInfo['follow_day'] ? : 0;
+        $deal_day = $configInfo['deal_day'] ? : 0;
+        //默认公海条件(没有负责人或已经到期)
+        $data['follow_time'] = time()-$follow_day*86400;
+        $data['deal_time'] = time()-$deal_day*86400;
+        $data['deal_status'] = '未成交';
         $countSql = "SELECT
         count(1) count1,
         0 count2
         FROM 5kcrm_crm_customer
         WHERE create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . "
         and owner_user_id IN (" . implode(',', $param['customer_auth_user_ids']) . ")
+        and ((  (  deal_time > ".$data['deal_time']." ) or (update_time > ".$data['follow_time']." and deal_time > ".$data['deal_time']."))or deal_status = '已成交'  or is_lock = 1 )
         UNION ALL
         SELECT
         count(1) AS count1,
         0 count2
-        FROM 5kcrm_crm_contacts
-        WHERE create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . "
-        and owner_user_id IN (" . implode(',', $param['contacts_auth_user_ids']) . ")
+        FROM 5kcrm_crm_contacts contacts
+         LEFT JOIN 5kcrm_crm_customer customer ON contacts.customer_id=customer.customer_id
+        WHERE contacts.create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . "
+        and contacts.owner_user_id IN (" . implode(',', $param['contacts_auth_user_ids']) . ")
+        and ((  (  customer.deal_time > ".$data['deal_time']." ) or (customer.update_time > ".$data['follow_time']." and customer.deal_time > ".$data['deal_time']."))or customer.deal_status = '已成交'  or customer. is_lock = 1 )
         UNION ALL
         SELECT
         count(1) AS count1,
@@ -180,7 +195,7 @@ class IndexLogic extends Common
         FROM 5kcrm_crm_receivables
         WHERE create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . "
         AND check_status = 2
-        and owner_user_id IN (" . implode(',', $param['receivables_auth_user_ids']) . ")                     
+        and owner_user_id IN (" . implode(',', $param['receivables_auth_user_ids']) . ")
         UNION ALL
         SELECT
         count(1) AS count,
@@ -221,6 +236,10 @@ class IndexLogic extends Common
         $adminModel = new \app\admin\model\Admin();
         $customerModel = new \app\crm\model\Customer();
         $dateTime = date('Y-m-d H:i:s');
+        if($param['start_time'] && $param['end_time']){
+            $param['start_time']=$param['start_time'].'00:00:00';
+            $param['end_time']=$param['end_time'].'23:59:59';
+        }
         $whereArr = $adminModel->getWhere($param, 1, ''); //统计条件
         $userIds = $whereArr['userIds'];
         //权限控制
@@ -235,13 +254,12 @@ class IndexLogic extends Common
         $customerParam['getCount'] = 1;
         $customerParam['owner_user_id'] = $owner_user_ids;
 
-        $sevenDaysParam['otherMap'] = " ( IFNULL('last_time','create_time') < " . strtotime('-1 week') . ") ";
-        $fifteenDaysParam['otherMap'] = " ( IFNULL('last_time','create_time') < " . strtotime('15 day') . ") ";
-        $oneMonthParam['otherMap'] = " ( IFNULL('last_time','create_time') < " . strtotime('-30 day') . ") ";
-        $threeMonthParam['otherMap'] = " ( IFNULL('last_time','create_time') < " . strtotime('-3 month') . ") ";
-        $sixMonthParam['otherMap'] = " ( IFNULL('last_time','create_time') < " . strtotime('-6 month') . ") ";
-        $unContactParam['otherMap'] = " ( last_time < next_time AND next_time < now()) ";
-
+        $sevenDaysParam['otherMap'] = " ( IFNULL(last_time,create_time) < " . strtotime('-1 week') . ") ";
+        $fifteenDaysParam['otherMap'] = " ( IFNULL(last_time,create_time) < " . strtotime('-15 day') . ") ";
+        $oneMonthParam['otherMap'] = " ( IFNULL(last_time,create_time) < " . strtotime('-30 day') . ") ";
+        $threeMonthParam['otherMap'] = " ( IFNULL(last_time,create_time) < " . strtotime('-3 month') . ") ";
+        $sixMonthParam['otherMap'] = " ( IFNULL(last_time,create_time) < " . strtotime('-6 month') . ") ";
+        $unContactParam['otherMap'] = " ( next_time < " . strtotime(date('Y-m-d 00:00:00')) . " AND (next_time) >0) ";
         $data['sevenDays'] = $customerModel->getDataList(array_merge($customerParam, $sevenDaysParam))['dataCount'] ?: 0;
         $data['fifteenDays'] = $customerModel->getDataList(array_merge($customerParam, $fifteenDaysParam))['dataCount'] ?: 0;
         $data['oneMonth'] = $customerModel->getDataList(array_merge($customerParam, $oneMonthParam))['dataCount'] ?: 0;
@@ -264,6 +282,10 @@ class IndexLogic extends Common
         $userModel = new \app\admin\model\User();
         $adminModel = new \app\admin\model\Admin();
         $customerModel = new \app\crm\model\Customer();
+        if($param['start_time'] && $param['end_time']){
+            $param['start_time']=$param['start_time'].'00:00:00';
+            $param['end_time']=$param['end_time'].'23:59:59';
+        }
         $whereArr = $adminModel->getWhere($param, 1, ''); //统计条件
         $userIds = $whereArr['userIds'];
         //权限控制
@@ -286,20 +308,24 @@ class IndexLogic extends Common
         $customerParam['owner_user_id'] = $owner_user_ids;
 
         switch ($label) {
+            case 1 :
+//                ((( next_time < " . strtotime(date('Y-m-d 00:00:00')).") AND (last_time IS NOT NULL))  AND (IFNULL(last_time,next_time) >0))
+                $customerParam['otherMap'] = " (next_time < " . strtotime(date('Y-m-d 00:00:00')) . " AND (next_time) >0) ";
+                break;
             case 2 :
-                $customerParam['otherMap'] = " ( IFNULL('last_time','create_time') < " . strtotime('-1 week') . ") ";
+                $customerParam['otherMap'] = " ( IFNULL(last_time,create_time) < " . strtotime('-1 week') . ") ";
                 break;
             case 3 :
-                $customerParam['otherMap'] = "  (  IFNULL('last_time','create_time') < " . strtotime('15 day') . ") ";
+                $customerParam['otherMap'] = "  (  IFNULL(last_time,create_time) < " . strtotime('-15 day') . ") ";
                 break;
             case 4 :
-                $customerParam['otherMap'] = "  ( IFNULL('last_time','create_time') < " . strtotime('-30 day') . ") ";
+                $customerParam['otherMap'] = "  ( IFNULL(last_time,create_time) < " . strtotime('-30 day') . ") ";
                 break;
             case 5 :
-                $customerParam['otherMap'] = "  ( IFNULL('last_time','create_time') < " . strtotime('-3 month') . ") ";
+                $customerParam['otherMap'] = "  ( IFNULL(last_time,create_time) < " . strtotime('-3 month') . ") ";
                 break;
             case 6 :
-                $customerParam['otherMap'] = "  ( IFNULL('last_time','create_time') < " . strtotime('-6 month') . ") ";
+                $customerParam['otherMap'] = "  ( IFNULL(last_time,create_time) < " . strtotime('-6 month') . ") ";
                 break;
         }
         return $customerModel->getDataList($customerParam);
@@ -318,7 +344,10 @@ class IndexLogic extends Common
         $adminModel = new \app\admin\model\Admin();
         $user_id = $param['user_id'] ?: [-1];
         $status = $param['label'] ?: 1; //1合同目标 2回款目标 3合同数 4新增客户数 5新增联系人数 6新增跟进记录数
-
+        if($param['start_time'] && $param['end_time']){
+            $param['start_time']=$param['start_time'].'00:00:00';
+            $param['end_time']=$param['end_time'].'23:59:59';
+        }
         $whereArr = $adminModel->getWhere($param, 1, ''); //统计条件
         $userIds = $whereArr['userIds'];
         $between_time = $whereArr['between_time'];
@@ -508,9 +537,9 @@ class IndexLogic extends Common
             $achievementMoney = db('crm_achievement')->where($where_achievement)->find();
             $v['thumb_img'] = $v['thumb_img'] ? getFullPath($v['thumb_img']) : '';
             if ($achievementMoney[$achievement] == 0.00) {
-                $v['rate'] = 0.00;
+                $v['rate'] = 0;
             } else {
-                $v['rate'] = (int)$v['money'] / $achievementMoney[$achievement];
+                $v['rate'] = round($v['money'] / $achievementMoney[$achievement]*100,2);
             }
             if ($userName['realname'] == $v['realname']) {
                 $list['self']['sort'] = $k + 1;
@@ -543,6 +572,10 @@ class IndexLogic extends Common
     {
         $userModel = new \app\admin\model\User();
         $adminModel = new \app\admin\model\Admin();
+        if($param['start_time'] && $param['end_time']){
+            $param['start_time']=$param['start_time'].'00:00:00';
+            $param['end_time']=$param['end_time'].'23:59:59';
+        }
         $whereArr = $adminModel->getWhere($param, 1, ''); //统计条件
         $user_id = $param['user_id'] ?: [-1];
         $userIds = $whereArr['userIds'];
@@ -572,7 +605,6 @@ class IndexLogic extends Common
             );
             $resDataArr = array_merge($resDataArr, $resData[0]);
         }
-
         return $resDataArr;
     }
 
@@ -583,6 +615,14 @@ class IndexLogic extends Common
      */
     public function getQueryDataSql($param)
     {
+        $configModel = new \app\crm\model\ConfigData();
+        $configInfo = $configModel->getData();
+        $follow_day = $configInfo['follow_day'] ? : 0;
+        $deal_day = $configInfo['deal_day'] ? : 0;
+        //默认公海条件(没有负责人或已经到期)
+        $data['follow_time'] = time()-$follow_day*86400;
+        $data['deal_time'] = time()-$deal_day*86400;
+        $data['deal_status'] = '未成交';
         switch ($param['type']) {
             case 1 :
                 $countSql = "SELECT
@@ -590,20 +630,21 @@ class IndexLogic extends Common
                 COUNT(CASE WHEN deal_status = '已成交' THEN 1 ELSE NULL END) AS dealCustomer
                 FROM 5kcrm_crm_customer
                 WHERE create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . "
-                AND owner_user_id IN (" . implode(',', $param['customer_auth_user_ids']) . ")";
+                AND owner_user_id IN (" . implode(',', $param['customer_auth_user_ids']) . ")
+                 and ((  (  deal_time > ".$data['deal_time']." ) or (update_time > ".$data['follow_time']." and deal_time > ".$data['deal_time']."))or deal_status = '已成交'  or is_lock = 1 )
+                ";
                 break;
             case 2 :
                 $countSql = "SELECT
-                count(1) activityNum,
-                COUNT(CASE WHEN b.activity_type_id in (SELECT customer_id FROM 5kcrm_crm_customer
+                 COUNT(distinct CASE WHEN  b.activity_type_id in (SELECT customer_id FROM 5kcrm_crm_customer
                 WHERE create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . "
-                AND owner_user_id IN (" . implode(',', $param['customer_auth_user_ids']) . ")
-                ) THEN 1 ELSE NULL END ) as activityRealNum
+                AND owner_user_id IN (" . implode(',', $param['customer_auth_user_ids']) . ")  AND next_time is not null
+                ) THEN b.activity_type_id ELSE NULL END) as  activityNum
                 FROM 5kcrm_crm_activity AS b
                 WHERE create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . "
                 AND b.type = '1'
-                AND b.activity_type = '2'                
-                AND b.status = '1'                
+                AND b.activity_type = '2'
+                AND b.status = '1'
                 AND b.create_user_id IN (" . implode(',', $param['record_auth_user_ids']) . ")";
                 break;
             case 3 :
@@ -643,6 +684,10 @@ class IndexLogic extends Common
     {
         $userModel = new \app\admin\model\User();
         $adminModel = new \app\admin\model\Admin();
+        if($param['start_time'] && $param['end_time']){
+            $param['start_time']=$param['start_time'].'00:00:00';
+            $param['end_time']=$param['end_time'].'23:59:59';
+        }
         $whereArr = $adminModel->getWhere($param, 1, ''); //统计条件
         $user_id = $param['user_id'] ?: [-1];
         $userIds = $whereArr['userIds'];
@@ -731,13 +776,7 @@ class IndexLogic extends Common
         $userModel = new \app\admin\model\User();
         $adminModel = new \app\admin\model\Admin();
         $whereArr = $adminModel->getWhere($param, 1, ''); //统计条件
-        if ($param['dataType'] == 1) {
-            $userIds = [];
-            $userIds[] = $param['user_id'];
-        } else {
-            $userIds = $whereArr['userIds'];
-        }
-
+        $userIds = $whereArr['userIds'];
         //权限控制
         if (!empty($param['type'])) {
             $last_where_contract = getTimeByType($param['type']);
@@ -745,8 +784,8 @@ class IndexLogic extends Common
             $where_activity['t.create_time'] = array('between', $between_time);
         } else {
             //自定义时间
-            $start_time = $param['start_time'] ?: strtotime(date('Y-01-01', time()));
-            $end_time = $param['end_time'] ? strtotime(date('Y-m-01', $param['end_time']) . ' +1 month -1 day') : strtotime(date('Y-m-01', time()) . ' +1 month -1 day');
+            $start_time = $param['start_time'] ?strtotime($param['start_time'].'00:00:00'): strtotime(date('Y-01-01', time()));
+            $end_time = $param['end_time'] ? strtotime($param['end_time'].'23:59:59') : strtotime(date('Y-m-01', time()) . ' +1 month -1 day');
             $where_activity['t.create_time'] = ['between', [$start_time, $end_time]];
         }
         $auth_customer_user_ids = $userModel->getUserByPer('crm', 'activity', 'index');
@@ -782,7 +821,7 @@ class IndexLogic extends Common
             } else {
                 $type['t.type'] = $param['queryType'];
             }
-            if ($param['user'] == '') {
+            if ($param['user_id'] == '') {
                 if ($param['subUser'] == '0') {
                     $type['t.create_user_id'] = $param['id'];
                     //下属创建
@@ -796,7 +835,7 @@ class IndexLogic extends Common
                     $type['t.create_user_id'] = array('in', $subStr);
                 }
             } else {
-                $type['t.create_user_id'] = $param['user'];
+                $type['t.create_user_id'] = $param['user_id'];
             }
             $type['t.status'] = 1;
             $list = db('crm_activity')

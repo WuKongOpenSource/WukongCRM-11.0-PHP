@@ -28,11 +28,11 @@ class Admin extends Common
         $structure_id = $apiCommon->userInfo['structure_id'];
         //员工IDS
         $user_ids = [];
-        if ($param['userId']) {
-            $user_ids = array($param['userId']);
+        if ($param['user_id']) {
+            $user_ids = array($param['user_id']);
         }
-        if ($param['deptId']) {
-            $userModel->getSubUserByStr($param['deptId'], 2);
+        if ($param['structure_id']) {
+            $userModel->getSubUserByStr($param['structure_id'], 2);
         }        
         if ($param['dataType']) {
             switch ($param['dataType']) {
@@ -65,8 +65,8 @@ class Admin extends Common
                     }
                 }
             }
-            if (!$user_ids) $user_ids = getSubUserId(true);            
         }
+        if (!$user_ids) $user_ids = getSubUserId(true,0, $apiCommon->userInfo['id']);
         $perUserIds = $perUserIds ? : getSubUserId(); //权限范围内userIds
         $userIds = [];
         if ($user_ids) {

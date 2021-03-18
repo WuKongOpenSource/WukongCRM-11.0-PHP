@@ -45,7 +45,8 @@ class work extends ApiCommon
                 'grouplist',
                 'addusergroup',
                 'update',
-                'follow'
+                'follow',
+                'updateWorkOrder'
             ]
         ];
         Hook::listen('check_auth',$action);
@@ -632,25 +633,22 @@ class work extends ApiCommon
 
         return resultArray(['data' => '操作成功！']);
     }
-    
+
     /**
-     * 项目排序
+     * 项目列表排序
      *
-     * @author      alvin guogaobo
-     * @version     1.0 版本号
-     * @since       2021/2/23 0023 15:27
+     * @author fanqi
+     * @date 2021-03-11
+     * @param WorkLogic $workLogic
      */
-//    public function workStart(){
-//        $param=$this->param;
-//        $userInfo=$this->userInfo;
-//        $param['work']=serialize($param);
-//        $param['user_id']=$userInfo['id'];
-//        $workStart=new WorkLogic();
-//        $res=$workStart->workStart($param);
-//        if(!$res){
-//            return resultArray(['error'=>'操作失败']);
-//        }
-//        return resultArray(['data'=>'操作成功']);
-//    }
+    public function updateWorkOrder(WorkLogic $workLogic)
+    {
+        $workIds  = $this->param['workIds'];
+        $userInfo = $this->userInfo;
+
+        $workLogic->setWorkOrder($workIds, $userInfo['id']);
+
+        return resultArray(['data' => '操作成功！']);
+    }
 }
  

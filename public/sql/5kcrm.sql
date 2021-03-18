@@ -311,7 +311,7 @@ CREATE TABLE `5kcrm_admin_record` (
   `record_id` int(11) NOT NULL AUTO_INCREMENT,
   `types` varchar(50) NOT NULL COMMENT '关联类型',
   `types_id` int(11) NOT NULL COMMENT '类型ID',
-  `content` varchar(1000) NOT NULL COMMENT '跟进内容',
+  `content` varchar(1024) DEFAULT NULL COMMENT '跟进内容',
   `category` varchar(30) NOT NULL DEFAULT '' COMMENT '跟进类型',
   `next_time` int(11) NOT NULL DEFAULT '0' COMMENT '下次联系时间',
   `business_ids` varchar(255) NOT NULL DEFAULT '' COMMENT '商机ID',
@@ -502,6 +502,7 @@ CREATE TABLE `5kcrm_admin_user` (
   `authkey` varchar(32) NOT NULL DEFAULT '' COMMENT '验证信息',
   `authkey_time` int(11) NOT NULL DEFAULT '0' COMMENT '验证失效时间',
   `type` tinyint(2) NOT NULL COMMENT '1系统用户 0非系统用户',
+  `is_read_notice` tinyint(1) NOT NULL DEFAULT 0 COMMENT '用户是否已读升级公告：1已读；0未读',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='用户表';
 
@@ -558,6 +559,7 @@ CREATE TABLE `5kcrm_crm_business` (
   `rw_user_id` varchar(500) NOT NULL DEFAULT '' COMMENT '读写权限',
   `create_time` int(11) NOT NULL COMMENT '创建时间',
   `update_time` int(11) NOT NULL COMMENT '更新时间',
+  `is_dealt` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否已经处理（待办事项）：1已处理；0未处理；',
   PRIMARY KEY (`business_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='商机表';
 
@@ -738,6 +740,8 @@ CREATE TABLE `5kcrm_crm_customer` (
   `next_time` int(11) NOT NULL DEFAULT '0' COMMENT '下次联系时间',
   `create_time` int(11) NOT NULL COMMENT '创建时间',
   `update_time` int(11) NOT NULL COMMENT '更新时间',
+  `is_dealt` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否已经处理（待办事项）：1已处理；0未处理；',
+  `is_allocation` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否是分配给我的线索：1是；0不是',
   PRIMARY KEY (`customer_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='客户表';
 
@@ -765,6 +769,8 @@ CREATE TABLE `5kcrm_crm_leads` (
   `next_time` int(11) DEFAULT '0' COMMENT '下次联系时间',
   `create_time` int(11) NOT NULL COMMENT '创建时间',
   `update_time` int(11) NOT NULL COMMENT '更新时间',
+  `is_dealt` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否已经处理（待办事项）：1已处理；0未处理；',
+  `is_allocation` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否是分配给我的线索：1是；0不是',
   PRIMARY KEY (`leads_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='线索表';
 
@@ -848,6 +854,7 @@ CREATE TABLE `5kcrm_crm_receivables_plan` (
   `create_time` int(11) NOT NULL COMMENT '创建时间',
   `update_time` int(11) NOT NULL COMMENT '更新时间',
   `file` varchar(500) NOT NULL DEFAULT '' COMMENT '附件',
+  `is_dealt` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否已经处理（待办事项）：1已处理；0未处理；',
   PRIMARY KEY (`plan_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='回款计划表';
 
@@ -1674,7 +1681,7 @@ ALTER TABLE `5kcrm_oa_event_notice` drop COLUMN `repeated`;
 ALTER TABLE `5kcrm_oa_event_notice` MODIFY COLUMN `noticetype` tinyint(4) unsigned DEFAULT NULL COMMENT '1分 2时 3天';
 ALTER TABLE `5kcrm_oa_event_notice` ADD COLUMN `number` tinyint(4) NOT NULL DEFAULT 0  COMMENT '根据noticetype来决定提前多久提醒';
 ALTER TABLE `5kcrm_admin_field` ADD COLUMN `is_hidden` tinyint(1) NOT NULL DEFAULT 0  COMMENT '是否隐藏：1隐藏；0不隐藏';
-INSERT INTO `5kcrm_admin_field` VALUES (NULL, 'crm_customer', 0, 'email', '邮箱', 'text', '', 0, 0, 0, '', '', 9, 1, 1553788800, 1611144298, 2, '', 0);
+INSERT INTO `5kcrm_admin_field` VALUES (NULL, 'crm_customer', 0, 'email', '邮箱', 'email', '', 0, 0, 0, '', '', 9, 1, 1553788800, 1611144298, 2, '', 0);
 ALTER TABLE `5kcrm_crm_leads` ADD COLUMN `last_time` int(10) unsigned DEFAULT NULL COMMENT '最后跟进时间';
 ALTER TABLE `5kcrm_crm_leads` ADD COLUMN `last_record` varchar(512) DEFAULT NULL COMMENT '最后跟进记录';
 ALTER TABLE `5kcrm_admin_config` MODIFY COLUMN `controller` varchar(50) DEFAULT NULL COMMENT '控制器';
@@ -1713,7 +1720,7 @@ INSERT INTO `5kcrm_admin_field` ( `types`, `types_id`, `field`, `name`, `form_ty
 INSERT INTO `5kcrm_admin_field` ( `types`, `types_id`, `field`, `name`, `form_type`, `default_value`, `max_length`, `is_unique`, `is_null`, `input_tips`, `setting`, `order_id`, `operating`, `create_time`, `update_time`, `type`, `relevant`, `is_hidden`) VALUES ( 'crm_visit', '0', 'customer_id', '客户名称', 'customer', '', '0', '0', '1', '', '', '5', '1', '1553788800', '1553788800', '0', '', '0');
 INSERT INTO `5kcrm_admin_field` ( `types`, `types_id`, `field`, `name`, `form_type`, `default_value`, `max_length`, `is_unique`, `is_null`, `input_tips`, `setting`, `order_id`, `operating`, `create_time`, `update_time`, `type`, `relevant`, `is_hidden`) VALUES ( 'crm_visit', '0', 'contacts_id', '联系人', 'contacts', '', '0', '0', '0', '', '', '6', '3', '1553788800', '1553788800', '0', '', '0');
 INSERT INTO `5kcrm_admin_field` ( `types`, `types_id`, `field`, `name`, `form_type`, `default_value`, `max_length`, `is_unique`, `is_null`, `input_tips`, `setting`, `order_id`, `operating`, `create_time`, `update_time`, `type`, `relevant`, `is_hidden`) VALUES ( 'crm_visit', '0', 'contract_id', '合同编号', 'contract', '', '0', '0', '1', '', '', '7', '1', '1553788800', '1553788800', '0', '', '0');
-INSERT INTO `5kcrm_admin_field` ( `types`, `types_id`, `field`, `name`, `form_type`, `default_value`, `max_length`, `is_unique`, `is_null`, `input_tips`, `setting`, `order_id`, `operating`, `create_time`, `update_time`, `type`, `relevant`, `is_hidden`) VALUES ('crm_visit', '0', 'satisfaction', '客户满意度', 'select', '', '0', '0', '0', '', '很满意\r\n满意\r\n一般不满意\r\n很不满意', '8', '1', '1553788800', '1553788800', '0', NULL, '0');
+INSERT INTO `5kcrm_admin_field` ( `types`, `types_id`, `field`, `name`, `form_type`, `default_value`, `max_length`, `is_unique`, `is_null`, `input_tips`, `setting`, `order_id`, `operating`, `create_time`, `update_time`, `type`, `relevant`, `is_hidden`) VALUES ('crm_visit', '0', 'satisfaction', '客户满意度', 'select', '', '0', '0', '0', '', '很满意\r\n满意\r\n一般\r\n不满意\r\n很不满意', '8', '1', '1553788800', '1553788800', '0', NULL, '0');
 INSERT INTO `5kcrm_admin_field` ( `types`, `types_id`, `field`, `name`, `form_type`, `default_value`, `max_length`, `is_unique`, `is_null`, `input_tips`, `setting`, `order_id`, `operating`, `create_time`, `update_time`, `type`, `relevant`, `is_hidden`) VALUES ( 'crm_visit', '0', 'feedback', '客户反馈', 'textarea', '', '0', '0', '0', '', '', '9', '1', '1553788800', '1553788800', '0', '', '0');
 
 DROP TABLE IF EXISTS `5kcrm_crm_number_sequence`;
@@ -1734,18 +1741,18 @@ CREATE TABLE `5kcrm_crm_number_sequence` (
   PRIMARY KEY (`number_sequence_id`) USING BTREE
 ) ENGINE=InnoDB AUTO_INCREMENT=1 CHARACTER SET = utf8 COLLATE = utf8_general_ci ROW_FORMAT=Dynamic COMMENT='编号规则';
 
-INSERT INTO `5kcrm_crm_number_sequence` VALUES ('1', '0', '1', 'HT', null, null, null, null, '1607356800', '1', null, '0', '1');
-INSERT INTO `5kcrm_crm_number_sequence` VALUES ('2', '1', '2', 'yyyyMMdd', null, null, null, null, '1607356800', '1', null, '0', '1');
-INSERT INTO `5kcrm_crm_number_sequence` VALUES ('3', '2', '3', '1', '1', '1', '43', '1612578239', '1607356800', '1', null, '0', '1');
-INSERT INTO `5kcrm_crm_number_sequence` VALUES ('4', '1', '1', 'HK', null, null, null, null, '1611627355', '7', null, '0', '2');
-INSERT INTO `5kcrm_crm_number_sequence` VALUES ('5', '1', '2', 'yyyyMMdd', null, null, null, null, '1611627355', '7', null, '0', '2');
-INSERT INTO `5kcrm_crm_number_sequence` VALUES ('6', '1', '3', '1', '1', '4', '21', '1612578487', '1611627355', '7', null, '0', '2');
-INSERT INTO `5kcrm_crm_number_sequence` VALUES ('7', '1', '1', 'HF', null, null, null, null, '1611627355', '7', null, '0', '3');
-INSERT INTO `5kcrm_crm_number_sequence` VALUES ('8', '1', '2', 'yyyyMMdd', null, null, null, null, '1611627355', '7', null, '0', '3');
-INSERT INTO `5kcrm_crm_number_sequence` VALUES ('9', '1', '3', '1', '1', '4', '13', '1612519628', '1611627355', '7', null, '0', '3');
-INSERT INTO `5kcrm_crm_number_sequence` VALUES ('10', '1', '2', 'yyyyMMdd', null, null, null, null, '1612505697', '8', null, '0', '4');
-INSERT INTO `5kcrm_crm_number_sequence` VALUES ('11', '1', '1', 'FP', null, null, null, null, '1612505750', '8', null, '0', '4');
-INSERT INTO `5kcrm_crm_number_sequence` VALUES ('12', '2', '3', '1', '1', '4', '4', '1612581183', '1612505750', '8', null, '0', '4');
+INSERT INTO `5kcrm_crm_number_sequence` VALUES ('1', '1', '1', 'HT', null, null, null, null, '1615737600', '1', null, '0', '1');
+INSERT INTO `5kcrm_crm_number_sequence` VALUES ('2', '2', '2', 'yyyyMMdd', null, null, null, null, '1615737600', '1', null, '0', '1');
+INSERT INTO `5kcrm_crm_number_sequence` VALUES ('3', '3', '3', '1', '1', '1', '1', '1615737600', '1615737600', '1', null, '0', '1');
+INSERT INTO `5kcrm_crm_number_sequence` VALUES ('4', '1', '1', 'HK', null, null, null, null, '1615737600', '7', null, '0', '2');
+INSERT INTO `5kcrm_crm_number_sequence` VALUES ('5', '2', '2', 'yyyyMMdd', null, null, null, null, '1615737600', '7', null, '0', '2');
+INSERT INTO `5kcrm_crm_number_sequence` VALUES ('6', '3', '3', '1', '1', '1', '1', '1615737600', '1615737600', '7', null, '0', '2');
+INSERT INTO `5kcrm_crm_number_sequence` VALUES ('7', '1', '1', 'HF', null, null, null, null, '1615737600', '7', null, '0', '3');
+INSERT INTO `5kcrm_crm_number_sequence` VALUES ('8', '2', '2', 'yyyyMMdd', null, null, null, null, '1615737600', '7', null, '0', '3');
+INSERT INTO `5kcrm_crm_number_sequence` VALUES ('9', '3', '3', '1', '1', '1', '1', '1615737600', '1615737600', '7', null, '0', '3');
+INSERT INTO `5kcrm_crm_number_sequence` VALUES ('10', '1', '2', 'yyyyMMdd', null, null, null, null, '1615737600', '8', null, '0', '4');
+INSERT INTO `5kcrm_crm_number_sequence` VALUES ('11', '2', '1', 'FP', null, null, null, null, '1615737600', '8', null, '0', '4');
+INSERT INTO `5kcrm_crm_number_sequence` VALUES ('12', '3', '3', '1', '1', '1', '1', '1615737600', '1615737600', '8', null, '0', '4');
 
 DROP TABLE IF EXISTS `5kcrm_crm_visit`;
 CREATE TABLE `5kcrm_crm_visit` (
@@ -1926,6 +1933,11 @@ CREATE TABLE `5kcrm_admin_oalog_rule`  (
   PRIMARY KEY (`id`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8 COLLATE = utf8_general_ci COMMENT = '日报规则表' ROW_FORMAT = Dynamic;
 
+INSERT INTO `5kcrm_admin_oalog_rule` VALUES (1, 4, NULL, NULL, NULL, NULL, 1, 'a:3:{i:0;s:27:\"每一天都是崭新的！\";i:1;s:63:\"蓝天是宁静的，空气是清新的，阳光是明媚的！\";i:2;s:93:\"以下内容为系统默认欢迎语，在日志随机展示，可自定义更改欢迎语。\";}');
+INSERT INTO `5kcrm_admin_oalog_rule` VALUES (2, 1, '3,4,10', '1,2,3,4,5,7,6', '08:00', '21:00', 1, NULL);
+INSERT INTO `5kcrm_admin_oalog_rule` VALUES (3, 2, '3,4', NULL, '1', '3', 1, NULL);
+INSERT INTO `5kcrm_admin_oalog_rule` VALUES (4, 3, '3', NULL, '3', '8', 1, NULL);
+
 ALTER TABLE `5kcrm_crm_business_type` ADD COLUMN `is_display` tinyint(1) unsigned NOT NULL DEFAULT 1 COMMENT '软删除：1显示0不显示';
 
 DROP TABLE IF EXISTS `5kcrm_admin_operation_log`;
@@ -1956,6 +1968,24 @@ CREATE TABLE `5kcrm_crm_receivables_file` (
   PRIMARY KEY (`r_id`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8 COLLATE = utf8_general_ci COMMENT = '回款附件表' ROW_FORMAT = Dynamic;
 
-INSERT INTO `5kcrm_crm_config` (`name`, `value`, `description`) VALUES ('activity_phrase', 'a:5:{i:0;s:18:\\\"电话无人接听\\\";i:1;s:15:\\\"客户无意向\\\";i:2;s:42:\\\"客户意向度适中，后续继续跟进\\\";i:3;s:42:\\\"客户意向度较强，成交几率较大\\\";i:4;s:3:\\\"312\\\";}', '跟进记录常用语');
+INSERT INTO `5kcrm_crm_config` (`name`, `value`, `description`) VALUES ('activity_phrase', 'a:4:{i:0;s:18:"电话无人接听";i:1;s:15:"客户无意向";i:2;s:42:"客户意向度适中，后续继续跟进";i:3;s:42:"客户意向度较强，成交几率较大";}', '跟进记录常用语');
 INSERT INTO `5kcrm_crm_config` (`name`, `value`, `description`) VALUES ('visit_config', '1', '是否开启回访提醒：1开启；0不开启');
 INSERT INTO `5kcrm_crm_config` (`name`, `value`, `description`) VALUES ('visit_day', '10', '客户回访提醒天数');
+
+DROP TABLE IF EXISTS `5kcrm_crm_dealt_relation`;
+CREATE TABLE `5kcrm_crm_dealt_relation`  (
+  `dealt_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+  `types` varchar(32) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL COMMENT '类型：crm_contract；crm_invoice；crm_receivables',
+  `types_id` int(10) UNSIGNED NOT NULL COMMENT '类型ID',
+  `user_id` int(10) UNSIGNED NOT NULL COMMENT '用户ID',
+  PRIMARY KEY (`dealt_id`) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8 COLLATE = utf8_general_ci COMMENT = '待办事项关联表' ROW_FORMAT = Dynamic;
+
+DROP TABLE IF EXISTS `5kcrm_work_order`;
+CREATE TABLE `5kcrm_work_order`  (
+  `order_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+  `work_id` int(10) UNSIGNED NOT NULL,
+  `user_id` int(10) UNSIGNED NOT NULL,
+  `order` int(10) UNSIGNED NOT NULL DEFAULT 1,
+  PRIMARY KEY (`order_id`) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8 COLLATE = utf8_general_ci COMMENT = '项目排序表' ROW_FORMAT = Dynamic;

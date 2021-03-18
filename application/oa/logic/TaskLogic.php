@@ -16,7 +16,6 @@ class TaskLogic
         $taskModel = new TaskModel();
         $recordModel = new \app\admin\model\Record();
         $str = ',' . $param['user_id'] . ',';
-        
         //自定义时间
         $map['t.stop_time'] = $param['dueDate'] ? strtotime($param['dueDate'] . ' +1 month -1 day') : ['>=', 0];
         $search = $param['search'];
@@ -35,30 +34,70 @@ class TaskLogic
             $where['t.status'] = [['=', 1], ['=', 5], 'OR'];
         }
         
-        if ($param['main_user_id']) {
-            $where['t.main_user_id'] = $param['main_user_id'];
-        }
         //项目id
         $priority = ($param['priority'] || $param['priority'] == '0') ? $param['priority'] : ['in', [0, 1, 2, 3]];
         $where['t.priority'] = $priority;
         
-        if ($param['work_id'] != 0) {
-            $where['t.work_id'] = $param['work_id'];
+        if (!empty($param['work_id'])) {
+            $where = [];
+            $where['ishidden'] = 0;
+            $where['pid'] = 0;
+            $where['work_id'] = $param['work_id'];
+            if (!empty($param['search'])) {
+                $taskSearch = ' (task.name like "%' . $param['search'] . '%" OR task.description like "%' . $param['search'] . '%")';
+            }
+            # 成员
+            if (!empty($param['owner_user_id']) && is_array($param['owner_user_id'])) {
+                $whereStr = '';
+                foreach ($param['owner_user_id'] as $key => $value) {
+                    $whereStr .= '(  task.owner_user_id like "%,' . $value . ',%") OR ';
+                }
+                if (!empty($whereStr)) $whereStr = '(' . rtrim($whereStr, 'OR ') . ')';
+            }
+            # 截止日期
+            $timeWhere = $this->getTimeParam($param['time_type']);
+            # 标签
+            $labelWhere = '';
+            if (!empty($param['label_id']) && is_array($param['label_id'])) {
+                foreach ($param['label_id'] as $key => $value) {
+                    $labelWhere .= '(  task.lable_id like "%,' . $value . ',%") OR ';
+                }
+                if (!empty($labelWhere)) $labelWhere = '(' . rtrim($labelWhere, 'OR ') . ')';
+            }
+            if ($param['owner_user_id']) {
+                foreach ($param['owner_user_id'] as $key => $value) {
+                    $logWhere.= '( task.owner_user_id like "%,' . $value . ',%") OR ';
+                }
+                if (!empty($logWhere)) $logWhere = '(' . rtrim($logWhere, 'OR ') . ')';
+            }
             $taskList = db('task')
-                ->alias('t')
-                ->join('AdminUser u', 'u.id = t.main_user_id', 'LEFT')
-                ->field('t.task_id,t.name as task_name,t.main_user_id,t.description,t.priority,t.stop_time,t.create_time,t.owner_user_id,t.start_time,t.create_user_id,u.realname as main_user_name,t.class_id')
+                ->alias('task')
+                ->join('AdminUser u', 'u.id = task.main_user_id', 'LEFT')
+                ->field('task.task_id,task.name as task_name,task.main_user_id,task.description,task.priority,task.stop_time,task.create_time,task.owner_user_id,
+                    task.start_time,task.create_user_id,u.realname as main_user_name,task.class_id,task.work_id,task.lable_id')
                 ->where($where)
-                ->order('t.task_id desc')
+                ->where($timeWhere)
+                ->where($labelWhere)
+                ->where($whereStr)
+                ->where($labelWhere)
+                ->where($taskSearch)
+                ->order('task.task_id desc')
                 ->select();
         } else {
-            if ($param['is_top'] == 5) {
+            if ($param['is_top'] > 0 ) {
                 $where = [];
                 $where['ishidden'] = 0;
                 $where['pid'] = 0;
-                $where['whereStr'] = ' ( task.create_user_id =' . $param['user_id'] . ' or (  task.owner_user_id like "%,' . $param['user_id'] . ',%") or ( task.main_user_id = ' . $param['user_id'] . ' ) )';
                 if (!empty($this->param['search'])) {
-                    $where['taskSearch'] = ' and (task.name like "%' . $this->param['search'] . '%" OR task.description like "%' . $this->param['search'] . '%")';
+                    $taskSearch = ' (task.name like "%' . $this->param['search'] . '%" OR task.description like "%' . $this->param['search'] . '%")';
+                }
+                # 成员
+                if (!empty($param['owner_user_id']) && is_array($param['owner_user_id'])) {
+                    $whereStr = '';
+                    foreach ($param['owner_user_id'] as $key => $value) {
+                        $whereStr .= '(  task.owner_user_id like "%,' . $value . ',%") OR ';
+                    }
+                    if (!empty($whereStr)) $whereStr = '(' . rtrim($whereStr, 'OR ') . ')';
                 }
                 # 截止日期
                 $timeWhere = $this->getTimeParam($param['time_type']);
@@ -70,17 +109,19 @@ class TaskLogic
                     }
                     if (!empty($labelWhere)) $labelWhere = '(' . rtrim($labelWhere, 'OR ') . ')';
                 }
-                $where = $this->where($param);
                 $taskList = db('task')
-                    ->alias('t')
-                    ->join('AdminUser u', 'u.id = t.main_user_id', 'LEFT')
-                    ->field('t.task_id,t.name as task_name,t.main_user_id,t.description,t.priority,t.stop_time,t.create_time,t.owner_user_id,t.start_time,t.create_user_id,u.realname as main_user_name,t.is_top')
+                    ->alias('task')
+                    ->join('AdminUser u', 'u.id = task.main_user_id', 'LEFT')
+                    ->field('task.task_id,task.name as task_name,task.main_user_id,task.description,task.priority,task.stop_time,task.create_time,task.owner_user_id,
+                    task.start_time,task.create_user_id,u.realname as main_user_name,task.is_top')
                     ->where($where)
                     ->where($timeWhere)
                     ->where($labelWhere)
-                    ->order('t.task_id desc')
+                    ->where($whereStr)
+                    ->where($taskSearch)
+                    ->where($labelWhere)
+                    ->order('task.task_id desc')
                     ->select();
-                
             } else {
                 ///下属任务
                 if ($param['mold'] == 1) {
@@ -127,7 +168,6 @@ class TaskLogic
                         ->select();
                 } else {
                     $map['t.pid'] = 0;
-                    // $map['t.work_id'] = 0;
                     if ($type != 0) {
                         switch ($type) {
                             case '1' :
@@ -162,7 +202,7 @@ class TaskLogic
             $taskList[$key]['work'] = '';
             if ($param['work_id'] != 0) {
                 $work = db('work_task_class')->where('class_id', $value['class_id'])->find();
-                $taskList[$key]['work'] = $work['name'];
+                $taskList[$key]['work'] = $work['name']?:'未分组';
             }
             if ($param['is_top'] != 0) {
                 switch ($value['is_top']) {
@@ -207,11 +247,12 @@ class TaskLogic
             $relationArr = $recordModel->getListByRelationId('task', $value['task_id']);
             $lableArr = $recordModel->getListByLableId('task', $value['task_id']);
             $taskList[$key]['owner_user_name'] = arrayToString(array_column($userModel->getListByStr($value['owner_user_id']), 'realname'));
-            $taskList[$key]['work_name'] = arrayToString(array_column($lableArr['lable'], 'name')) . ' ';
-            $taskList[$key]['relation'] = arrayToString(array_column($relationArr['businessList'], 'name')) . ' ' .
+            $taskList[$key]['owner_user_name'] = trim($taskList[$key]['owner_user_name'],',');
+            $taskList[$key]['work_name'] = trim(arrayToString(array_column($lableArr['lable'], 'name')),','). ' ';
+            $taskList[$key]['relation'] = trim(arrayToString(array_column($relationArr['businessList'], 'name')) . ' ' .
                 arrayToString(array_column($relationArr['contactsList'], 'name')) . ' ' .
                 arrayToString(array_column($relationArr['contractList'], 'name')) . ' ' .
-                arrayToString(array_column($relationArr['customerList'], 'name'));
+                arrayToString(array_column($relationArr['customerList'], 'name')),',');
         }
         return $taskList;
     }
@@ -222,8 +263,8 @@ class TaskLogic
      */
     public function excelExport($param)
     {
-        
         $data = $this->getDataList($param);
+        p($data);
         $excelModel = new \app\admin\model\Excel();
         if ($param['work_id'] != 0) {
             $file_name = 'work_task';
@@ -289,19 +330,19 @@ class TaskLogic
         $work_id = $param['work_id'] ?: '';
         
         if ($param['main_user_id']) {
-            $map['t.main_user_id'] = ['in', $param['main_user_id']];
+            $map['task.main_user_id'] = ['in', $param['main_user_id']];
         }
-        
+       
         //截止时间
         if ($param['stop_time_type']) {
             if ($param['stop_time_type'] == '5') { //没有截至日期
-                $map['t.stop_time'] = '0';
+                $map['task.stop_time'] = '0';
             } elseif ($param['stop_time_type'] == '6') { //延期的
-                $map['t.stop_time'] = ['between', [1, time()]];
-                $map['t.status'] = 1;
+                $map['task.stop_time'] = ['between', [1, time()]];
+                $map['task.status'] = 1;
             } elseif ($param['stop_time_type'] == '7') { //今日更新
                 $timeAry = getTimeByType('today');
-                $map['t.update_time'] = ['between', [$timeAry[0], $timeAry[1]]];
+                $map['task.update_time'] = ['between', [$timeAry[0], $timeAry[1]]];
             } else {
                 switch ($param['stop_time_type']) {
                     case '1': //今天到期
@@ -321,7 +362,7 @@ class TaskLogic
                     default:
                         break;
                 }
-                $map['t.stop_time'] = ['between', [$timeAry[0], $timeAry[1]]];
+                $map['task.stop_time'] = ['between', [$timeAry[0], $timeAry[1]]];
             }
         }
         
@@ -345,10 +386,10 @@ class TaskLogic
                     $task_ids = $task_id;
                 }
             }
-            $map['t.task_id'] = ['in', $task_ids];
+            $map['task.task_id'] = ['in', $task_ids];
         } else {
             
-            $map['t.task_id'] = $work_id;
+            $map['task.task_id'] = $work_id;
         }
         return $map;
     }

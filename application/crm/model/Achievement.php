@@ -83,8 +83,8 @@ class Achievement extends Common
  		if ($request['year']) {
  			$map['year'] = $request['year'];
  		}
-        if ($request['status']) {
-        	$map['status'] = $request['status'];
+        if ($request['type']) {
+        	$map['status'] = $request['type'];
         }
         if ($request['user_id']) { //员工
         	$map['obj_id'] = $request['user_id'];
@@ -101,7 +101,11 @@ class Achievement extends Common
         } elseif ($request['structure_id']) {
 			$map['type'] = 3;
 			$result = array();
-			$userlist = Db::name('AdminUser')->field('id,realname as name')->where('structure_id = '.$request['structure_id'].'')->select();
+			if ($request['structure_id'] == 1) {
+                $userlist = Db::name('AdminUser')->field('id,realname as name')->whereIn('status', [1, 2])->select();
+            } else {
+                $userlist = Db::name('AdminUser')->field('id,realname as name')->where('structure_id = '.$request['structure_id'].'')->select();
+            }
 			if (!$userlist) {
 				return array();
 			}
@@ -273,8 +277,8 @@ class Achievement extends Common
             foreach ($temp_user_ids as $k =>$v) {
                 $data2['type'] = 3;
                 $data2['obj_id'] = $v;
+                $data2['status'] = $param['status'];
                 $data2['year'] = $param['year'];
-                $data2['status'] = !empty($param['status']) ? $param['status'] : 1;
                 # 员工名称
                 $param['name'] = Db::name('admin_user')->where('id', $v)->value('realname');
                 $ret = $this->where($data2)->find();

@@ -68,6 +68,7 @@ class Examine extends Common
                 if (!isSuperAdministrators($user_id)) {
                     $map_str = "(( check_user_id LIKE '%," . $user_id . ",%' OR check_user_id = " . $user_id . " ) OR ( flow_user_id LIKE '%," . $user_id . ",%'  OR `flow_user_id` = " . $user_id . " ) )";
                 }
+                $map['examine.create_user_id'] = ['<>',$user_id];
                 break;
             case '1' :
                 $map['check_user_id'] = [['like', '%,' . $user_id . ',%']];
@@ -356,10 +357,10 @@ class Examine extends Common
                         'create_user_id' => $param['create_user_id'],
                         'update_time' => time(),
                         'create_time' => time(),
-                        'customer_ids' => !empty($rdata['customer_ids']) ? trim($rdata['customer_ids'], ',') : '',
-                        'contacts_ids' => !empty($rdata['contacts_ids']) ? trim($rdata['contacts_ids'], ',') : '',
-                        'business_ids' => !empty($rdata['business_ids']) ? trim($rdata['business_ids'], ',') : '',
-                        'contract_ids' => !empty($rdata['contract_ids']) ? trim($rdata['contract_ids'], ',') : '',
+                        'customer_ids' => !empty($rdata['customer_ids']) ? $rdata['customer_ids'] : '',
+                        'contacts_ids' => !empty($rdata['contacts_ids']) ? $rdata['contacts_ids'] : '',
+                        'business_ids' => !empty($rdata['business_ids']) ? $rdata['business_ids'] : '',
+                        'contract_ids' => !empty($rdata['contract_ids']) ? $rdata['contract_ids'] : '',
                     ]);
                 }
                 
@@ -447,14 +448,18 @@ class Examine extends Common
                         $send_user_id
                     );
                 }
-                
+
                 //相关业务
+                Db::name('OaExamineRelation')->where('examine_id', $examine_id)->delete(); // 先删除在添加
                 $rdata = [];
-                $rdata['customer_ids'] = $param['oaExamineRelation']['customer_ids'] ? arrayToString($param['oaExamineRelation']['customer_ids']) : [];
-                $rdata['contacts_ids'] = $param['oaExamineRelation']['contacts_ids'] ? arrayToString($param['oaExamineRelation']['contacts_ids']) : [];
-                $rdata['business_ids'] = $param['oaExamineRelation']['business_ids'] ? arrayToString($param['oaExamineRelation']['business_ids']) : [];
-                $rdata['contract_ids'] = $param['oaExamineRelation']['contract_ids'] ? arrayToString($param['oaExamineRelation']['contract_ids']) : [];
-                Db::name('OaExamineRelation')->where('examine_id = ' . $examine_id)->update($rdata);
+                $rdata['examine_id']   = $examine_id;
+                $rdata['status']       = 1;
+                $rdata['create_time']  = time();
+                $rdata['customer_ids'] = $param['oaExamineRelation']['customer_ids'] ? arrayToString($param['oaExamineRelation']['customer_ids']) : '';
+                $rdata['contacts_ids'] = $param['oaExamineRelation']['contacts_ids'] ? arrayToString($param['oaExamineRelation']['contacts_ids']) : '';
+                $rdata['business_ids'] = $param['oaExamineRelation']['business_ids'] ? arrayToString($param['oaExamineRelation']['business_ids']) : '';
+                $rdata['contract_ids'] = $param['oaExamineRelation']['contract_ids'] ? arrayToString($param['oaExamineRelation']['contract_ids']) : '';
+                Db::name('OaExamineRelation')->insert($rdata);
                 
                 //处理差旅相关
                 $resTravel = true;
@@ -493,10 +498,10 @@ class Examine extends Common
                         'create_user_id' => $create_user_id,
                         'update_time' => time(),
                         'create_time' => time(),
-                        'customer_ids' => !empty($rdata['customer_ids']) ? trim($rdata['customer_ids'], ',') : '',
-                        'contacts_ids' => !empty($rdata['contacts_ids']) ? trim($rdata['contacts_ids'], ',') : '',
-                        'business_ids' => !empty($rdata['business_ids']) ? trim($rdata['business_ids'], ',') : '',
-                        'contract_ids' => !empty($rdata['contract_ids']) ? trim($rdata['contract_ids'], ',') : '',
+                        'customer_ids' => !empty($rdata['customer_ids']) ? $rdata['customer_ids'] : '',
+                        'contacts_ids' => !empty($rdata['contacts_ids']) ? $rdata['contacts_ids'] : '',
+                        'business_ids' => !empty($rdata['business_ids']) ? $rdata['business_ids'] : '',
+                        'contract_ids' => !empty($rdata['contract_ids']) ? $rdata['contract_ids'] : '',
                     ]);
                 }
                 
@@ -581,6 +586,7 @@ class Examine extends Common
                 }
                 $travelList[$k]['start_time'] = date('Y-m-d H:i:s', $v['start_time']);
                 $travelList[$k]['end_time'] = date('Y-m-d H:i:s', $v['end_time']);
+                $travelList[$k]['create_time'] = date('Y-m-d H:i:s', $v['create_time']);
                 $travelList[$k]['fileList'] = $fileList ?: [];
                 $travelList[$k]['imgList'] = $imgList ?: [];
             }

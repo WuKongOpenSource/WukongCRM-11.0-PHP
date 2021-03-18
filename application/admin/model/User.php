@@ -185,6 +185,8 @@ class User extends Common
 			$list[$k]['img'] = $v['img'] ? getFullPath($v['img']) : '';
 			$list[$k]['thumb_img'] = $v['thumb_img'] ? getFullPath($v['thumb_img']) : '';
 			$list[$k]['create_time'] = $v['create_time'] ? date('Y-m-d H:i:s', $v['create_time']) : '';
+			$list[$k]['s_name'] = !empty($v['s_name']) ? $v['s_name'] : '';
+			$list[$k]['structure_id'] = !empty($v['structure_id']) ? $v['structure_id'] : '';
 		}															
 		$data = [];			
 		$data['list'] = $list;				
@@ -516,7 +518,7 @@ class User extends Common
 
 		//登录有效时间
         $cacheConfig = config('cache');
-        $loginExpire = $cacheConfig['expire'] ? : 86400*3;        
+        $loginExpire = !empty($cacheConfig['expire']) ? $cacheConfig['expire'] : 86400 * 30;
 
         // 保存缓存
         session_start();
@@ -528,10 +530,10 @@ class User extends Common
         
     	$platform = $paramArr['platform'] ? '_'.$paramArr['platform'] : ''; //请求平台(mobile,ding)
 		//删除旧缓存
-        if (cache('Auth_'.$userInfo['authkey'].$platform)) {
-       		cache('Auth_'.$userInfo['authkey'].$platform, NULL);
+        if (Cache::get('Auth_'.$userInfo['authkey'].$platform)) {
+            Cache::rm('Auth_'.$userInfo['authkey'].$platform);
         }
-        cache('Auth_'.$authKey.$platform, $info, $loginExpire, 'UserToken');
+        Cache::set('Auth_'.$authKey.$platform, $info, $loginExpire);
         unset($userInfo['authkey']);
 		
         // 返回信息
@@ -574,7 +576,7 @@ class User extends Common
 
 		//登录有效时间
         $cacheConfig = config('cache');
-        $loginExpire = $cacheConfig['expire'] ? : '86400*3';         
+        $loginExpire = $cacheConfig['expire'] ? : 86400 * 3;
 
         $password = $this->where('id', $userInfo['id'])->value('password');
         if (user_md5($old_pwd, $userInfo['salt'], $userInfo['username']) != $password) {
@@ -598,7 +600,7 @@ class User extends Common
             session_start();
             $cache['userInfo'] = $userInfo;
             $cache['authKey'] = user_md5($userInfo['username'].$userInfo['password'].session_id(), $userInfo['salt']);
-            cache('Auth_'.$auth_key, null);
+            cache('Auth_'.$cache['authKey'], null);
             cache('Auth_'.$cache['authKey'], $cache, $loginExpire);
             return $cache['authKey'];//把auth_key传回给前端
         }
@@ -713,20 +715,15 @@ class User extends Common
             unset($authList['bi']);
         }
         # 任务审批
-        if (in_array('taskExamine', $adminConfig) && !$authList['oa']) {
-            $oaAuth = ['announcement' => ['read' => true]];
-            $authList['oa'] = $oaAuth;
-            $authList['oa']['taskExamine'] = (Object)[];
-        } else {
-            $authList['oa'] = $authList['oa'];
+        if (in_array('taskExamine', $adminConfig) ) {
             $authList['oa']['taskExamine'] = (Object)[];
         }
         # 项目
-        if (in_array('work', $adminConfig) && !$authList['work']) {
-            $oaAuth = ['work' => 'read'];
-            $authList['work'] = $oaAuth;
-        } else {
-            $authList['work'] = $authList['work'];
+        if (in_array('work', $adminConfig)) {
+            $authList['project']['projectLabelManage']['projectLabelAdd']    = !empty($authList['work']['work']['save']);
+            $authList['project']['projectLabelManage']['projectLabelDelete'] = !empty($authList['work']['work']['save']);
+            $authList['project']['projectLabelManage']['projectLabelUpdate'] = !empty($authList['work']['work']['save']);
+            $authList['project']['projectManage']['save']                    = !empty($authList['work']['work']['save']);
         }
         # 日志
         if (in_array('log', $adminConfig)) {
@@ -788,29 +785,6 @@ class User extends Common
         # 发票抬头权限
         if (!empty($authList['crm']['invoice']['index'])) {
             $authList['crm']['invoiceTitle']['index'] = true;
-        }
-//        else {
-//            $authList['crm']['invoice']['updateInvoiceStatus'] = false;
-//        }
-        # project
-        if (!empty($authList['work']['work']['update']) || !empty($authList['work']['work']['save'])) {
-            $authList['project']['projectLabelManage']['projectLabelAdd']    = true;
-            $authList['project']['projectLabelManage']['projectLabelDelete'] = true;
-            $authList['project']['projectLabelManage']['projectLabelUpdate'] = true;
-            $authList['project']['projectManage']['save']                    = true;
-        }
-//        else {
-//            $authList['project']['projectLabelManage']['projectLabelAdd']    = false;
-//            $authList['project']['projectLabelManage']['projectLabelDelete'] = false;
-//            $authList['project']['projectLabelManage']['projectLabelUpdate'] = false;
-//            $authList['project']['projectManage']['save']                    = false;
-//        }
-        # 项目
-        $projectRules = Db::name('admin_rule')->where(['types' => 3, 'level' => 4, 'status' => 0])->column('name');
-        if (!empty($authList['project']['projectManage']['save'])) {
-            foreach ($projectRules AS $key => $value) $authList['work']['project'][$value] = true;
-        } else {
-            $authList['work'] = [];
         }
         unset($authList['work']['work']);
         unset($authList['work']['task']);

@@ -73,8 +73,8 @@ class Log extends Common
         $dataWhere['structure_id'] = $request['structure_id'];
         $dataWhere['auth_user_ids'] = $auth_user_ids;
         $logMap = '';
-        if ($request['send_user_id'] != '') {
-            $map['log.create_user_id'] = ['in', trim(arrayToString($request['send_user_id']), ',')];
+        if ($request['create_user_id'] != '') {
+            $map['log.create_user_id'] = ['in', trim(arrayToString($request['create_user_id']), ',')];
         }
         switch ($by) {
             case 'me' :
@@ -282,10 +282,10 @@ class Log extends Common
                     'create_user_id' => $param['create_user_id'],
                     'update_time' => time(),
                     'create_time' => time(),
-                    'customer_ids' => !empty($rdata['customer_ids']) ? trim($rdata['customer_ids'], ',') : '',
-                    'contacts_ids' => !empty($rdata['contacts_ids']) ? trim($rdata['contacts_ids'], ',') : '',
-                    'business_ids' => !empty($rdata['business_ids']) ? trim($rdata['business_ids'], ',') : '',
-                    'contract_ids' => !empty($rdata['contract_ids']) ? trim($rdata['contract_ids'], ',') : '',
+                    'customer_ids' => !empty($rdata['customer_ids']) ? $rdata['customer_ids'] : '',
+                    'contacts_ids' => !empty($rdata['contacts_ids']) ? $rdata['contacts_ids'] : '',
+                    'business_ids' => !empty($rdata['business_ids']) ? $rdata['business_ids'] : '',
+                    'contract_ids' => !empty($rdata['contract_ids']) ? $rdata['contract_ids'] : '',
                 ]);
             }
             
@@ -361,10 +361,10 @@ class Log extends Common
                     'create_user_id' => $param['user_id'],
                     'update_time' => time(),
                     'create_time' => time(),
-                    'customer_ids' => !empty($rdata['customer_ids']) ? trim($rdata['customer_ids'], ',') : '',
-                    'contacts_ids' => !empty($rdata['contacts_ids']) ? trim($rdata['contacts_ids'], ',') : '',
-                    'business_ids' => !empty($rdata['business_ids']) ? trim($rdata['business_ids'], ',') : '',
-                    'contract_ids' => !empty($rdata['contract_ids']) ? trim($rdata['contract_ids'], ',') : ''
+                    'customer_ids' => !empty($rdata['customer_ids']) ? $rdata['customer_ids'] : '',
+                    'contacts_ids' => !empty($rdata['contacts_ids']) ? $rdata['contacts_ids'] : '',
+                    'business_ids' => !empty($rdata['business_ids']) ? $rdata['business_ids'] : '',
+                    'contract_ids' => !empty($rdata['contract_ids']) ? $rdata['contract_ids'] : ''
                 ]);
             }
             return $data;

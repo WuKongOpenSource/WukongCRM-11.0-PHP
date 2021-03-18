@@ -166,14 +166,14 @@ function where_arr($array = [], $m = '', $c = '', $a = '')
                 if (!empty($v['end']))   $v['end']   = date('Y-m-d', $v['end']);
             }
             # 创建人、负责人、回访人（非自定义字段）
-            if ($v['form_type'] == 'user' && in_array($k, ['create_user_id', 'owner_user_id'])) {
-                if ($v['condition'] == 'is') $v['condition'] = 'contains';
-            }
+//            if ($v['form_type'] == 'user' && in_array($k, ['create_user_id', 'owner_user_id'])) {
+//                if ($v['condition'] == 'is') $v['condition'] = 'contains';
+//            }
             # 自定义字段的user、structure类型
             if (($v['form_type'] == 'user' && !in_array($k, ['create_user_id', 'owner_user_id'])) || $v['form_type'] == 'structure') {
                 if ($v['condition'] == 'is') $v['condition'] = 'contains';
                 if ($v['condition'] == 'isNot') {
-                    return "(".$c.$k." not like '%".$v['value'][0]."%' OR ".$c.$k." is null)";
+                    return "(".$c.$k." not like ',%".$v['value'][0]."%,' OR ".$c.$k." is null)";
                 }
             }
             # 处理多选字段的精确搜索
@@ -182,7 +182,7 @@ function where_arr($array = [], $m = '', $c = '', $a = '')
                 if ($v['condition'] == 'is' && count($v['value']) > 1) {
                     $checkboxLike = '';
                     foreach ($v['value'] AS $kk => $vv) {
-                        $checkboxLike .= $c.$k." like "."'%".$vv."%' AND ";
+                        $checkboxLike .= $c.$k." like "."',%".$vv."%,' AND ";
                     }
                     return "(".$checkboxLike."LENGTH(".$c.$k.") = LENGTH('".arrayToString($v['value'])."'))";
                 }
@@ -779,7 +779,6 @@ function updateActionLog($user_id, $types, $action_id, $oldData = [], $newData =
 {
     if (is_array($oldData) && is_array($newData) && $user_id) {
         $differentData = array_diff_assoc($newData, $oldData);
-
         $fieldModel = new FieldModel();
         $userModel = new UserModel();
         $structureModel = new \app\admin\model\Structure();
@@ -791,6 +790,7 @@ function updateActionLog($user_id, $types, $action_id, $oldData = [], $newData =
         $unField = ['update_time','create_time']; //定义过滤字段
         $message = [];
         $un_form_type = ['file', 'form'];
+        
         foreach ($differentData as $k => $v) {
             if ($newFieldArr[$k] && !in_array($newFieldArr[$k]['form_type'], $un_form_type)) {
                 $field_name = '';
@@ -829,6 +829,11 @@ function updateActionLog($user_id, $types, $action_id, $oldData = [], $newData =
                 } elseif ($newFieldArr[$k]['form_type'] == 'visit') {
                     $new_value = $v ? db('crm_visit')->where(['visit_id' => $v])->value('number') : '';
                     $old_value = $v ? db('crm_visit')->where(['visit_id' => $oldData[$k]])->value('number') : '';
+                } elseif ($newFieldArr[$k]['form_type'] == 'single_user'){
+                    $new_value = $v ? db('admin_user')->where(['id' => $v])->value('realname') : '';
+                    $old_value = $v ? db('admin_user')->where(['id' => $oldData['owner_user_id']])->value('realname') : '';
+                }elseif($newFieldArr[$k]['form_type'] == 'floatnumber'){
+                    $new_value = $v ? number_format($v,2) : '';
                 }
                 $message[] = '将 ' . "'" . $field_name . "'" . ' 由 ' . $old_value . ' 修改为 ' . $new_value;
             }

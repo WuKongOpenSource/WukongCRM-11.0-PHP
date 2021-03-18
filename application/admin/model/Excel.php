@@ -85,7 +85,7 @@ class Excel extends Common
         $objProps->setCategory("5kcrm"); //种类
         $objPHPExcel->setActiveSheetIndex(0); //设置当前的sheet
         $objActSheet = $objPHPExcel->getActiveSheet();
-        $objActSheet->setTitle('悟空软件导入模板' . date('Y-m-d', time())); //设置sheet的标题
+        $objActSheet->setTitle('导入模板' . date('Y-m-d', time())); //设置sheet的标题
         
         //存储Excel数据源到其他工作薄
         $objPHPExcel->createSheet();
@@ -237,6 +237,10 @@ class Excel extends Common
                 $types_name = '员工信息';
                 $type_name = 'user';
                 break;
+            case 'work_task' :
+                $types_name = '任务信息';
+                $type_name = 'task';
+                break;
             default :
                 $types_name = '悟空软件';
                 $type_name = 'WuKong';
@@ -250,7 +254,7 @@ class Excel extends Common
             $objWriter->save($save_path);
         } else {
             header("Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            header("Content-Disposition:attachment;filename=" . $type_name .'_'. date('Y-m-d') . ".xls");
+            header("Content-Disposition:attachment;filename=" . $type_name . '_' . date('Y-m-d') . ".xls");
             header("Pragma:no-cache");
             header("Expires:0");
             $objWriter = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($objPHPExcel, 'Xls');
@@ -297,7 +301,7 @@ class Excel extends Common
         fputcsv($fp, $title_cell);
         // $export_data = $callback(0);
         $round = round(1000, 9999);
-        cache($file_name . $round, $callback['list']);
+        Cache::set($file_name . $round, $callback['list'], config('export_cache_time'));
         $sheetContent = cache($file_name . $round);
         $sheetCount = $callback['dataCount'];
         $forCount = 1000; //每次取出1000个
@@ -422,14 +426,11 @@ class Excel extends Common
             $data = $callback($i + ($page - 1) * ($response_size / $page_size), $page_size);
             $total = $data['dataCount'];
             foreach ($data['list'] as $val) {
-                $val['create_time']=strtotime($val['create_time']);
-                $val['update_time']=strtotime($val['update_time']);
-                $val['last_time']=strtotime($val['last_time']);
-                $val['next_time']=strtotime($val['next_time']);
                 $rows = [];
                 foreach ($field_list as $rule) {
                     if ($rule['form_type'] == 'customer_address') {
                         $address_arr = explode(chr(10), $val['address']);
+                        
                         $rows[] = $address_arr[0] ?: '';
                         $rows[] = $address_arr[1] ?: '';
                         $rows[] = $address_arr[2] ?: '';
@@ -488,7 +489,7 @@ class Excel extends Common
         $user_id = $param['owner_user_id'];
         
         // 采用伪队列  允许三人同时导入数据
-        $queue = new Queue(self::IMPORT_QUEUE, 5);
+        $queue = new Queue(self::IMPORT_QUEUE, 50000000);
         $import_queue_index = input('import_queue_index');
         
         // 队列任务ID
@@ -718,27 +719,27 @@ class Excel extends Common
             if ($end_row > $max_row) {
                 $end_row = $max_row;
             }
-    
+            
             // 读取数据
             $dataList = $sheet->rangeToArray("A{$start_row}:{$max_col}{$end_row}");
             // 数据重复时的处理方式 0跳过  1覆盖
-            $config = $param['config'] ? : 0;
-    
+            $config = $param['config'] ?: 0;
             // 默认数据
+            
             $default_data = [
                 'create_user_id' => $param['create_user_id'],
                 'owner_user_id' => $param['owner_user_id'],
                 'create_time' => time(),
                 'update_time' => time(),
             ];
+            
             if ($temp !== count($field_list)) {
 //                $this->error = '请使用最新导入模板';
                 @unlink($save_path);
                 $queue->dequeue();
                 foreach ($dataList as $val) {
-                    $error_data_func($val,'请使用最新导入模板');
+                    $error_data_func($val, '请使用最新导入模板');
                 }
-                // 错误数据文件保存
                 $objWriter = \PHPExcel_IOFactory::createWriter($err_PHPExcel, 'Excel5');
                 $objWriter->save($error_path);
                 $error = [
@@ -750,7 +751,7 @@ class Excel extends Common
                     'cover' => 0,
                     // 错误数据写入行号
                     'error' => $total,
-                    'error_file_path' =>'temp/' . $error_data_file_name
+                    'error_file_path' => 'temp/' . $error_data_file_name
                 ];
                 $queue->cache('last_import_cache', [
                     'total' => $total,
@@ -765,14 +766,15 @@ class Excel extends Common
                     'cover' => 0,
                     'error' => $total,
                     'user_id' => $user_id,
-                    'error_data_file_path' =>'temp/' . $error_data_file_name
+                    'error_data_file_path' => 'temp/' . $error_data_file_name
                 ]);
                 Cache::rm('item');
                 Cache::rm('excel_item');
-                Cache::set('item', 1);
-                Cache::set('excel_item', serialize($error));
+                Cache::set('item', 1, config('import_cache_time'));
+                Cache::set('excel_item', serialize($error), config('import_cache_time'));
                 return true;
-            }else{
+            } else {
+                
                 // 开始导入数据
                 foreach ($dataList as $val) {
                     $data = [];
@@ -793,13 +795,13 @@ class Excel extends Common
                         } else {
                             $temp_value = trim($val[$fk]);
                         }
-            
-            
+                        
+                        
                         if ($field['field'] == 'category_id' && $types == 'crm_product') {
-                            $data['category_id'] = $productCategoryArr[$temp_value] ? : 0;
+                            $data['category_id'] = $productCategoryArr[$temp_value] ?: 0;
                             $data['category_str'] = $dataModel->getPidStr($productCategoryArr[$temp_value], '', 1);
                         }
-            
+                        
                         // 特殊字段特殊处理
                         $temp_value = $this->handleData($temp_value, $field);
                         $data[$field['field']] = $temp_value;
@@ -825,9 +827,9 @@ class Excel extends Common
                     }
                     $old_data_id_list = [];
                     if ($unique_where) {
-                        if($types == 'crm_product'){
-                            $old_data_id_list = $model->whereOr($unique_where)->where('delete_user_id',0)->column($db_id);
-                        }else{
+                        if ($types == 'crm_product') {
+                            $old_data_id_list = $model->whereOr($unique_where)->where('delete_user_id', 0)->column($db_id);
+                        } else {
                             $old_data_id_list = $dataModel->whereOr($unique_where)->column($db_id);
                         }
                     }
@@ -839,17 +841,14 @@ class Excel extends Common
                             $data['user_id'] = $param['create_user_id'];
                             $data['update_time'] = time();
                             $data['update_time'] = time();
-                            if(isset($data['next_time'])){
-                                $data['next_time']=$data['next_time']?date('Y-m-d H:i:s', $data['next_time']):'';
-                            }
                             $dataModel->startTrans();
                             try {
                                 $up_success_count = 0;
                                 foreach ($old_data_id_list as $id) {
-                                    if($types=='crm_customer'){
+                                    if ($types == 'crm_customer') {
                                         $owner = db('crm_customer')->where(['name' => $data['name']])->find();
                                         if (!empty($owner) && $owner['owner_user_id'] == 0) {
-                                            $temp_error = $owner['name'] .' '. '公海数据，无覆盖权限';
+                                            $temp_error = $owner['name'] . ' ' . '公海数据，无覆盖权限';
                                             $error_data_func($val, $temp_error);
                                             break;
                                         }
@@ -889,28 +888,25 @@ class Excel extends Common
                         }
                     } else {
                         $data = array_merge($data, $default_data);
-                        if(isset($data['next_time'])){
-                            $data['next_time']=$data['next_time']?date('Y-m-d H:i:s', $data['next_time']):'';
-                        }
                         if (!$resData = $dataModel->createData($data)) {
                             $error_data_func($val, $dataModel->getError());
                         }
                     }
                 }
-    
+                
                 // 完成数(已导入数)
                 $done = ($page - 1) * $page_size + count($dataList);
                 if ($page == $max_page) {
                     $done = $total;
                 }
-    
+                
                 // 错误数
                 $error = $error_row - 3;
-    
+                
                 // 错误数据文件保存
                 $objWriter = \PHPExcel_IOFactory::createWriter($err_PHPExcel, 'Excel5');
                 $objWriter->save($error_path);
-    
+                
                 $this->error = [
                     // 数据导入文件临时路径
                     'temp_file' => $save_name,
@@ -929,7 +925,7 @@ class Excel extends Common
                     // 导入任务ID
                     'import_queue_index' => $import_queue_index
                 ];
-    
+                
                 $queue->cache('last_import_cache', [
                     'total' => $total,
                     'done' => $done,
@@ -944,12 +940,12 @@ class Excel extends Common
                     $this->error['error_file_path'] = 'temp/' . $error_data_file_name;
                     // 删除导入文件
                     @unlink($save_path);
-        
+                    
                     // 没有错误数据时，删除错误文件
                     if ($error == 0) {
                         @unlink($error_path);
                     }
-        
+                    
                     (new ImportRecord())->createData([
                         'type' => $types,
                         'total' => $total,
@@ -959,25 +955,25 @@ class Excel extends Common
                         'user_id' => $user_id,
                         'error_data_file_path' => $error ? 'temp/' . $error_data_file_name : ''
                     ]);
-                    Cache::set('item', 1);
-                    Cache::set('excel_item', serialize($this->error));
-                }else{
-                    $excelData['cover']=$cover;
-                    $excelData['page']=$page+1;
-                    $excelData['types']=$types;
-                    $excelData['temp_file']=$save_name;
-                    $excelData['error_file']=$error_data_file_name;
-                    $excelData['create_user_id']=$param['create_user_id'];
-                    $excelData['import_queue_index']=$import_queue_index;
-                    $excelData['config']=$config;
-                    $excelData['owner_user_id']=$user_id;
-                    $excelData['base']='batchImportData';
-                    Cache::set('item', 0);
-                    Cache::set('excel', $excelData);
+                    Cache::set('item', 1, config('import_cache_time'));
+                    Cache::set('excel_item', serialize($this->error), config('import_cache_time'));
+                } else {
+                    $queue->dequeue();
+                    $excelData['cover'] = $cover;
+                    $excelData['page'] = $page + 1;
+                    $excelData['types'] = $types;
+                    $excelData['temp_file'] = $save_name;
+                    $excelData['error_file'] = $error_data_file_name;
+                    $excelData['create_user_id'] = $param['create_user_id'];
+                    $excelData['import_queue_index'] = $import_queue_index;
+                    $excelData['config'] = $config;
+                    $excelData['owner_user_id'] = $user_id;
+                    $excelData['base'] = 'batchImportData';
+                    Cache::set('item', 0, config('import_cache_time'));
+                    Cache::set('excel', $excelData, config('import_cache_time'));
                 }
                 return true;
             }
-          
         } else {
             $this->error = '请选择导入文件';
             $queue->dequeue();
@@ -1436,20 +1432,20 @@ class Excel extends Common
                 $queue->dequeue();
                 $this->error['error_file_path'] = 'temp/' . $error_data_file_name;
                 
-                Cache::set('item', 1);
-                Cache::set('excel_item', serialize($this->error));
+                Cache::set('item', 1, config('import_cache_time'));
+                Cache::set('excel_item', serialize($this->error), config('import_cache_time'));
             } else {
-                $excelData['page']=$page+1;
-                $excelData['types']=$types;
-                $excelData['temp_file']=$save_name;
-                $excelData['error_file']=$error_data_file_name;
-                $excelData['create_user_id']=$param['create_user_id'];
-                $excelData['import_queue_index']=$import_queue_index;
-                $excelData['config']=$config;
-                $excelData['owner_user_id']=$user_id;
-                $excelData['base']='importExcel';
-                Cache::set('item', 0);
-                Cache::set('excel', $excelData);
+                $excelData['page'] = $page + 1;
+                $excelData['types'] = $types;
+                $excelData['temp_file'] = $save_name;
+                $excelData['error_file'] = $error_data_file_name;
+                $excelData['create_user_id'] = $param['create_user_id'];
+                $excelData['import_queue_index'] = $import_queue_index;
+                $excelData['config'] = $config;
+                $excelData['owner_user_id'] = $user_id;
+                $excelData['base'] = 'importExcel';
+                Cache::set('item', 0, config('import_cache_time'));
+                Cache::set('excel', $excelData, config('import_cache_time'));
             }
             return true;
         } else {
@@ -1705,8 +1701,8 @@ class Excel extends Common
         }
         // 将标题名称通过fputcsv写到文件句柄
         fputcsv($fp, $title_cell);
-//        $export_data = $callback(0);
-        foreach ($callback as $item) {
+        $export_data = $callback(0);
+        foreach ($export_data as $item) {
             $rows = [];
             foreach ($field_list as $rule) {
                 $rows[] = $item[$rule['field']];
@@ -1731,7 +1727,7 @@ class Excel extends Common
      *
      * @author Ymob
      */
-    public function batchTaskImportData($file, $param, $controller = null)
+    public function batchTaskImportData($file,$field_list, $param, $controller = null)
     {
         // 导入模块
         $types = $param['types'];
@@ -1742,7 +1738,7 @@ class Excel extends Common
         }
         $user_id = $param['owner_user_id'];
         // 采用伪队列  允许三人同时导入数据
-        $queue = new Queue(self::IMPORT_QUEUE, 3);
+        $queue = new Queue(self::IMPORT_QUEUE, 30000);
         $import_queue_index = input('import_queue_index');
         
         // 队列任务ID
@@ -1865,17 +1861,6 @@ class Excel extends Common
                 $error_row++;
             };
             
-            $field_list = [
-                '0' => ['name' => '任务名称', 'field' => 'name'],
-                '1' => ['name' => '任务描述', 'field' => 'description'],
-                '2' => ['name' => '开始时间', 'field' => 'start_time'],
-                '3' => ['name' => '结束时间', 'field' => 'stop_time'],
-                '4' => ['name' => '负责人', 'field' => 'create_user_id'],
-                '5' => ['name' => '参与人', 'field' => 'owner_user_id'],
-                '6' => ['name' => '所属任务列表', 'field' => 'class_id'],
-            ];
-            $field_key_name_list = array_column($field_list, 'name');
-            
             // 加载导入数据文件
             $objRender = \PhpOffice\PhpSpreadsheet\IOFactory::createReader('Xls');
             $objRender->setReadDataOnly(true);
@@ -1888,34 +1873,6 @@ class Excel extends Common
             $max_col_num = count($field_list) - 1;
             $max_col_num += 3 * array_count_values(array_column($field_list, 'form_type'))['map_address'];
             $max_col = \PHPExcel_Cell::stringFromColumnIndex($max_col_num);
-            
-            // 检测导入文件是否使用最新模板
-            $header = $sheet->rangeToArray("A2:{$max_col}2")[0];
-            $temp = 0;
-            for ($i = 0; $i < count($field_list); $i++) {
-                if (
-                    $header[$i] == $field_list[$i]['name']
-                    || $header[$i] == $field_list[$i]['name'] . '(*)'
-                ) {
-                    $temp++;
-                    // 字段为地址时，占四列
-                } elseif ($field_list[$i]['form_type'] == 'map_address') {
-                    if (
-                        $header[$i] == $this->map_address[0]
-                        && $header[$i + 1] == $this->map_address[1]
-                        && $header[$i + 2] == $this->map_address[2]
-                        && $header[$i + 3] == $this->map_address[3]
-                    ) {
-                        $temp++;
-                    }
-                }
-            }
-            if ($temp !== count($field_list)) {
-                $this->error = '请使用最新导入模板';
-                @unlink($save_path);
-                $queue->dequeue();
-                return false;
-            }
             
             // 每次导入条数
             $page_size = 100;
@@ -1951,9 +1908,31 @@ class Excel extends Common
                 'create_user_id' => $param['create_user_id'],
                 'create_time' => time(),
                 'update_time' => time(),
+                'work_id' => $param['work_id'],
             ];
             // 开始导入数据
             foreach ($dataList as $val) {
+                foreach ($field_list as $field) {
+                    $temp_value = trim($val[$fk]);
+                    // 特殊字段特殊处理
+                    $temp_value = $this->handleData($temp_value, $field);
+                    $data[$field['field']] = $temp_value;
+                    if ($temp_value == '') {
+                        if ($field['is_null']) {
+                            $not_null_field[] = $field['name'];
+                        }
+                        $empty_count++;
+                    }
+                    $fk++;
+                }
+                if (!empty($not_null_field)) {
+                    $error_data_func($val, implode(', ', $not_null_field) . '不能为空');
+                    continue;
+                }
+                if ($empty_count == count($field_list)) {
+                    $error_data_func($val, '空行');
+                    continue;
+                }
                 $data = [];
                 $fk = 0;
                 $classData = db('work_task_class')->where(['name' => $val[6], 'work_id' => $param['work_id']])->order('class_id', 'asc')->select();
@@ -1972,15 +1951,7 @@ class Excel extends Common
                     $data['class_id'] = db('work_task_class')->insertGetId($item);
                 }
                 $dataModel = new \app\work\model\Task();
-                foreach ($field_list as $field) {
-                    $temp_value = trim($val[$fk]);
-                    // 特殊字段特殊处理
-                    $temp_value = $this->handleData($temp_value, $field);
-                    $data[$field['field']] = $temp_value;
-                    
-                    $fk++;
-                }
-                // 数据重复时
+                
                 $data = array_merge($data, $default_data);
                 if (!$resData = $dataModel->createTask($data)) {
                     $error_data_func($val, $dataModel->getError());
@@ -2047,20 +2018,23 @@ class Excel extends Common
                     'user_id' => $user_id,
                     'error_data_file_path' => $error ? 'temp/' . $error_data_file_name : ''
                 ]);
-                Cache::set('item', 1);
-                Cache::set('excel_item', serialize($this->error));
+                Cache::set('item', 1, config('import_cache_time'));
+                Cache::set('excel_item', serialize($this->error), config('import_cache_time'));
             } else {
-                $excelData['cover']=$cover;
-                $excelData['page']=$page+1;
-                $excelData['types']=$types;
-                $excelData['temp_file']=$save_name;
-                $excelData['error_file']=$error_data_file_name;
-                $excelData['create_user_id']=$param['create_user_id'];
-                $excelData['import_queue_index']=$import_queue_index;
-                $excelData['owner_user_id']=$user_id;
-                $excelData['base']='batchTaskImportData';
-                Cache::set('item', 0);
-                Cache::set('excel', $excelData);
+                $excelData['cover'] = $cover;
+                $excelData['page'] = $page + 1;
+                $excelData['types'] = $types;
+                $excelData['temp_file'] = $save_name;
+                $excelData['error_file'] = $error_data_file_name;
+                $excelData['create_user_id'] = $param['create_user_id'];
+                $excelData['import_queue_index'] = $import_queue_index;
+                $excelData['owner_user_id'] = $user_id;
+                $excelData['total'] = $total;
+                $excelData['done'] = $done;
+                $excelData['error'] = $error;
+                $excelData['base'] = 'batchTaskImportData';
+                Cache::set('item', 0, config('import_cache_time'));
+                Cache::set('excel', $excelData, config('import_cache_time'));
             }
             return true;
         } else {
@@ -2325,7 +2299,6 @@ class Excel extends Common
         $objWriter = \PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel5');  //excel5为xls格式，excel2007为xlsx格式
         $objWriter->save('php://output');
     }
-    
     /**
      * 运行中
      * @param $param
@@ -2333,11 +2306,15 @@ class Excel extends Common
      */
     public function importNum()
     {
-        $param = Cache::get('item');
-        $excelData=Cache::get('excel');
-        $base=$excelData['base'];
+        $param = Cache::pull('item');
+        $excelData = Cache::pull('excel');
+        $base = $excelData['base'];
         if ($param == 0) {
-            $this->$base('',$excelData);
+            if($base=='batchTaskImportData'){
+                $this->batchTaskImportData('', $excelData);
+            }else{
+                $this->batchImportData('', $excelData);
+            }
             $data = 0;
         } elseif ($param == 1) {
             $data = '';
@@ -2353,7 +2330,7 @@ class Excel extends Common
      */
     public function importInfo()
     {
-        $param = Cache::get('excel_item');
+        $param = Cache::pull('excel_item');
         $param = unserialize($param);
         return $param;
     }
@@ -2367,19 +2344,19 @@ class Excel extends Common
     {
         $list = db('admin_import_record')->alias('i')
             ->join('admin_user user', 'i.user_id=user.id')
-            ->where(['i.type'=>$param['type'],'i.user_id'=>$param['user_id']])->page($param['page'], $param['limit'])
+            ->where(['i.type' => $param['type'], 'i.user_id' => $param['user_id']])->page($param['page'], $param['limit'])
             ->field('i.*,user.realname as user_name')->order('create_time desc')->select();
         $dataCount = db('admin_import_record')->where('type', $param['type'])->count();
         $week = strtotime(date("Y-m-d H:i:s", strtotime("+7 day")));
         $time = time();
         foreach ($list as $k => $v) {
-            $week = strtotime("+7 day",$v['create_time']);
+            $week = strtotime("+7 day", $v['create_time']);
             if ($time > (int)$week) {
                 $list[$k]['valid'] = 0;
             } else {
                 $list[$k]['valid'] = 1;
             }
-            if($v['error_data_file_path']==''){
+            if ($v['error_data_file_path'] == '') {
                 $list[$k]['valid'] = -1;
             }
             $list[$k]['create_time'] = date('Y-m-d', $v['create_time']);

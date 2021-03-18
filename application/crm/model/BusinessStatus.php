@@ -44,8 +44,11 @@ class BusinessStatus extends Common
      * @return    [array]                    [description]
      */		
 	public function getTypeList($request)
-    {  	
-			
+    {
+        # H5不传page和limit（查全部），商机组不会有太多，把limit设置大一些就行。
+        if (empty($request['limit'])) $request['limit'] = 100;
+        if (empty($request['page']))  $request['page'] = 1;
+
     	$userModel = new \app\admin\model\User();
     	$structureModel = new \app\admin\model\Structure();
         $request = $this->fmtRequest( $request );
@@ -54,6 +57,7 @@ class BusinessStatus extends Common
 			//普通筛选
 			$map['name'] = ['like', '%'.$map['search'].'%'];
 		}
+
         $map['is_display'] = ['eq', 1];
 		unset($map['search']);
 		$list = db('crm_business_type')
@@ -67,6 +71,7 @@ class BusinessStatus extends Common
         	$list[$k]['structure_id_info'] = $structureModel->getListByStr($v['structure_id']) ? : [];
         	$list[$k]['create_time'] = !empty($v['create_time']) ? date('Y-m-d H:i:s', $v['create_time']) : null;
             $list[$k]['update_time'] = !empty($v['update_time']) ? date('Y-m-d H:i:s', $v['update_time']) : null;
+            $list[$k]['status_list'] = db('crm_business_status')->where('type_id', $v['type_id'])->order('order_id', 'asc')->select();
         }    
         $data = [];
         $data['list'] = $list;

@@ -68,7 +68,6 @@ class Receivables extends ApiCommon
         $param['user_id'] = $userInfo['id'];
         if ($param['receivables_id']) {
             $param['receivables_id'] = ['condition' => 'in', 'value' => $param['receivables_id'], 'form_type' => 'text', 'name' => ''];
-            $param['is_excel'] = 1;
         }
         $excelModel = new \app\admin\model\Excel();
         // 导出的字段列表
@@ -76,7 +75,6 @@ class Receivables extends ApiCommon
         $field_list = $fieldModel->getIndexFieldConfig('crm_receivables', $userInfo['id']);
         // 文件名
         $file_name = '5kcrm_receivables_' . date('Ymd');
-        
         $model = model('Receivables');
         $temp_file = $param['temp_file'];
         unset($param['temp_file']);
@@ -181,7 +179,7 @@ class Receivables extends ApiCommon
         //判断权限
         $auth_user_ids = $userModel->getUserByPer('crm', 'receivables', 'read');
         if (!in_array($data['owner_user_id'], $auth_user_ids)) {
-            $authData['dataAuth'] = 0;
+            $authData['dataAuth'] = (int)0;
             return resultArray(['data' => $authData]);
         }
         if (!$data) {

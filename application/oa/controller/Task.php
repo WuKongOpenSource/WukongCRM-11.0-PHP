@@ -380,20 +380,39 @@ class Task extends ApiCommon
         }
         $taskInfo = Db::name('Task')->where(['task_id' => $param['task_id']])->find();
         $det = Db::name('TaskRelation')->where(['task_id' => $param['task_id']])->find();
+        $activityUpdate = [];
         if ($param['type'] == '1') {
             $newstr = str_replace(',' . $param['id'] . ',', ',', $det['customer_ids']);
             $newdata['customer_ids'] = $newstr;
+            # 删除活动关联
+            $customerIds = db('crm_activity')->where(['activity_type' => 11, 'activity_type_id' => $param['task_id']])->value('customer_ids');
+            $activityUpdate['customer_ids'] = str_replace(',' . $param['id'] . ',', ',', $customerIds);
+            if ($activityUpdate['customer_ids'] == ',') $activityUpdate['customer_ids'] = '';
         } elseif ($param['type'] == '2') {
             $newstr = str_replace(',' . $param['id'] . ',', ',', $det['contacts_ids']);
             $newdata['contacts_ids'] = $newstr;
+            # 删除活动关联
+            $contactsIds = db('crm_activity')->where(['activity_type' => 11, 'activity_type_id' => $param['task_id']])->value('contacts_ids');
+            $activityUpdate['contacts_ids'] = str_replace(',' . $param['id'] . ',', ',', $contactsIds);
+            if ($activityUpdate['contacts_ids'] == ',') $activityUpdate['contacts_ids'] = '';
         } elseif ($param['type'] == '3') {
             $newstr = str_replace(',' . $param['id'] . ',', ',', $det['business_ids']);
             $newdata['business_ids'] = $newstr;
+            # 删除活动关联
+            $businessIds = db('crm_activity')->where(['activity_type' => 11, 'activity_type_id' => $param['task_id']])->value('business_ids');
+            $activityUpdate['business_ids'] = str_replace(',' . $param['id'] . ',', ',', $businessIds);
+            if ($activityUpdate['business_ids'] == ',') $activityUpdate['business_ids'] = '';
         } elseif ($param['type'] == '4') {
             $newstr = str_replace(',' . $param['id'] . ',', ',', $det['contract_ids']);
             $newdata['contract_ids'] = $newstr;
+            # 删除活动关联
+            $contractIds = db('crm_activity')->where(['activity_type' => 11, 'activity_type_id' => $param['task_id']])->value('contract_ids');
+            $activityUpdate['contract_ids'] = str_replace(',' . $param['id'] . ',', ',', $contractIds);
+            if ($activityUpdate['contract_ids'] == ',') $activityUpdate['contract_ids'] = '';
         }
         $flag = Db::name('TaskRelation')->where(['task_id' => $param['task_id']])->update($newdata);
+        # 取消活动关联
+        db('crm_activity')->where(['activity_type' => 11, 'activity_type_id' => $param['task_id']])->update($activityUpdate);
         if ($flag) {
             if (!$taskInfo['pid']) {
                 actionLog($taskInfo['task_id'], $taskInfo['owner_user_id'], $taskInfo['structure_ids'], '编辑关联关系');

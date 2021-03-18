@@ -54,9 +54,8 @@ class Product extends ApiCommon
         if($param['excel_type']!=1){
             $param = $this->param;
         }
-
-        if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
-        if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
+        if (!empty($param['start_time'])) $param['start_time'] = $param['start_time'] . ' 00:00:00';
+        if (!empty($param['end_time']))   $param['end_time']   = $param['end_time'] . ' 23:59:59';
 
         $list = $productModel->getStatistics($param);
 
@@ -78,11 +77,10 @@ class Product extends ApiCommon
     public function productCategory()
     {
         $param = $this->param;
-
         $productModel = new \app\bi\model\Product();
 
-        if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
-        if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
+        if (!empty($param['start_time'])) $param['start_time'] = $param['start_time'] . ' 00:00:00';
+        if (!empty($param['end_time']))   $param['end_time']   =$param['end_time'] . ' 23:59:59';
 
         $list = $productModel->getStatistics($param);
 
@@ -105,28 +103,28 @@ class Product extends ApiCommon
         $subtotalCount = [];
         $sumCount = [];
         $item = [];
-        $unm = 0;
-        $subtotal = 0;
         $res = [];
-        foreach ($list as $val) {
+        foreach ($list as &$val) {
             $res[] = $val['product_id'];
             $data[$val['product_id']][] = $val;
         }
         $res = array_unique($res);
         foreach ($res as $e) {
+            $unm = 0;
+            $subtotal = 0;
             foreach ($list as $v) {
                 if ($e == $v['product_id']) {
                     $unm += $v['num'];
                     $subtotal += $v['subtotal'];
-                    $sumCount[$e] = $unm + $v['num'];
-                    $subtotalCount[$e] = (float)$subtotal + $v['subtotal'];
+                    $sumCount[$e] = $unm;
+                    $subtotalCount[$e] = (float)$subtotal;
                 }
             }
             $item[$e][] = [
                 'type' => '',
                 'category_id_info' => '',
                 'product_name' => '',
-                'contract_name' => '',
+                'contract_num' => '',
                 'realname' => '',
                 'name' => '',
                 'price' => '合计',

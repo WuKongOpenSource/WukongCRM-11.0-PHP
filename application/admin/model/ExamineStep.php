@@ -332,17 +332,35 @@ class ExamineStep extends Common
 
             $createUserInfo = $userModel->getUserById($dataInfo['create_user_id']);
             $createUserInfo['check_time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
-            if ($dataInfo['check_status'] == 4) {
+            if ($dataInfo['check_status'] == 4 && $dataInfo['create_user_id']!=trim( $dataInfo['check_status'], ',')) {
                 $createUserInfo['check_type'] = 2;
-                $newlist[0]['type'] = '2'; //撤销
-            } else {
-
+                $newlist[1]['type'] = '2'; //撤销
+                $newlist[1]['status'] = '5'; //创建，前端要求给创建人加一个status字段，定义为5
                 $createUserInfo['check_type'] = 3;
                 $newlist[0]['type'] = '3'; //创建
                 $newlist[0]['status'] = '5'; //创建，前端要求给创建人加一个status字段，定义为5
+                $newlist[0]['user_id_info'] = array($createUserInfo);
+                $newlist[0]['time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
+                $newlist[1]['user_id_info'] = array($createUserInfo);
+                $newlist[1]['time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
+            } elseif ($dataInfo['check_status'] == 4 && $dataInfo['create_user_id']==trim( $dataInfo['check_status'], ',')){
+                $createUserInfo['check_type'] = 3;
+                $newlist[0]['type'] = '3'; //创建
+                $newlist[0]['status'] = '5'; //创建，前端要求给创建人加一个status字段，定义为5
+                $createUserInfo['check_type'] = 2;
+                $newlist[1]['type'] = '2'; //撤销
+                $newlist[1]['status'] = '5'; //创建，前端要求给创建人加一个status字段，定义为5
+                $newlist[0]['user_id_info'] = array($createUserInfo);
+                $newlist[0]['time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
+                $newlist[1]['user_id_info'] = array($createUserInfo);
+                $newlist[1]['time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
+            } else {
+                $createUserInfo['check_type'] = 3;
+                $newlist[0]['type'] = '3'; //创建
+                $newlist[0]['status'] = '5'; //创建，前端要求给创建人加一个status字段，定义为5
+                $newlist[0]['user_id_info'] = array($createUserInfo);
+                $newlist[0]['time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
             }
-            $newlist[0]['user_id_info'] = array($createUserInfo);
-            $newlist[0]['time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
         }
         $stepList = [];
         if ($dataInfo['check_status'] !== 4 || $action !== 'view') {
@@ -367,6 +385,10 @@ class ExamineStep extends Common
                         if (in_array($val, $check_user_ids)) {
                             $check_type = 1;
                             $type = !empty($dataInfo['check_user_id']) ? 4 : 1;
+                        }
+                        if(in_array($val, $check_user_ids) && $dataInfo['check_status'] == 2){
+                            $check_type = 1;
+                            $type = 1;
                         }
                         $re_check_user_ids = $this->getUserByCheck($types, $types_id, $v['order_id'], 2); //撤销人员
                         if ($dataInfo['check_status'] == 4) {
@@ -484,7 +506,7 @@ class ExamineStep extends Common
                 $is_recheck = 1;
             }
         }
-        if (in_array($check_user_id, stringToArray($dataInfo['check_user_id'])) && !in_array($dataInfo['check_status'],['2','3','5'])) {
+        if (in_array($check_user_id, stringToArray($dataInfo['check_user_id'])) && !in_array($dataInfo['check_status'],['2','3','4','5'])) {
             $is_check = 1;
         }
 

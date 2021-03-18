@@ -9,6 +9,7 @@ namespace app\admin\controller;
 
 use com\verify\HonrayVerify;
 use app\common\controller\Common;
+use think\Cache;
 use think\Request;
 use think\Session;
 
@@ -41,7 +42,7 @@ class Base extends Common
         $request = Request::instance();
         $paramArr = $request->param();
         $platform = $paramArr['platform'] ? '_'.$paramArr['platform'] : ''; //请求平台(mobile,ding)
-        $cache = cache('Auth_'.$authKey.$platform,null);
+        $cache = Cache::set('Auth_'.trim($header['authkey']).$platform,null);
         cookie(null, '72crm_');
         cookie(null, '5kcrm_');
         session('user_id','null');

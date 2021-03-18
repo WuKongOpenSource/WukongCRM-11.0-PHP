@@ -64,7 +64,6 @@ class Contract extends ApiCommon
         if ($param['excel_type'] != 1) {
             $param = $this->param;
         }
-
         $perUserIds = $userModel->getUserByPer('bi', 'contract', 'read'); // 权限范围内userIds
         $whereArr   = $adminModel->getWhere($param, '', $perUserIds);       // 统计条件
         $userIds    = $whereArr['userIds'];
@@ -140,7 +139,7 @@ class Contract extends ApiCommon
         if($param['excel_type']!=1){
             $param = $this->param;
         }
-
+        
         $perUserIds = $userModel->getUserByPer('bi', 'contract', 'read'); //权限范围内userIds
         $whereArr   = $adminModel->getWhere($param, '', $perUserIds); //统计条件
         $userIds    = $whereArr['userIds'];
@@ -233,7 +232,6 @@ class Contract extends ApiCommon
         if($param['excel_type']!=1){
             $param = $this->param;
         }
-
         $perUserIds = $userModel->getUserByPer('bi', 'contract', 'read'); //权限范围内userIds
         $whereArr   = $adminModel->getWhere($param, '', $perUserIds); //统计条件
         $userIds    = $whereArr['userIds'];
@@ -341,10 +339,12 @@ class Contract extends ApiCommon
                 break;
             case 'summary':
                 $list = $this->summary($excel_type);
+                $list=$list['list'];
                 $type['type'] = '合同汇总表';
                 break;
             case 'invoice':
                 $list = $this->invoice($excel_type);
+                $list=$list['list'];
                 $type['type'] = '发票统计分析表';
                 break;
         }

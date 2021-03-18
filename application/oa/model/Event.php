@@ -631,6 +631,7 @@ class Event extends Common
         foreach ($event_date as $k => $v) {
             $event_date[$k]['create_time'] = $v['create_time'] ? date('Y-m-d H:i:s', $v['create_time']) : null;
             $event_date[$k]['last_time'] = $v['last_time'] ? date('Y-m-d H:i:s', $v['last_time']) : null;
+            $event_date[$k]['next_time'] = $v['next_time'] ? date('Y-m-d H:i:s', $v['next_time']) : null;
         }
         $data = [];
         $data['list'] = $event_date;

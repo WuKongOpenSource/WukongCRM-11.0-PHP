@@ -70,6 +70,7 @@ class Visit extends ApiCommon
         }
         $param['owner_user_id'] = $param['owner_user_id'] ? : $userInfo['id'];
         $param['create_user_id'] = $userInfo['id'];
+        $param['create_time'] = time();
         $param['update_time'] = time();
         $res = $Visit->createData($param);
         if ($res) {
@@ -98,7 +99,7 @@ class Visit extends ApiCommon
         $roPre = $userModel->rwPre($userInfo['id'], $data['ro_user_id'], $data['rw_user_id'], 'read');
         $rwPre = $userModel->rwPre($userInfo['id'], $data['ro_user_id'], $data['rw_user_id'], 'update');
         if (!in_array($data['owner_user_id'], $auth_user_ids) && !$rwPre && !$roPre) {
-            $authData['dataAuth'] = 0;
+            $authData['dataAuth'] = (int)0;
             return resultArray(['data' => $authData]);
         }
         if (!$data) {
@@ -129,6 +130,7 @@ class Visit extends ApiCommon
         //判断权限
         $data = $Visit->getDataById($param['id']);
         $auth_user_ids = $userModel->getUserByPer('crm', 'visit', 'update');
+        $param['update_time'] = time();
         if ($Visit->updateDataById($param, $param['id'])) {
             # 更新crm_number_sequence表中的last_date、create_time字段
             if (!empty($numberInfo['data'])) (new NumberSequence())->batchUpdate($numberInfo['data']);

@@ -107,7 +107,7 @@ class Leads extends ApiCommon
         $auth_user_ids = $userModel->getUserByPer('crm', 'leads', 'read');
         if (!in_array($data['owner_user_id'], $auth_user_ids)) {
             //无权限
-            $authData['dataAuth'] = 0;
+            $authData['dataAuth'] = (int)0;
             return resultArray(['data' => $authData]);
         }
         if (!$data) {
@@ -312,6 +312,10 @@ class Leads extends ApiCommon
                 $errorMessage[] = '"' . $leadsInfo['name'] . '"转移失败，错误原因：无权限；';
                 continue;
             }
+
+            # 处理分配标识，待办事项专用
+            $data['is_allocation'] = 1;
+
             $resLeads = db('crm_leads')->where(['leads_id' => $leads_id])->update($data);
             if (!$resLeads) {
                 $errorMessage[] = '"' . $leadsInfo['name'] . '"转移失败，错误原因：数据出错；';

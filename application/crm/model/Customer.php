@@ -59,6 +59,7 @@ class Customer extends Common
     	$is_remind = $request['is_remind'];
     	$getCount = $request['getCount'];
     	$otherMap = $request['otherMap'];
+    	unset($request['poolId']);
     	//需要过滤的参数
     	$unsetRequest = ['scene_id','search','user_id','is_excel','action','order_field','order_type','is_remind','getCount','type','otherMap'];
     	foreach ($unsetRequest as $v) {
@@ -79,7 +80,7 @@ class Customer extends Common
             }
         }
 		$searchMap = [];
-		if ($search) {
+		if ($search || $search == '0') {
 			//普通筛选
 			$searchMap = function($query) use ($search){
 			        $query->where('customer.name',array('like','%'.$search.'%'))
@@ -170,6 +171,11 @@ class Customer extends Common
 		$userField = $fieldModel->getFieldByFormType('crm_customer', 'user'); //人员类型
 		$structureField = $fieldModel->getFieldByFormType('crm_customer', 'structure'); //部门类型
         $datetimeField = $fieldModel->getFieldByFormType('crm_customer', 'datetime'); //日期时间类型
+        # 处理人员和部门类型的排序报错问题(前端传来的是包含_name的别名字段)
+        $temporaryField = str_replace('_name', '', $order_field);
+        if (in_array($temporaryField, $userField) || in_array($temporaryField, $structureField)) {
+            $order_field = $temporaryField;
+        }
 		//排序
 		if ($order_type && $order_field) {
 			$order = $fieldModel->getOrderByFormtype('crm_customer','customer',$order_field,$order_type);
@@ -229,13 +235,13 @@ class Customer extends Common
 				foreach ($userField as $key => $val) {
 					if (in_array($val, $field_list)) {
                         $usernameField  = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
-                        $list[$k][$val] = implode($usernameField, ',');
+                        $list[$k][$val.'_name'] = implode($usernameField, ',');
 					}
 	        	}
 				foreach ($structureField as $key => $val) {
 					if (in_array($val, $field_list)) {
                         $structureNameField = !empty($v[$val]) ? db('admin_structure')->whereIn('id', stringToArray($v[$val]))->column('name') : [];
-                        $list[$k][$val]     = implode($structureNameField, ',');
+                        $list[$k][$val.'_name'] = implode($structureNameField, ',');
 					}
 				}
                 foreach ($datetimeField as $key => $val) {
@@ -335,7 +341,11 @@ class Customer extends Common
 		foreach ($arrFieldAtt as $k=>$v) {
 			$param[$v] = arrayToString($param[$v]);
 		}
-		if ($this->data($param)->allowField(true)->isUpdate(false)->save()) {
+
+        # 设置今日需联系客户
+        if (!empty($param['next_time']) && $param['next_time'] >= strtotime(date('Y-m-d 00:00:00'))) $param['is_dealt'] = 0;
+
+        if ($this->data($param)->allowField(true)->isUpdate(false)->save()) {
 			//修改记录
 			updateActionLog($param['create_user_id'], 'crm_customer', $this->customer_id, '', '', '创建了客户');			
 			$data = [];
@@ -426,7 +436,10 @@ class Customer extends Common
         foreach ($arrFieldAtt as $k=>$v) {
             $param[$v] = arrayToString($param[$v]);
         }
-        $param['follow'] = '已跟进';
+
+        # 设置今日需联系客户
+        if (!empty($param['next_time']) && $param['next_time'] >= strtotime(date('Y-m-d 00:00:00'))) $param['is_dealt'] = 0;
+
         if ($this->update($param, ['customer_id' => $customer_id], true)) {
             //修改记录
             updateActionLog($user_id, 'crm_customer', $customer_id, $dataInfo->data, $param);
@@ -511,6 +524,12 @@ class Customer extends Common
 	public function getStatistics($request)
     {
     	$userModel = new \app\admin\model\User();
+        $adminModel = new \app\admin\model\Admin();
+        $request['start_time']=strtotime($request['start_time']);
+        $request['end_time']=strtotime($request['end_time']);
+        $perUserIds = $userModel->getUserByPer('bi', 'customer', 'read'); //权限范围内userIds
+        $whereArr   = $adminModel->getWhere($request, '', $perUserIds); //统计条件
+        $userIds    = $whereArr['userIds'];
     	$request = $this->fmtRequest( $request );
 		$map = $request['map'] ? : [];
 		unset($map['search']);
@@ -527,7 +546,7 @@ class Customer extends Common
             $where_time = " > 0 ";
             $where_date = " != '' ";
         }
-
+        
 		//员工IDS
 		$map_user_ids = [];
 		if (!empty($map['user_id'])) {
@@ -535,17 +554,19 @@ class Customer extends Common
 		} elseif (!empty($map['structure_id'])) {
 		    $map_user_ids = $userModel->getSubUserByStr($map['structure_id'], 2);
 		}
-
-		# 没有传递员工参数并且部门下没员工的情况
-		if (empty($map_user_ids)) return [];
-
-		$perUserIds = $userModel->getUserByPer('bi', 'customer', 'read'); //权限范围内userIds
-		$userIds = $map_user_ids ? array_intersect($map_user_ids, $perUserIds) : $perUserIds; //数组交集
-		$userIds = array_values($userIds);
-
+		
 		$prefix = config('database.prefix');
 		$count = count($userIds);
+        $configModel = new \app\crm\model\ConfigData();
+        $configInfo = $configModel->getData();
+        $follow_day = $configInfo['follow_day'] ? : 0;
+        $deal_day = $configInfo['deal_day'] ? : 0;
+        //默认公海条件(没有负责人或已经到期)
+        $data['follow_time'] = time()-$follow_day*86400;
+        $data['deal_time'] = time()-$deal_day*86400;
+        $data['deal_status'] = '未成交';
 		$sql = '';
+  
 		foreach ($userIds as $key => $user_id) {
 			$sql .= "
 				SELECT
@@ -573,12 +594,13 @@ class Customer extends Common
 				WHERE
 					cu.create_time {$where_time}
 					AND cu.owner_user_id = {$user_id}
+					AND ((  (  deal_time > ".$data['deal_time']." ) OR (update_time > ".$data['follow_time']." AND deal_time > ".$data['deal_time']."))OR deal_status = '已成交'  OR is_lock = 1 )
 			";
 			if ($count > 1 && $key != $count - 1) {
 				$sql .= " UNION ALL ";
 			}
 		}
-
+  
 		if ($sql == '') {
 			return [];
 		}
@@ -587,6 +609,7 @@ class Customer extends Common
         $dealCustomerCount     = 0; # 成交客户总数
         $contractMoneyCount    = 0; # 合同总金额
         $receivablesMoneyCount = 0; # 回款总金额
+       
 		$list = queryCache($sql);
 		foreach ($list as &$val) {
 			$val['deal_customer_num']     = Floor($val['deal_customer_num']);
@@ -756,7 +779,7 @@ class Customer extends Common
     	$is_lock = $param['is_lock'] ? : 0;
     	$deal_status = $param['deal_status'] ? : '未成交';
     	$update_time = $param['update_time'];
-    	if (strtotime($param['update_time'])) {
+    	if (strtotime(date('Y-m-d H:i:s', $param['update_time'])) != $param['update_time']) {
     		$update_time = strtotime($param['update_time']);
     	}
     	if (!$is_lock && $deal_status !== '已成交') {
@@ -809,7 +832,6 @@ class Customer extends Common
             //通过提前提醒时间,计算查询时间段
             $remind_follow_day = ($follow_day-$remind_day > 0) ? ($follow_day-$remind_day) : $follow_day-1;
             $remind_deal_day = ($deal_day-$remind_day > 0) ? ($deal_day-$remind_day) : $deal_day-1;
-
             if (($follow_day > 0) && ($deal_day > 0)) {
 				$follow_between = array(time()-$follow_day*86400,time()-$remind_follow_day*86400);
                 $deal_between = array(time()-$deal_day*86400,time()-$remind_deal_day*86400);
@@ -825,7 +847,7 @@ class Customer extends Common
 					                    ->where(['customer.is_lock' => 0])
 					                    ->where(['customer.deal_status' => ['neq','已成交']]);
 									});							
-								};  		
+								};
 		    	} else {
 					$whereData = function($query) use ($data){
 					        	$query->where(function ($query) use ($data) {
@@ -1084,9 +1106,11 @@ class Customer extends Common
         $poolStatus = checkPerByAction('crm', 'customer', 'pool');
 
         # 客户
+        $customerAuth = [];
         $customerWhere = [];
         if ((!empty($param['type']) && $param['type'] == 2) || !$poolStatus) {
             $customerWhere = $this->getWhereByCustomer();
+            $customerAuth['owner_user_id'] = ['neq', 0];
         }
 
         # 公海
@@ -1098,20 +1122,6 @@ class Customer extends Common
         if (!empty($param['type']) && $param['type'] == 9 && !$poolStatus) {
             return [];
         }
-
-        # 基本权限
-//        $auth_user_ids = $userModel->getUserByPer('crm', 'customer', 'index');
-//        $authMapData['auth_user_ids'] = $auth_user_ids;
-//        $authMapData['user_id'] = $apiCommon->userInfo['id'];
-//        $authMap = function($query) use ($authMapData){
-//            $query->where(['customer.owner_user_id' => array('in',$authMapData['auth_user_ids'])])
-//                ->whereOr(function ($query) use ($authMapData) {
-//                    $query->where('FIND_IN_SET("'.$authMapData['user_id'].'", customer.ro_user_id)')->where(['customer.owner_user_id' => array('neq','')]);
-//                })
-//                ->whereOr(function ($query) use ($authMapData) {
-//                    $query->where('FIND_IN_SET("'.$authMapData['user_id'].'", customer.rw_user_id)')->where(['customer.owner_user_id' => array('neq','')]);
-//                });
-//        };
 
         # 附近
         $lngLatRange = $this->getLngLatRange($param['lng'], $param['lat'], $param['distance']);
@@ -1133,7 +1143,7 @@ class Customer extends Common
             ->where($customerWhere)
             ->where($poolWhere)
             ->where($lngLatWhere)
-//            ->where($authMap)
+            ->where($customerAuth)
             ->field(['customer_id', 'name', 'address', 'detail_address', 'owner_user_id', 'lat', 'lng'])
             ->order('update_time', 'desc')
             ->select();
@@ -1143,7 +1153,7 @@ class Customer extends Common
             # todo 暂时将查询写在循环中
             $ownerUserInfo = !empty($value['owner_user_id'])    ? $userModel->getUserById($value['owner_user_id']) : [];
             $ownerUserName = !empty($ownerUserInfo['realname']) ? $ownerUserInfo['realname'] : '';
-            $list[$key]['owner_user_name'] = $ownerUserName;
+            $list[$key]['owner_user_name'] = !empty($ownerUserName) ? $ownerUserName : '暂无负责人';
             $list[$key]['distance'] = $this->getLngLatDistance($param['lng'], $param['lat'], $value['lng'], $value['lat'], 1, 0);
         }
 

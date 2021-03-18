@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+    <title>悟空CRM安装向导</title>
+    <link rel="shortcut icon" href="__STATIC__/icon/favicon.ico">
+    <link rel="stylesheet" href="__STATIC__/style/base.css">
+    <link rel="stylesheet" href="__STATIC__/style/step3.css">
+    <script src="__STATIC__/js/jquery-3.3.1.min.js"></script>
+</head>
+<body>
+<div class="header-wrapper">
+    {include file="public/header"}
+</div>
+<div class="top">
+    <div class="step-group">
+        <div class="step active">
+            <div class="sort">
+                <img class="pic" style="width:100%; height: 100%;" src="__STATIC__/icon/success.png" alt="">
+            </div>
+            <div class="desc">检查安装环境</div>
+        </div>
+        <div class="step active line"></div>
+        <div class="step active">
+            <div class="sort">
+                <img class="pic" style="width:100%; height: 100%;" src="__STATIC__/icon/success.png" alt="">
+            </div>
+            <div class="desc">创建数据库</div>
+        </div>
+        <div class="step line active"></div>
+        <div class="step">
+            <div class="sort">
+                <img class="pic" style="width:100%; height: 100%;" src="__STATIC__/icon/success.png" alt="">
+            </div>
+            <div class="desc">安装失败</div>
+        </div>
+    </div>
+</div>
+<div class="container">
+    <div class="result">
+        <h1 style="text-align:center;padding-top: 20px;">安装悟空CRM数据库超时，请手动导入SQL文件！</h1>
+        <div class="desc" style="overflow:scroll;overflow-x:hidden;height:500px;color:#666666;font-weight: 600; margin-top: 50px; line-height:30px; text-align: left;padding-left: 20px;">
+            <p>1、SQL文件位置：public/sql/5kcrm.sql、public/sql/install.sql</p>
+            <p>2、在config目录下创建database.php文件</p>
+            <p>3、database.php文件内容：</p>
+            <p>return [</p>
+            <p>// 数据库类型</p>
+            <p>'type' => 'mysql',</p>
+            <p>// 服务器地址</p>
+            <p>'hostname' => '127.0.0.1',</p>
+            <p>// 数据库名</p>
+            <p>'database' => '',</p>
+            <p>// 用户名</p>
+            <p>'username' => '',</p>
+            <p>// 密码</p>
+            <p>'password' => '',</p>
+            <p>// 端口</p>
+            <p>'hostport' => '3306',</p>
+            <p>// 连接dsn</p>
+            <p>'dsn' => '',</p>
+            <p>// 数据库连接参数</p>
+            <p>'params' => [],</p>
+            <p>// 数据库编码默认采用utf8</p>
+            <p>'charset' => 'utf8',</p>
+            <p>// 数据库表前缀</p>
+            <p>'prefix' => '5kcrm_',</p>
+            <p>// 数据库调试模式</p>
+            <p>'debug' => true,</p>
+            <p>// 数据库部署方式:0 集中式(单一服务器),1 分布式(主从服务器)</p>
+            <p>'deploy' => 0,</p>
+            <p>// 数据库读写是否分离 主从式有效</p>
+            <p>'rw_separate' => false,</p>
+            <p>// 读写分离后 主服务器数量</p>
+            <p>'master_num' => 1,</p>
+            <p>// 指定从服务器序号</p>
+            <p>'slave_no' => '',</p>
+            <p>// 自动读取主库数据</p>
+            <p>'read_master' => false,</p>
+            <p>// 是否严格检查字段是否存在</p>
+            <p>'fields_strict' => true,</p>
+            <p>// 数据集返回类型</p>
+            <p>'resultset_type' => 'array',</p>
+            <p>];</p>
+        </div>
+    </div>
+</div>
+<div class="footer-wrapper">
+    {include file="public/footer"}
+</div>
+</body>
+<script>
+    $('.login').click(function () {
+        window.location = '../../../index.html'
+    })
+</script>
+</html>

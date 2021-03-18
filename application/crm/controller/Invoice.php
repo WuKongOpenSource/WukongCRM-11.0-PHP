@@ -100,7 +100,6 @@ class Invoice extends ApiCommon
             if (empty($numberInfo['number'])) return resultArray(['error' => '请填写发票编号！']);
             $param['invoice_apple_number'] = $numberInfo['number'];
         }
-
         # 检查发票编号是否重复
         if ($invoiceLogic->getInvoiceId(['invoice_apple_number' => $param['invoice_apple_number']])) {
             return resultArray(['error' => '发票编号重复！']);
@@ -142,10 +141,32 @@ class Invoice extends ApiCommon
         if (!$invoice_id = $invoiceLogic->save($param)) {
             return resultArray(['error' => '创建失败！']);
         }
-
+        $send_user_id = stringToArray($param['check_user_id']);
+        (new Message())->send(
+            Message::INVOICE_TO_DO,
+            [
+                'title'     => $param['invoice_apple_number'],
+                'action_id' => $invoice_id
+            ],
+            $send_user_id
+        );
         # 更新crm_number_sequence表中的last_date、create_time字段
         if (!empty($numberInfo['data'])) (new NumberSequence())->batchUpdate($numberInfo['data']);
         updateActionLog($param['create_user_id'], 'crm_invoice', $invoice_id, '', '', '创建了发票');
+
+        # 创建待办事项的关联数据
+        $checkUserIds = db('crm_invoice')->where('invoice_id', $invoice_id)->value('check_user_id');
+        $checkUserIdArray = stringToArray($checkUserIds);
+        $dealtData = [];
+        foreach ($checkUserIdArray AS $kk => $vv) {
+            $dealtData[] = [
+                'types'    => 'crm_invoice',
+                'types_id' => $invoice_id,
+                'user_id'  => $vv
+            ];
+        }
+        if (!empty($dealtData)) db('crm_dealt_relation')->insertAll($dealtData);
+
         return resultArray(['data' => '创建成功！']);
     }
 
@@ -182,7 +203,7 @@ class Invoice extends ApiCommon
         }
 
         if (!isSuperAdministrators($userInfo['id']) && $readStatus === false) {
-            $authData['dataAuth'] = 0;
+            $authData['dataAuth'] = (int)0;
             return resultArray(['data' => $authData]);
         }
 
@@ -299,7 +320,22 @@ class Invoice extends ApiCommon
         # 更新crm_number_sequence表中的last_date、create_time字段
         if (!empty($numberInfo['data'])) (new NumberSequence())->batchUpdate($numberInfo['data']);
         //修改记录
-        // updateActionLog($param['user_id'], 'crm_invoice', $param['invoice_id'], $dataInfo, $param);        
+        // updateActionLog($param['user_id'], 'crm_invoice', $param['invoice_id'], $dataInfo, $param);
+
+        # 删除待办事项的关联数据
+        db('crm_dealt_relation')->where(['types' => ['eq', 'crm_invoice'], 'types_id' => ['eq', $param['invoice_id']]])->delete();
+        # 创建待办事项的关联数据
+        $checkUserIds = db('crm_invoice')->where('invoice_id', $param['invoice_id'])->value('check_user_id');
+        $checkUserIdArray = stringToArray($checkUserIds);
+        $dealtData = [];
+        foreach ($checkUserIdArray AS $kk => $vv) {
+            $dealtData[] = [
+                'types'    => 'crm_invoice',
+                'types_id' => $param['invoice_id'],
+                'user_id'  => $vv
+            ];
+        }
+        if (!empty($dealtData)) db('crm_dealt_relation')->insertAll($dealtData);
 
         return resultArray(['data' => '编辑成功！']);
     }
@@ -490,7 +526,7 @@ class Invoice extends ApiCommon
                         'title'     => $dataInfo['invoice_apple_number'],
                         'action_id' => $param['id']
                     ],
-                    $dataInfo['owner_user_id']
+                    stringToArray($dataInfo['owner_user_id'])
                 );
             } else {
                 if (!empty($status)) {
@@ -512,7 +548,7 @@ class Invoice extends ApiCommon
                             'title'     => $dataInfo['invoice_apple_number'],
                             'action_id' => $param['id']
                         ],
-                        $dataInfo['owner_user_id']
+                        stringToArray($dataInfo['owner_user_id'])
                     );
                 }
             }

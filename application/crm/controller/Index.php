@@ -128,8 +128,8 @@ class Index extends ApiCommon
             $end_time = $between_time[1];
         } else {
             //自定义时间
-            $start_time = $param['start_time'] ?: strtotime(date('Y-01-01', time()));
-            $end_time = $param['end_time'] ? strtotime(date('Y-m-01', $param['end_time']) . ' +1 month -1 day') : strtotime(date('Y-m-01', time()) . ' +1 month -1 day');
+            $start_time = $param['start_time'] ?strtotime($param['start_time'].'00:00:00'): strtotime(date('Y-01-01', time()));
+            $end_time = $param['end_time'] ? strtotime($param['end_time'].'23:59:59') : strtotime(date('Y-m-01', time()) . ' +1 month -1 day');
             $between_time = array($start_time, $end_time);
         }
 
@@ -214,13 +214,9 @@ class Index extends ApiCommon
         $param['user_id'] = $param['user_id'] ?: $userInfo['id'];;
         $businessModel = new \app\crm\model\Business();
         $param['merge'] = 1;
-        if($param['dataType']==1){
-            $userIds[] = $param['user_id'];
-        }elseif($param['dataType']==2){
-            $param['perUserIds'] = getSubUserId(true,0,$param['user_id']);
-        }
-        if ($param['dataType'] == 3 || $param['dataType'] == 4) {
-            $param['structure_id'] = $userInfo['structure_id'];
+        if($param['start_time'] && $param['end_time']){
+            $param['start_time']=$param['start_time'].' 00:00:00';
+            $param['end_time']=$param['end_time'].' 23:59:59';
         }
         $list = $businessModel->getFunnel($param);
         return resultArray(['data' => $list]);
@@ -238,12 +234,21 @@ class Index extends ApiCommon
         //统计条件
         $param = $this->param;
         $userInfo = $this->userInfo;
-        $userWhere['type']=3;
         $userWhere['status']=$param['label'];
-        $userIds = [];
         if ($param['dataType'] == 3 || $param['dataType'] == 4) {
-            $param['structure_id'] = $userInfo['structure_id'];
             $userWhere['type']=2;
+        }else{
+            $userWhere['type']=3;
+        }
+        if ($param['type']) {
+            $last_where_contract = getTimeByType($param['type']);
+            $userWhere['year']=date('Y',$last_where_contract[0]);
+            $time = getTimeArray();
+        } else {
+            //自定义时间
+            $param['start_time']=$param['start_time']?$param['start_time'].' 00:00:00':0;
+            $param['end_time']=$param['end_time'].' 23:59:59';
+            $time = getTimeArray(strtotime($param['start_time']),strtotime($param['end_time']));
         }
         $whereArr = $adminModel->getWhere($param, 1, '');
         if($param['user_id']){
@@ -251,26 +256,13 @@ class Index extends ApiCommon
         }elseif ($param['structure_id']){
             $userWhere['type']=2;
         }
-        $param['user_id'] = $param['user_id'] ?: $userInfo['id'];
-        if ($param['dataType'] == 1) {
-            $userIds[] = $param['user_id'];
-        } else {
-            $userIds = $whereArr['userIds'];
-        }
-        if (!isset($param['user_id'])) {
+        $userIds = $whereArr['userIds'];
+        if (!empty($param['user_id'])) {
             $userWhere['obj_id'] = $param['user_id'];
         } else {
             $userWhere['obj_id'] = ['in', $userIds];
         }
-        if (!empty($param['type'])) {
-            $last_where_contract = getTimeByType($param['type']);
-            $userWhere['year']=date('Y',$last_where_contract[0]);
-        } else {
-            //自定义时间
-            $userWhere['year']=$param['start_time'] ?date('Y',$param['start_time']): strtotime(date('Y', time()));
-        }
         //时间
-        $time = getTimeArray();
         $ax = 7;
         if ($time['time_format'] == '%Y-%m-%d') {
             $ax = 10;
@@ -314,6 +306,7 @@ class Index extends ApiCommon
         }
         $list = array();
         $money = '0.00';
+        
         foreach ($time['list'] as $val) {
             $item = [];
             $item['type'] = $val['type'];
@@ -322,8 +315,10 @@ class Index extends ApiCommon
 
             $achievement=Db::name('crm_achievement')->where($userWhere)->select();
             $data_time=date('m',strtotime($val['type']));
+            $num='';
             foreach ($achievement as $val){
-                    $item['achievement']=$val[$this->monthName[$data_time]];
+                $num+=(int)$val[$this->monthName[$data_time]];
+                    $item['achievement']=$num;
             }
             $list[] = $item;
         }
@@ -342,6 +337,10 @@ class Index extends ApiCommon
     {
         $param = $this->param;
         $adminModel = new \app\admin\model\Admin();
+        if($param['start_time'] && $param['end_time']){
+            $param['start_time']=$param['start_time'].'00:00:00';
+            $param['end_time']=$param['end_time'].'23:59:59';
+        }
         $whereArr = $adminModel->getWhere($param, '', ''); //统计条件
         $userIds = $whereArr['userIds'];
         $where = [];
@@ -367,6 +366,7 @@ class Index extends ApiCommon
     {
         $param = $this->param;
         $adminModel = new \app\admin\model\Admin();
+        
         $whereArr = $adminModel->getWhere($param, '', ''); //统计条件
         $userIds = $whereArr['userIds'];
         $where = [];
@@ -537,7 +537,10 @@ class Index extends ApiCommon
         $types = $param['types'];
         $userInfo = $this->userInfo;
         $user_id = $param['user_id'] ? : $userInfo['id'];
-
+        if($param['start_time'] && $param['end_time']){
+            $param['start_time']=$param['start_time'].' 00:00:00';
+            $param['end_time']=$param['end_time'].' 23:59:59';
+        }
         $whereArr = $adminModel->getWhere($param, 1, ''); //统计条件
         $userIds = $whereArr['userIds'];
         $between_time = $whereArr['between_time'];        
@@ -664,7 +667,7 @@ class Index extends ApiCommon
         // Db::query('SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;');
         $param = $this->param;
         $userInfo = $this->userInfo;
-        $param['user_id'] = $userInfo['id'];
+        $param['user_id'] = $param['user_id']?:$userInfo['id'];
         $indexModel = new IndexLogic;
         $data = $indexModel->ranking($param);
         return resultArray(['data' => $data]);
@@ -678,7 +681,7 @@ class Index extends ApiCommon
     {
         $param = $this->param;
         $userInfo = $this->userInfo;
-        $param['user_id'] = $userInfo['id'];
+        $param['user_id'] = $param['user_id']?:$userInfo['id'];
         $indexModel = new IndexLogic;
         $data = $indexModel->queryDataInfo($param);
         return resultArray(['data' => $data]);
@@ -692,10 +695,6 @@ class Index extends ApiCommon
         $param = $this->param;
         $userInfo = $this->userInfo;
         $param['user_id'] = $param['user_id'] ?: $userInfo['id'];
-
-        if ($param['dataType'] == 3 || $param['dataType'] == 4) {
-            $param['structure_id'] = $userInfo['structure_id'];
-        }
         $indexModel = new IndexLogic;
         $data = $indexModel->businessList($param);
         return resultArray(['data' => $data]);
@@ -752,14 +751,7 @@ class Index extends ApiCommon
     public function activityList(){
         $param = $this->param;
         $userInfo = $this->userInfo;
-        $param['user']=$param['user_id'];
         $param['id']=$userInfo['id'];
-        if ($param['dataType'] == 1) {
-            $param['user_id']=$param['user_id']?:$userInfo['id'];
-        }
-        if ($param['dataType'] == 3 || $param['dataType'] == 4) {
-            $param['structure_id'] = $userInfo['structure_id'];
-        }
         $indexLogic=new IndexLogic();
         $data=$indexLogic->activityList($param);
         return resultArray(['data'=>$data]);

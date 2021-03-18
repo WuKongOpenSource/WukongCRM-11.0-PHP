@@ -59,8 +59,7 @@ class Examine extends Common
         $userIds = $whereData['userIds'];        
 
         //时间
-        $time_array = getTimeArray();
-
+       
         $category_list = db('oa_examine_category')
             ->where(['status' => 1,'is_deleted' => ['neq',1]])
             ->field('category_id,title')
@@ -75,7 +74,7 @@ class Examine extends Common
         
         $sql = OaExamineModel::field($fields)
             ->where([
-                'create_time' => ['BETWEEN', $time_array['between']],
+                'create_time' => ['BETWEEN', $whereData['between_time']],
                 'create_user_id' => ['IN', $userIds],
                 'check_status' => ['neq', 4]
             ])

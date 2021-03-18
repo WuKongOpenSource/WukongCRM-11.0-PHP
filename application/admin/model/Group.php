@@ -117,7 +117,9 @@ class Group extends Common
             }
             $param['rules'] = arrayToString(array_unique($rulesParam));
         }
-
+        if($param['title']){
+        	unset($param['rules']);
+        }
 		$flag = $this->where('id = '.$group_id)->update($param);
 		if ($flag) {
 			return true;

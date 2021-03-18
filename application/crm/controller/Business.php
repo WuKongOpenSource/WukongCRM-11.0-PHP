@@ -8,6 +8,7 @@
 namespace app\crm\controller;
 
 use app\admin\controller\ApiCommon;
+use app\crm\traits\SearchConditionTrait;
 use app\crm\traits\StarTrait;
 use think\Hook;
 use think\Request;
@@ -15,7 +16,7 @@ use think\Db;
 
 class Business extends ApiCommon
 {
-    use StarTrait;
+    use StarTrait, SearchConditionTrait;
 
     /**
      * 用于判断权限
@@ -93,7 +94,7 @@ class Business extends ApiCommon
         $roPre = $userModel->rwPre($userInfo['id'], $data['ro_user_id'], $data['rw_user_id'], 'read');
         $rwPre = $userModel->rwPre($userInfo['id'], $data['ro_user_id'], $data['rw_user_id'], 'update');        
         if (!in_array($data['owner_user_id'],$auth_user_ids) && !$rwPre && !$roPre) {
-            $authData['dataAuth'] = 0;
+            $authData['dataAuth'] = (int)0;
             return resultArray(['data' => $authData]);
         }        
         //商机状态组
@@ -212,7 +213,7 @@ class Business extends ApiCommon
     public function statusList()
     {
         $businessStatusModel = model('BusinessStatus');
-        $key = 'BI_queryCache_StatusList_Data1';
+        $key = 'BI_queryCache_StatusList_Data';
         $list = cache($key);
         if (!$list) {
             $userInfo = $this->userInfo;
@@ -225,7 +226,7 @@ class Business extends ApiCommon
             foreach ($list as $k=>$v) {
                 $list[$k]['statusList'] = $businessStatusModel->getDataList($v['type_id']);
             }
-            cache($key, $list, true);
+            cache($key, $list, config('business_status_cache_time'));
         }
 
         return resultArray(['data' => $list]);
@@ -415,7 +416,7 @@ class Business extends ApiCommon
                 'create_user_id'   => $businessInfo['owner_user_id'],
                 'update_time'      => time(),
                 'create_time'      => time(),
-                'customer_ids'     => $businessInfo['customer_id']
+                'customer_ids'     => ',' . $businessInfo['customer_id'] . ','
             ]);
 
 			//推进记录添加
@@ -426,7 +427,18 @@ class Business extends ApiCommon
             $temp['owner_user_id'] = $userInfo['id'];
 			$temp['remark'] = $param['remark'] ? : '';
 			Db::name('CrmBusinessLog')->insert($temp);
-            return resultArray(['data' => '推进成功']);
+
+			# 返回商机阶段数据
+			$typeId = db('crm_business')->where('business_id', $param['business_id'])->value('type_id');
+			$businessStatus = db('crm_business_status')->where('type_id', $typeId)->select();
+			$result = [
+			    'business_id' => $param['business_id'],
+                'type_id'     => $typeId,
+                'status_id'   => $param['status_id'],
+                'status_list' => $businessStatus
+            ];
+
+            return resultArray(['data' => $result]);
         }
     }
     
@@ -523,17 +535,25 @@ class Business extends ApiCommon
 
         $businessId = $this->param['business_id'];
 
+        $userInfo = $this->userInfo;
+
+        # 查询联系人和商机关联数据
+        $contactsIds = Db::name('crm_contacts_business')->where('business_id', $businessId)->column('contacts_id');
+
         # 联系人
-        $contactsCount = Db::name('crm_contacts_business')->alias('business')
-            ->join('__CRM_CONTACTS__ contacts', 'contacts.contacts_id = business.contacts_id')
-            ->join('__CRM_CUSTOMER__ customer', 'customer.customer_id = contacts.customer_id')
-            ->where('business_id', $businessId)->count();
+        $contactsAuth = $this->getContactsSearchWhere($userInfo['id']);
+        $contactsCount = Db::name('crm_contacts')->whereIn('contacts_id', $contactsIds)->where($contactsAuth)->count();
 
         # 合同
-        $contractCount = Db::name('crm_contract')->where('business_id', $businessId)->count();
+        $contractAuth = $this->getContractSearchWhere($userInfo['id']);
+        $contractCount = Db::name('crm_contract')->where('business_id', $businessId)->where($contractAuth)->count();
+
+        # 查询商机和产品的关联表
+        $productIds = Db::name('crm_business_product')->where('business_id', $businessId)->column('product_id');
 
         # 产品
-        $productCount = Db::name('crm_business_product')->where('business_id', $businessId)->count();
+        $productAuth = $this->getProductSearchWhere();
+        $productCount = Db::name('crm_product')->whereIn('product_id', $productIds)->whereIn('owner_user_id', $productAuth)->count();
 
         # 附件
         $fileCount = Db::name('crm_business_file')->alias('business')->join('__ADMIN_FILE__ file', 'file.file_id = business.file_id', 'LEFT')->where('business_id', $businessId)->count();

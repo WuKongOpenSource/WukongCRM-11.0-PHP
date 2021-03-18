@@ -18,21 +18,25 @@ class WorkLogic
     public function index($param)
     {
         # 排序
-        $orderField = 'work_id';
+        $orderField = 'w.work_id';
         $orderSort = 'asc';
         if (!empty($param['sort_type']) && $param['sort_type'] == 1) {
-            $orderField = 'work_id';
+            $orderField = 'w.work_id';
             $orderSort = 'asc';
         }
         if (!empty($param['sort_type']) && $param['sort_type'] == 2) {
-            $orderField = 'work_id';
+            $orderField = 'w.work_id';
             $orderSort = 'desc';
         }
         if (!empty($param['sort_type']) && $param['sort_type'] == 3) {
-            $orderField = 'update_time';
+            $orderField = 'w.update_time';
             $orderSort = 'desc';
         }
-        
+        if (!empty($param['sort_type']) && $param['sort_type'] == 4) {
+            $orderField = 'o.order';
+            $orderSort = 'asc';
+        }
+
         # 搜索
         $searchWhere = '';
         $dateWhere = [];
@@ -51,59 +55,90 @@ class WorkLogic
         switch ($type) {
             case 1 :
                 # 今天
-                $dateWhere['update_time'][] = ['egt', strtotime(date('Y-m-d 00:00:00'))];
-                $dateWhere['update_time'][] = ['elt', strtotime(date('Y-m-d 23:59:59'))];
+                $dateWhere['w.update_time'][] = ['egt', strtotime(date('Y-m-d 00:00:00'))];
+                $dateWhere['w.update_time'][] = ['elt', strtotime(date('Y-m-d 23:59:59'))];
                 break;
             case 2 :
                 # 上周
-                $dateWhere['update_time'][] = ['egt', strtotime('last week monday')];
-                $dateWhere['update_time'][] = ['elt', strtotime(date('Y-m-d 23:59:59', strtotime('last week sunday')))];
+                $dateWhere['w.update_time'][] = ['egt', strtotime('last week monday')];
+                $dateWhere['w.update_time'][] = ['elt', strtotime(date('Y-m-d 23:59:59', strtotime('last week sunday')))];
                 break;
             case 3 :
                 # 上月
-                $dateWhere['update_time'][] = ['egt', strtotime(date('Y-m-01 00:00:00', strtotime('last month')))];
-                $dateWhere['update_time'][] = ['elt', strtotime(date('Y-m-d 23:59:59', strtotime('Last day of last month')))];
+                $dateWhere['w.update_time'][] = ['egt', strtotime(date('Y-m-01 00:00:00', strtotime('last month')))];
+                $dateWhere['w.update_time'][] = ['elt', strtotime(date('Y-m-d 23:59:59', strtotime('Last day of last month')))];
                 break;
             case 4 :
                 # 去年
-                $dateWhere['update_time'][] = ['egt', strtotime(date('Y-01-01 00:00:00', strtotime('last year')))];
-                $dateWhere['update_time'][] = ['elt', strtotime(date('Y-12-31 23:59:59', strtotime('last year')))];
+                $dateWhere['w.update_time'][] = ['egt', strtotime(date('Y-01-01 00:00:00', strtotime('last year')))];
+                $dateWhere['w.update_time'][] = ['elt', strtotime(date('Y-12-31 23:59:59', strtotime('last year')))];
         }
         
         # 时间区间
-        if (!empty($startTime)) $dateWhere['update_time'] = ['egt', strtotime($startTime . '00:00:00')];
-        if (!empty($endTime)) $dateWhere['update_time'] = ['elt', strtotime($endTime . '23:59:59')];
+        if (!empty($startTime)) $dateWhere['w.update_time'] = ['egt', strtotime($startTime . '00:00:00')];
+        if (!empty($endTime)) $dateWhere['w.update_time'] = ['elt', strtotime($endTime . '23:59:59')];
         
         # 搜索内容
-        if ($search) $searchWhere = '(name like "%' . $search . '%") OR (description like "%' . $search . '%")';
+        if ($search) $searchWhere = '(w.name like "%' . $search . '%") OR (w.description like "%' . $search . '%")';
         
         # 成员
         if (!empty($ownerUserId)) {
             $userIds = Db::name('work_user')->whereIn('user_id', $ownerUserId)->column('work_id');
-            $userWhere['work_id'] = ['in', $userIds];
+            $userWhere['w.work_id'] = ['in', $userIds];
         }
         
         $userModel = new \app\admin\model\User();
         $perUserIds = $userModel->getUserByPer('work', 'work', 'index');
         $authUser = array_unique(array_merge([$param['user_id']], $perUserIds));
-        
-        $data = Db::name('work')
-            ->where(function ($query) {
-                $query->where('status', 1);
-                $query->where('ishidden', 0);
-            })
-            ->where(function ($query) use ($param, $authUser) {
-                $query->whereOr(['create_user_id' => ['in', $authUser]]);
-                $query->whereOr('is_open', 1);
-                $query->whereOr(function ($query) use ($param) {
-                    $query->where('is_open', 0);
-                    $query->where('owner_user_id', 'like', '%' . $param['user_id'] . '%');
-                });
-            })
-            ->where($searchWhere)
-            ->where($dateWhere)
-            ->where($userWhere)
-            ->order($orderField, $orderSort)->select();
+
+        if ($param['sort_type'] == 4 && db('work_order')->where('user_id', $param['user_id'])->count() > 0) {
+            # 选择了按手动拖动排序，并且手动排过序。
+            $data = Db::name('work')->alias('w')
+                    ->field('w.*')
+                    ->join('__WORK_ORDER__ o', 'o.work_id = w.work_id', 'left')
+                    ->where(function ($query) {
+                        $query->where('status', 1);
+                        $query->where('ishidden', 0);
+                    })
+                    ->where(function ($query) use ($param, $authUser) {
+                        $query->whereOr(['create_user_id' => ['in', $authUser]]);
+                        $query->whereOr('is_open', 1);
+                        $query->whereOr(function ($query) use ($param) {
+                            $query->where('is_open', 0);
+                            $query->where('owner_user_id', 'like', '%' . $param['user_id'] . '%');
+                        });
+                    })
+                    ->where('o.user_id', $param['user_id'])
+                    ->where($searchWhere)
+                    ->where($dateWhere)
+                    ->where($userWhere)
+                    ->order($orderField, $orderSort)->select();
+        } else {
+            # 未手动排过序，如果选择了手动排序选项
+            if ($param['sort_type'] == 4) {
+                $orderField = 'w.work_id';
+                $orderSort = 'asc';
+            }
+
+            $data = Db::name('work')->alias('w')
+                    ->field('w.*')
+                    ->where(function ($query) {
+                        $query->where('status', 1);
+                        $query->where('ishidden', 0);
+                    })
+                    ->where(function ($query) use ($param, $authUser) {
+                        $query->whereOr(['create_user_id' => ['in', $authUser]]);
+                        $query->whereOr('is_open', 1);
+                        $query->whereOr(function ($query) use ($param) {
+                            $query->where('is_open', 0);
+                            $query->where('owner_user_id', 'like', '%' . $param['user_id'] . '%');
+                        });
+                    })
+                    ->where($searchWhere)
+                    ->where($dateWhere)
+                    ->where($userWhere)
+                    ->order($orderField, $orderSort)->select();
+        }
 
         foreach ($data as $key => $value) {
             $data[$key]['authList']['project'] = $this->getRuleList($value['work_id'], $param['user_id'], $value['group_id']);
@@ -111,94 +146,33 @@ class WorkLogic
         
         return $data;
     }
-    
+
     /**
-     * @param $param work 排序数组值 user_id用户
+     * 手动设置项目顺序
      *
-     * @author      alvin guogaobo
-     * @version     1.0 版本号
-     * @since       2021/2/23 15:42
+     * @param $workIds 项目ID数组
+     * @param $userId 当前用户ID
+     * @author fanqi
+     * @date 2021-03-11
+     * @return bool
      */
-//    public function workStart($param)
-//    {
-//        $item = Db::name('workStart')->where('user_id', $param['user_id'])->find();
-//        $data = [];
-//        $data['datas'] = $param['work'];
-//        $data['user_id'] = $param['user_id'];
-//        if (!$item) {
-//            return Db::name('workStart')->insertGetId($data);
-//        } else {
-//            return Db::name('workStart')->where('user_id', $param['user_id'])->update([$data]);
-//        }
-//    }
-    
-    /**
-     * 根据数组指定键名排序数组
-     * @param $array array  被排序数组
-     * @param $key_name string 数组键名
-     * @param $sort   string  desc|asc  升序或者降序
-     * @return array 返回排序后的数组
-     */
-//    function gw_sort($array, $param)
-//    {
-//        $whilr = array
-//        (
-//            [0] => ['work_id' => 5,
-//                'name' => 222,
-//                'status' => 1,
-//                'create_time' => 1613628469,
-//                'create_user_id' => 7,
-//                'description' => 222,
-//                'color' => '#53D397',
-//                'is_open' => 1,
-//                'owner_user_id' => ',1,2,3,4,5,7,',
-//                'ishidden' => 0,
-//                'archive_time' => 0,
-//                'group_id' => 12,
-//                'cover_url' => 'http://192.168.1.31/72crm-php/public/uploads/20210218/12ece02733c8684ce987f207062173b5.png',
-//                'update_time' => 1613629916,
-//                'is_follow' => 0,
-//                'is_system_cover' => 0,],
-//
-//            [1] => [
-//
-//                'work_id' => 7,
-//                'name' => '啊啊',
-//                'status' => 1,
-//                'create_time' => 1614059388,
-//                'create_user_id' => 1,
-//                'description' => '',
-//                'color' => '#53D397',
-//                'is_open' => 0,
-//                'owner_user_id' => ',1,3,',
-//                'ishidden' => 0,
-//                'archive_time' => 0,
-//                'group_id' => 12,
-//                'cover_url' => 'https://file.72crm.com/static/pc/images/pm/project-cover-1.jpg',
-//                'update_time' => 1614059926,
-//                'is_follow' => 0,
-//                'is_system_cover' => 1,
-//            ]
-//
-//        );
-//        $item = Db::name('workStart')->where('user_id', $param['user_id'])->find();
-//        $key_name_array = array();//保存被排序数组键名
-//        foreach ($whilr as $key => $val) {
-//            foreach ($item as $v){
-//                $key_name_array[] = array_merge(array_flip($val), $v);
-//            }
-//        }
-//        $key_name_array = array_flip($key_name_array);//反转键名和值得到数组排序后的位置
-//        $result = array();
-//        foreach($array as $k=>$v){
-//            foreach ($item as $vall){
-//                $this_key_name_value = $v[$vall];//当前数组键名值依次是20,10,30
-//                $save_position = $key_name_array[$this_key_name_value];//获取20,10,30排序后存储位置
-//                $result[$save_position] = $v;//当前项存储到数组指定位置
-//            }
-//        }
-//        ksort($result);
-//
-//        return $result;
-//    }
+    public function setWorkOrder($workIds, $userId)
+    {
+        $data = [];
+
+        foreach ($workIds AS $key => $value) {
+            $data[] = [
+                'work_id' => $value,
+                'user_id' => $userId,
+                'order'   => $key + 1
+            ];
+        }
+
+        if (!empty($data)) {
+            if (db('work_order')->where('user_id', $userId)->delete() === false) return false;
+            if (db('work_order')->insertAll($data) === false) return false;
+        }
+
+        return true;
+    }
 }

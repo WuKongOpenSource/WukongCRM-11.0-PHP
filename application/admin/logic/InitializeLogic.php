@@ -80,7 +80,22 @@ class InitializeLogic
             # 查询产品文件数据
             $productFileInfo = $this->getFileList($productFileIds);
 
+            # 获取产品图和产品详情图附件ID
+            $productDetailsIds  = [];
+            $productDetailFiles = Db::name('crm_product')->field(['cover_images', 'details_images'])->select();
+            foreach ($productDetailFiles AS $key => $value) {
+                if (!empty($value['cover_images'])) $productDetailsIds = array_merge($productDetailsIds, explode(',', $value['cover_images']));
+                if (!empty($value['details_images'])) $productDetailsIds = array_merge($productDetailsIds, explode(',', $value['details_images']));
+            }
+
+            # 合并附件ID数据
+            $productFileIds = array_merge($productFileIds, $productDetailsIds);
+
+            # 获取产品图和产品详情图文件数据
+            $productDetailsFiles = $this->getFileList($productDetailsIds);
+
             # 合并附件数据
+            $files = array_merge($files, $productDetailsFiles);
             $files = array_merge($files, $productFileInfo);
 
             # 删除产品分类表
@@ -383,6 +398,41 @@ class InitializeLogic
             Db::query("TRUNCATE TABLE ".$prefix."oa_event_relation");
 
             # ------ 清除跟客户模块有关的管理数据表 END ------ #
+
+
+            # ------ 清除自动编号数据 START ------ #
+            $time = time();
+            Db::query("TRUNCATE TABLE ".$prefix."crm_number_sequence");
+            Db::query("INSERT INTO `".$prefix."crm_number_sequence` VALUES (1, 1, 1, 'HT', null, null, null, null, ".$time.", 1, null, 0, 1)");
+            Db::query("INSERT INTO `".$prefix."crm_number_sequence` VALUES (2, 2, 2, 'yyyyMMdd', null, null, null, null, ".$time.", 1, null, 0, 1)");
+            Db::query("INSERT INTO `".$prefix."crm_number_sequence` VALUES (3, 3, 3, 1, 1, 1, 1, ".$time.", ".$time.", 1, null, 0, 1)");
+            Db::query("INSERT INTO `".$prefix."crm_number_sequence` VALUES (4, 1, 1, 'HK', null, null, null, null, ".$time.", 1, null, 0, 2)");
+            Db::query("INSERT INTO `".$prefix."crm_number_sequence` VALUES (5, 2, 2, 'yyyyMMdd', null, null, null, null, ".$time.", 1, null, 0, 2)");
+            Db::query("INSERT INTO `".$prefix."crm_number_sequence` VALUES (6, 3, 3, 1, 1, 1, 1, ".$time.", ".$time.", 1, null, 0, 2)");
+            Db::query("INSERT INTO `".$prefix."crm_number_sequence` VALUES (7, 1, 1, 'HF', null, null, null, null, ".$time.", 1, null, 0, 3)");
+            Db::query("INSERT INTO `".$prefix."crm_number_sequence` VALUES (8, 2, 2, 'yyyyMMdd', null, null, null, null, ".$time.", 1, null, 0, 3)");
+            Db::query("INSERT INTO `".$prefix."crm_number_sequence` VALUES (9, 3, 3, 1, 1, 1, 1, ".$time.", ".$time.", 1, null, 0, 3)");
+            Db::query("INSERT INTO `".$prefix."crm_number_sequence` VALUES (10, 1, 2, 'yyyyMMdd', null, null, null, null, ".$time.", 1, null, 0, 4)");
+            Db::query("INSERT INTO `".$prefix."crm_number_sequence` VALUES (11, 2, 1, 'FP', null, null, null, null, ".$time.", 1, null, 0, 4)");
+            Db::query("INSERT INTO `".$prefix."crm_number_sequence` VALUES (12, 3, 3, 1, 1, 1, 1, ".$time.", ".$time.", 1, null, 0, 4)");
+            # ------ 清除自动编号数据 END ------ #
+
+
+            # ------ 设置跟进记录常用语 START ------ #
+            $phrase = ['电话无人接听', '客户无意向', '客户意向度适中，后续继续跟进', '客户意向度较强，成交几率较大'];
+            $phraseId = db('crm_config')->where('name', 'activity_phrase')->value('id');
+            if (!empty($phraseId)) {
+                db('crm_config')->where('id', $phraseId)->update([
+                    'value' => serialize($phrase)
+                ]);
+            } else {
+                db('crm_config')->insert([
+                    'name' => 'activity_phrase',
+                    'value' => serialize($phrase),
+                    'description' => '跟进记录常用语'
+                ]);
+            }
+            # ------ 设置跟进记录常用语 END ------ #
 
 
             # ------ 删除审批记录 START ------ #
@@ -831,6 +881,10 @@ class InitializeLogic
             Db::name('admin_message')->where('module_name', 'work')->delete();
             Db::name('admin_message')->where('module_name', 'oa')->where('controller_name', 'task')->delete();
             # ------ 清除评论和消息数据 END ------ #
+
+
+            # 清除任务关联客户模块表并重置字段ID
+            Db::query("TRUNCATE TABLE ".$prefix."task_relation");
 
 
             # ------ 重置附件表自增ID START ------ #

@@ -65,19 +65,23 @@ class Achievement extends ApiCommon
 	//员工业绩目标列表
 	public function indexForuser(AchievementLogic $achievementLogic)
     {
-//        $model = model('Achievement');
-//        $param = $this->param;
-//        $data = $model->getDataListForUser($param);
-//        return resultArray(['data' => $data]);
-        if (empty($this->param['year'])) return resultArray(['error' => '请选择年份！']);
-        if (empty($this->param['type'])) return resultArray(['error' => '请选择业绩类型']);
-        if (empty($this->param['structure_id']) && empty($this->param['user_id'])) {
-            return resultArray(['error' => '请选择部门或员工！']);
+        $model = model('Achievement');
+        $param = $this->param;
+        $data = $model->getDataListForUser($param);
+        # 剔除没有业绩目标的员工
+        foreach ($data AS $key => $value) {
+            if (empty((int)$value['yeartarget'])) unset($data[(int)$key]);
         }
-
-        $data = $achievementLogic->getEmployeeList($this->param);
-
-        return resultArray(['data' => $data]);
+        return resultArray(['data' => array_values($data)]);
+//        if (empty($this->param['year'])) return resultArray(['error' => '请选择年份！']);
+//        if (empty($this->param['type'])) return resultArray(['error' => '请选择业绩类型']);
+//        if (empty($this->param['structure_id']) && empty($this->param['user_id'])) {
+//            return resultArray(['error' => '请选择部门或员工！']);
+//        }
+//
+//        $data = $achievementLogic->getEmployeeList($this->param);
+//
+//        return resultArray(['data' => $data]);
     }
 
     /**

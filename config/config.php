@@ -14,7 +14,7 @@ return [
     // 应用命名空间
     'app_namespace'          => 'app',
     // 应用调试模式
-    'app_debug'              => false,
+    'app_debug'              => true,
     // 应用Trace
     'app_trace'              => false,
     // 应用模式状态
@@ -181,7 +181,7 @@ return [
 
     'cache'                  => [
         // 驱动方式
-        'type'   => 'File',
+        'type'   => 'redis',
         // 缓存保存目录
         'path'   => CACHE_PATH,
         // 缓存前缀
@@ -190,14 +190,8 @@ return [
         'expire' => 86400*30,
         // 禁用缓存子目录
         'cache_subdir' => false,
-        'redis' => [
-            'type' => 'redis',
-            'host' => '127.0.0.1', // 全局缓存有效期（0为永久有效）
-            'expire'=> 0,
-        // 缓存前缀
-            'prefix'=> 'think',
-
-        ],
+        // 密码
+        'password' => ''
     ],
 
     // +----------------------------------------------------------------------
@@ -266,5 +260,12 @@ return [
     'bi_cache_time' => 1800,
     // 商业智能慢查询查询时间（查询超过该时间进行数据缓存）（毫秒）
     'bi_slow_query_time' => 500,
-    'public_key' => 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAkqKFcAQtIp4rlkB5LOMnViyVY/hhA6x0R9ftwtEXsAFu4hBZrm9txdEvxSrDCUsx3Zwv/gdimeOzTtfSKffdoE/DwllNP9Zu6nsr2kGRgPrRwjtlO+j2FOM0b9UY1SQ/bWE+a9oQL2jL9xMSbtX1xG/+HcMo1bT+pa6FNQzs3egmvMt75/jaxINPSraj4kgNFawSBk7qDBEqDYiQwtPTuaNW1YZIs++/gZHsCRgGs/JrAbxNpl7+v/+Z503I3I2rs/8eUM5d16NXR8M7vtobUDCTIiQOgRahO8WMadgFlwavyVCYhy/TBXyj5RUfWaS26LrEN3vkj4TjoJu5m9LQ5QIDAQAB',  
+    // 导入缓存时间（秒）
+    'import_cache_time' => 1800,
+    // 导出缓存时间（秒）
+    'export_cache_time' => 1800,
+    // 商机状态组列表缓存时间（秒）
+    'business_status_cache_time' => 1800,
+
+    'public_key' => 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAkqKFcAQtIp4rlkB5LOMnViyVY/hhA6x0R9ftwtEXsAFu4hBZrm9txdEvxSrDCUsx3Zwv/gdimeOzTtfSKffdoE/DwllNP9Zu6nsr2kGRgPrRwjtlO+j2FOM0b9UY1SQ/bWE+a9oQL2jL9xMSbtX1xG/+HcMo1bT+pa6FNQzs3egmvMt75/jaxINPSraj4kgNFawSBk7qDBEqDYiQwtPTuaNW1YZIs++/gZHsCRgGs/JrAbxNpl7+v/+Z503I3I2rs/8eUM5d16NXR8M7vtobUDCTIiQOgRahO8WMadgFlwavyVCYhy/TBXyj5RUfWaS26LrEN3vkj4TjoJu5m9LQ5QIDAQAB',
 ];

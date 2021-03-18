@@ -193,7 +193,6 @@ class CommonLogic
         
         # 编辑参数
         $data = [];
-        $item=[];
         if (!empty($param['list'])) {
             foreach ($param['list'] as $key => $value) {
                 foreach ($value as $k => $v) {
@@ -204,48 +203,29 @@ class CommonLogic
                         # 处理产品类别
                         $categorys = explode(',', $v);
                         $data[$k] = $categorys[count($categorys) - 1];
-                    } elseif (in_array($k, $fileField)) {
-                        # 处理附件类型数据
-                        $fileArray = [];
-                        foreach ($v AS $kk => $vv) {
-                            if (!empty($vv['file_id'])) $fileArray[] = $vv['file_id'];
-                        }
-                        if (!empty($fileArray)) $data[$k] = arrayToString($fileArray);
-                    } elseif (in_array($k, $checkboxField)) {
-                        # 处理多选类型数据
-                        $data[$k] = arrayToString($v);
-                    } elseif (in_array($k, $userField)) {
-                        # 处理人员类型数据
-                        $userArray = [];
-                        foreach ($v AS $kk => $vv) {
-                           if (!empty($vv['id'])) $userArray[] = $vv['id'];
-                        }
-                        $data[$k] = !empty($userArray) ? arrayToString($userArray) : '';
-                    } elseif (in_array($k, $structureField)) {
-                        # 处理部门类型数据
-                        $structureArray = [];
-                        foreach ($v AS $kk => $vv) {
-                            if (!empty($vv['id'])) $structureArray[] = $vv['id'];
-                        }
-                        $data[$k] = !empty($structureArray) ? arrayToString($structureArray) : '';
+                    } elseif (in_array($k, $fileField) || in_array($k, $checkboxField) || in_array($k, $userField) || in_array($k, $structureField)) {
+                        # 处理附件、多选、人员、部门类型数据
+                        $data[$k] = !empty($v) ? arrayToString($v) : '';
                     } elseif ($types == 'crm_visit' && $k == 'contract_id') {
                         # 处理回访提交过来的合同编号
                         if (!empty($v[0]['contract_id'])) $data[$k] = $v[0]['contract_id'];
-                    }else {
+                    } else {
                         $data[$k] = $v;
                     }
+                    $item[$k]=$v;
                 }
-                $item=$value;
             }
             $data[$primaryKey]   = $actionId;
             $data['update_time'] = time();
         }
         $res = $model->update($data);
+        unset($data[$primaryKey]);
+        unset($data['update_time']);
         //详细信息修改新增操作记录
         if ($res) {
             //修改记录
             $user_id = $apiCommon->userInfo;
-            updateActionLog($user_id['id'], $types, $actionId, $info, $item);
+            updateActionLog($user_id['id'], $types, $actionId, $info, $data);
         }
         return $res;
     }

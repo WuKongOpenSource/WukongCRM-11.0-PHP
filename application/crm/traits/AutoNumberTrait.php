@@ -29,7 +29,31 @@ trait AutoNumberTrait
         $number = '';
         $data   = [];
 
-        $info = Db::name('crm_number_sequence')->where('number_type', $type)->where('status', 0)->select();
+        # 根据设置重置编号（不想改下面的代码，在这里在写一个，多公海版本出来后，用定时来做）
+        $list = Db::name('crm_number_sequence')->where('number_type', $type)->where('status', 0)->select();
+        foreach ($list AS $key => $value) {
+            if ($value['type'] == 3 && $value['reset'] != 0) {
+                # 1：每天；2：每月；3：每年；
+                $currentDate = [
+                    1 => date('Y-m-d'),
+                    2 => date('Y-m'),
+                    3 => date('Y')
+                ];
+                $lastDate = [
+                    1 => date('Y-m-d', $value['last_date']),
+                    2 => date('Y-m',   $value['last_date']),
+                    3 => date('Y',     $value['last_date'])
+                ];
+                
+                if ($currentDate[$value['reset']] != $lastDate[$value['reset']]) {
+                    Db::name('crm_number_sequence')->where('number_sequence_id', $value['number_sequence_id'])->update([
+                        'last_number' => 1
+                    ]);
+                }
+            }
+        }
+
+        $info = Db::name('crm_number_sequence')->where('number_type', $type)->order('sort', 'asc')->where('status', 0)->select();
 
         foreach ($info AS $key => $value) {
             # 文本

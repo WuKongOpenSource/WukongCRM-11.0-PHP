@@ -47,6 +47,7 @@ class Contract extends Common
     	$order_type = $request['order_type'];     	
     	$is_excel = $request['is_excel']; //导出
         $getCount = $request['getCount'];
+        $contractIdArray = $request['contractIdArray']; // 待办事项提醒参数
 
 		unset($request['scene_id']);
 		unset($request['search']);
@@ -55,6 +56,7 @@ class Contract extends Common
 		unset($request['order_type']);		  	
 		unset($request['is_excel']);
         unset($request['getCount']);
+        unset($request['contractIdArray']);
 
         $request = $this->fmtRequest( $request );
 
@@ -71,9 +73,25 @@ class Contract extends Common
                 $sceneMap = $sceneModel->getDefaultData('crm_contract', $user_id) ? : [];
             }
         }
-		if ($search) {
-			//普通筛选
-			$sceneMap['name'] = ['condition' => 'contains','value' => $search,'form_type' => 'text','name' => '合同名称'];
+        $searchWhere = [];
+		if ($search || $search == '0') {
+            //普通筛选
+		    $searchWhere = function ($query) use ($search) {
+		        $query->where(function ($query) use ($search){
+                    $query->whereLike('customer.name', '%' . $search . '%');
+                })->whereOr(function ($query) use ($search) {
+                    $query->whereLike('contract.num', '%' . $search . '%');
+                })->whereOr(function ($query) use ($search) {
+                    $query->whereLike('contract.name', '%' . $search . '%');
+                });
+            };
+//            if (db('crm_customer')->whereLike('name', '%' . $search . '%')->value('customer_id')) {
+//                $sceneMap['customer_name'] = ['condition' => 'contains', 'value' => $search, 'form_type' => 'text', 'name' => '客户名称'];
+//            } elseif (db('crm_contract')->whereLike('num', '%' . $search . '%')->value('contract_id')) {
+//                $sceneMap['num'] = ['condition' => 'contains', 'value' => $search, 'form_type' => 'text', 'name' => '合同编号'];
+//            } else {
+//                $sceneMap['name'] = ['condition' => 'contains', 'value' => $search, 'form_type' => 'text', 'name' => '合同名称'];
+//            }
 		}
 		$partMap = [];
 		//优先级：普通筛选>高级筛选>场景
@@ -128,12 +146,21 @@ class Contract extends Common
 		$userField = $fieldModel->getFieldByFormType('crm_contract', 'user');
 		$structureField = $fieldModel->getFieldByFormType('crm_contract', 'structure');  //部门类型
         $datetimeField = $fieldModel->getFieldByFormType('crm_contract', 'datetime'); //日期时间类型
+        # 处理人员和部门类型的排序报错问题(前端传来的是包含_name的别名字段)
+        $temporaryField = str_replace('_name', '', $order_field);
+        if (in_array($temporaryField, $userField) || in_array($temporaryField, $structureField)) {
+            $order_field = $temporaryField;
+        }
 		//排序
 		if ($order_type && $order_field) {
 			$order = $fieldModel->getOrderByFormtype('crm_contract','contract',$order_field,$order_type);
 		} else {
 			$order = 'contract.update_time desc';
 		}
+
+		# 待办事项查询参数
+        $dealtWhere = [];
+		if (!empty($contractIdArray)) $dealtWhere['contract.contract_id'] = ['in', $contractIdArray];
 				
 		$readAuthIds = $userModel->getUserByPer('crm', 'contract', 'read');
         $updateAuthIds = $userModel->getUserByPer('crm', 'contract', 'update');
@@ -144,15 +171,14 @@ class Contract extends Common
             ->join('__CRM_BUSINESS__ business','contract.business_id = business.business_id','LEFT')
             ->join('__CRM_CONTACTS__ contacts','contract.contacts_id = contacts.contacts_id','LEFT')
             // ->join('__CRM_RECEIVABLES_PLAN__ plan','contract.contract_id = plan.contract_id','LEFT')
-            ->where($map)->where($partMap)->where($authMap)->group('contract.contract_id')->count('contract.contract_id');
+            ->where($searchWhere)->where($map)->where($partMap)->where($authMap)->where($dealtWhere)->group('contract.contract_id')->count('contract.contract_id');
         if (!empty($getCount) && $getCount == 1) {
             $data['dataCount'] = !empty($dataCount) ? $dataCount : 0;
 			$contractMoney = $this->getContractMoney($map, $partMap, $authMap);
-	        $receivedMoney = $this->getReceivablesMoney($map, $partMap, $authMap);
 	        $data['extraData']['money'] = [
-	            'contractMoney'   => $this->getContractMoney($map, $partMap, $authMap),                        # 合同总金额
-	            'receivedMoney'   => $this->getReceivablesMoney($map, $partMap, $authMap),                     # 回款总金额
-	            'unReceivedMoney' => sprintf("%.2f", $contractMoney - $receivedMoney) # 未回款
+	            'contractMoney'   => $contractMoney['contractMoney'],    # 合同总金额
+	            'receivedMoney'   => $contractMoney['receivablesMoney'], # 回款总金额
+	            'unReceivedMoney' => $contractMoney['arrearsMoney']      # 未回款总金额
 	        ];         
             return $data;
         }
@@ -167,9 +193,11 @@ class Contract extends Common
 				->join('__CRM_CONTACTS__ contacts','contract.contacts_id = contacts.contacts_id','LEFT')	
 				// ->join('__CRM_RECEIVABLES_PLAN__ plan','contract.contract_id = plan.contract_id','LEFT')	
 				->join('CrmReceivables receivables','receivables.contract_id = contract.contract_id AND receivables.check_status = 2','LEFT')
-				->where($map)
+                ->where($searchWhere)
+                ->where($map)
 				->where($partMap)
 				->where($authMap)
+                ->where($dealtWhere)
         		->limit($request['offset'], $request['length'])
         		->field(array_merge($indexField, [
 					'customer.name' => 'customer_name',
@@ -188,11 +216,11 @@ class Contract extends Common
             $list[$k]['owner_user_name'] = !empty($list[$k]['owner_user_id_info']['realname']) ? $list[$k]['owner_user_id_info']['realname'] : '';
 			foreach ($userField as $key => $val) {
                 $usernameField  = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
-                $list[$k][$val] = implode($usernameField, ',');
+                $list[$k][$val.'_name'] = implode($usernameField, ',');
         	}
 			foreach ($structureField as $key => $val) {
                 $structureNameField = !empty($v[$val]) ? db('admin_structure')->whereIn('id', stringToArray($v[$val]))->column('name') : [];
-                $list[$k][$val]     = implode($structureNameField, ',');
+                $list[$k][$val.'_name'] = implode($structureNameField, ',');
         	}
             foreach ($datetimeField as $key => $val) {
                 $list[$k][$val] = !empty($v[$val]) ? date('Y-m-d H:i:s', $v[$val]) : null;
@@ -243,58 +271,78 @@ class Contract extends Common
         $data['list'] = $list;
         $data['dataCount'] = $dataCount ? : 0;
         $contractMoney = $this->getContractMoney($map, $partMap, $authMap);
-        $receivedMoney = $this->getReceivablesMoney($map, $partMap, $authMap);
         $data['extraData']['money'] = [
-            'contractMoney'   => $this->getContractMoney($map, $partMap, $authMap),                        # 合同总金额
-            'receivedMoney'   => $this->getReceivablesMoney($map, $partMap, $authMap),                     # 回款总金额
-            'unReceivedMoney' => sprintf("%.2f", $contractMoney - $receivedMoney) # 未回款
+            'contractMoney'   => $contractMoney['contractMoney'],    # 合同总金额
+            'receivedMoney'   => $contractMoney['receivablesMoney'], # 回款总金额
+            'unReceivedMoney' => $contractMoney['arrearsMoney']      # 未回款
         ];
 
         return $data;
     }
 
     /**
-     * 获取回款总金额
+     * 获取合同相关金额
      *
      * @param $map
      * @param $partMap
      * @param $authMap
-     * @return float|string
-     */
-    private function getReceivablesMoney($map, $partMap, $authMap)
-    {
-        $contractIds = db('crm_contract')
-            ->alias('contract')
-            ->join('__CRM_CUSTOMER__ customer','contract.customer_id = customer.customer_id','LEFT')
-            ->join('__CRM_BUSINESS__ business','contract.business_id = business.business_id','LEFT')
-            ->join('__CRM_CONTACTS__ contacts','contract.contacts_id = contacts.contacts_id','LEFT')
-            ->where('check_status', 2)->where($map)->where($partMap)->where($authMap)->column('contract.contract_id');
-        $contractIds = array_unique($contractIds);
-
-        $money = db('crm_receivables')->where('check_status', 2)->whereIn('contract_id', $contractIds)->sum('money');
-
-        return !empty($money) ? sprintf("%.2f", $money) : 0.00;
-    }
-
-
-    /**
-     * 获取合同总金额
-     *
-     * @param $map
-     * @param $partMap
-     * @param $authMap
-     * @return float|string
+     * @author fanqi
+     * @date 2021-03-03
+     * @return array
      */
     private function getContractMoney($map, $partMap, $authMap)
     {
-        $money = db('crm_contract')
+        $contractMoney    = 0.00; # 合同总金额
+        $receivablesMoney = 0.00; # 回款总金额
+        $arrearsMoney     = 0.00; # 未回款总金额
+
+        # 过滤审核状态参数，只查询审核成功的数据。
+        foreach ($map AS $key => $value) {
+            if ($key === 'contract.check_status') unset($map[$key]);
+        }
+
+        $data = db('crm_contract')
             ->alias('contract')
             ->join('__CRM_CUSTOMER__ customer','contract.customer_id = customer.customer_id','LEFT')
             ->join('__CRM_BUSINESS__ business','contract.business_id = business.business_id','LEFT')
             ->join('__CRM_CONTACTS__ contacts','contract.contacts_id = contacts.contacts_id','LEFT')
-            ->where('check_status', 2)->where($map)->where($partMap)->where($authMap)->sum('contract.money');
+            ->join('__CRM_RECEIVABLES__ receivables','receivables.contract_id = contract.contract_id','LEFT')
+            ->where('contract.check_status', 2)
+            ->where($map)
+            ->where($partMap)
+            ->where($authMap)
+            ->field(['contract.contract_id', 'contract.money AS contractMoney', 'receivables.money AS receivablesMoney', 'receivables.check_status AS receivablesStatus'])
+            ->select();
 
-        return !empty($money) ? sprintf("%.2f", $money) : 0.00;
+        # 将同一合同下的回款进行整合
+        $result = [];
+        foreach ($data AS $key => $value) {
+            # 同属于一个合同下的回款
+            if (!empty($result[$value['contract_id']])) {
+                if ($value['receivablesStatus'] == 2) $result[$value['contract_id']]['receivablesMoney'] += $value['receivablesMoney'];
+                continue;
+            }
+
+            $result[$value['contract_id']] = [
+                'contractMoney'    => $value['contractMoney'],
+                'receivablesMoney' => $value['receivablesStatus'] == 2 ? $value['receivablesMoney'] : 0,
+            ];
+        }
+
+        # 统计各金额总和
+        foreach ($result AS $key => $value) {
+            $contractMoney    += $value['contractMoney'];    # 合同金额
+            $receivablesMoney += $value['receivablesMoney']; # 回款金额
+
+            # 未回款金额
+            if ($value['contractMoney'] > $value['receivablesMoney']) $arrearsMoney += $value['contractMoney'] - $value['receivablesMoney'];
+        }
+
+        return [
+            'contractMoney'    => sprintf("%.2f", $contractMoney),
+            'receivablesMoney' => sprintf("%.2f", $receivablesMoney),
+            'arrearsMoney'     => sprintf("%.2f", $arrearsMoney)
+        ];
     }
 
 	//根据IDs获取数组
@@ -383,10 +431,23 @@ class Contract extends Common
                 'create_user_id'   => $param['create_user_id'],
                 'update_time'      => time(),
                 'create_time'      => time(),
-                'customer_ids'     => $param['customer_id'],
-                'contacts_ids'     => $param['contacts_id'],
-                'business_ids'     => $param['business_id']
+                'customer_ids'     => ',' . $param['customer_id'] . ',',
+                'contacts_ids'     => ',' . $param['contacts_id'] . ',',
+                'business_ids'     => ',' . $param['business_id'] . ','
             ]);
+
+            # 创建待办事项的关联数据
+            $checkUserIds = db('crm_contract')->where('contract_id', $data['contract_id'])->value('check_user_id');
+            $checkUserIdArray = stringToArray($checkUserIds);
+            $dealtData = [];
+            foreach ($checkUserIdArray AS $kk => $vv) {
+                $dealtData[] = [
+                    'types'    => 'crm_contract',
+                    'types_id' => $data['contract_id'],
+                    'user_id'  => $vv
+                ];
+            }
+            if (!empty($dealtData)) db('crm_dealt_relation')->insertAll($dealtData);
 
 			return $data;
 		} else {
@@ -456,6 +517,22 @@ class Contract extends Common
             }		
 			$data = [];
 			$data['contract_id'] = $contract_id;
+
+			# 删除待办事项的关联数据
+            db('crm_dealt_relation')->where(['types' => ['eq', 'crm_contract'], 'types_id' => ['eq', $data['contract_id']]])->delete();
+            # 创建待办事项的关联数据
+            $checkUserIds = db('crm_contract')->where('contract_id', $data['contract_id'])->value('check_user_id');
+            $checkUserIdArray = stringToArray($checkUserIds);
+            $dealtData = [];
+            foreach ($checkUserIdArray AS $kk => $vv) {
+                $dealtData[] = [
+                    'types'    => 'crm_contract',
+                    'types_id' => $data['contract_id'],
+                    'user_id'  => $vv
+                ];
+            }
+            if (!empty($dealtData)) db('crm_dealt_relation')->insertAll($dealtData);
+
 			return $data;
 		} else {
 			$this->error = '编辑失败';

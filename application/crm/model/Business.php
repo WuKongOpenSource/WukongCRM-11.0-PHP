@@ -45,6 +45,8 @@ class Business extends Common
         $order_type = $request['order_type'];
         $is_excel = $request['is_excel']; //导出
         $getCount = $request['getCount'];
+        $businessTypeId = $request['typeId']; // 针对mobile
+        $businessStatusId = $request['statusId']; // 针对mobile
         unset($request['scene_id']);
         unset($request['search']);
         unset($request['user_id']);
@@ -53,6 +55,8 @@ class Business extends Common
         unset($request['order_type']);
         unset($request['is_excel']);
         unset($request['getCount']);
+        unset($request['typeId']);
+        unset($request['statusId']);
 
         $request = $this->fmtRequest($request);
         $requestMap = $request['map'] ?: [];
@@ -68,7 +72,7 @@ class Business extends Common
                 $sceneMap = $sceneModel->getDefaultData('crm_business', $user_id) ?: [];
             }
         }
-        if ($search) {
+        if ($search || $search == '0') {
             //普通筛选
             $sceneMap['name'] = ['condition' => 'contains', 'value' => $search, 'form_type' => 'text', 'name' => '商机名称'];
         }
@@ -142,12 +146,20 @@ class Business extends Common
         $userField = $fieldModel->getFieldByFormType('crm_business', 'user'); //人员类型
         $structureField = $fieldModel->getFieldByFormType('crm_business', 'structure');  //部门类型
         $datetimeField = $fieldModel->getFieldByFormType('crm_business', 'datetime'); //日期时间类型
+        # 处理人员和部门类型的排序报错问题(前端传来的是包含_name的别名字段)
+        $temporaryField = str_replace('_name', '', $order_field);
+        if (in_array($temporaryField, $userField) || in_array($temporaryField, $structureField)) {
+            $order_field = $temporaryField;
+        }
         //排序
         if ($order_type && $order_field) {
             $order = $fieldModel->getOrderByFormtype('crm_business', 'business', $order_field, $order_type);
         } else {
             $order = 'business.update_time desc';
         }
+        # 商机组和商机状态搜索
+        if (!empty($businessTypeId))   $map['business.type_id']   = ['eq', $businessTypeId];
+        if (!empty($businessStatusId)) $map['business.status_id'] = ['eq', $businessStatusId];
 
         $readAuthIds = $userModel->getUserByPer('crm', 'business', 'read');
         $updateAuthIds = $userModel->getUserByPer('crm', 'business', 'update');
@@ -184,11 +196,11 @@ class Business extends Common
             $list[$k]['owner_user_name'] = !empty($list[$k]['owner_user_id_info']['realname']) ? $list[$k]['owner_user_id_info']['realname'] : '';
             foreach ($userField as $key => $val) {
                 $usernameField  = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
-                $list[$k][$val] = implode($usernameField, ',');
+                $list[$k][$val.'_name'] = implode($usernameField, ',');
             }
             foreach ($structureField as $key => $val) {
                 $structureNameField = !empty($v[$val]) ? db('admin_structure')->whereIn('id', stringToArray($v[$val]))->column('name') : [];
-                $list[$k][$val]     = implode($structureNameField, ',');
+                $list[$k][$val.'_name'] = implode($structureNameField, ',');
             }
             foreach ($datetimeField as $key => $val) {
                 $list[$k][$val] = !empty($v[$val]) ? date('Y-m-d H:i:s', $v[$val]) : null;
@@ -267,18 +279,19 @@ class Business extends Common
             return false;
         }
 
-        # 处理下次联系时间
-        if (!empty($param['next_time'])) $param['next_time'] = strtotime($param['next_time']);
-
         //处理部门、员工、附件、多选类型字段
         $arrFieldAtt = $fieldModel->getArrayField('crm_business');
         foreach ($arrFieldAtt as $k => $v) {
             $param[$v] = arrayToString($param[$v]);
         }
 
+        # 设置今日需联系商机
+        if (!empty($param['next_time']) && $param['next_time'] >= strtotime(date('Y-m-d 00:00:00'))) $param['is_dealt'] = 0;
+
         $param['money'] = $param['money'] ?: '0.00';
         $param['discount_rate'] = $param['discount_rate'] ?: '0.00';
         if ($this->data($param)->allowField(true)->save()) {
+            updateActionLog($param['create_user_id'], 'crm_business', $this->business_id, '', '', '创建了商机');
             $business_id = $this->business_id;
             if ($param['product']) {
                 //产品数据处理
@@ -310,7 +323,7 @@ class Business extends Common
                 'create_user_id' => $param['create_user_id'],
                 'update_time' => time(),
                 'create_time' => time(),
-                'customer_ids' => $param['customer_id']
+                'customer_ids' => ',' . $param['customer_id'] . ','
             ]);
 
             return $data;
@@ -352,14 +365,19 @@ class Business extends Common
             return false;
         }
 
-        # 处理下次联系时间
-        if (!empty($param['next_time'])) $param['next_time'] = strtotime($param['next_time']);
+        # 商机金额小数处理
+        if (!empty($param['money']) && is_numeric($param['money']) && strpos($param['money'], ".") === false) {
+            $param['money'] .= '.00';
+        }
 
         //处理部门、员工、附件、多选类型字段
         $arrFieldAtt = $fieldModel->getArrayField('crm_business');
         foreach ($arrFieldAtt as $k => $v) {
             $param[$v] = arrayToString($param[$v]);
         }
+
+        # 设置今日需联系商机
+        if (!empty($param['next_time']) && $param['next_time'] >= strtotime(date('Y-m-d 00:00:00'))) $param['is_dealt'] = 0;
 
         $param['money'] = $param['money'] ?: '0.00';
         $param['discount_rate'] = $param['discount_rate'] ?: '0.00';
@@ -464,19 +482,22 @@ class Business extends Common
         $map = [];
         $map['create_time'] = $where['create_time'];
         $map['owner_user_id'] = ['in', $userIds];
-
+        $map['type_id'] = $type_id;
+        
         $sql_a = CrmBusinessModel::field([
-            'SUM(CASE WHEN status_id = 1 THEN money ELSE 0 END) AS sum_ying',
-            'SUM(CASE WHEN status_id = 2 THEN money ELSE 0 END) AS sum_shu'
+            'SUM(CASE WHEN is_end = 1 THEN money ELSE 0 END) AS sum_ying',
+            'SUM(CASE WHEN is_end = 2 THEN money ELSE 0 END) AS sum_shu',
+            'type_id'
         ])
             ->where($map)
             ->fetchSql()
-            ->select();
+            ->find();
         $res_a = queryCache($sql_a, 200);
         $sql = CrmBusinessModel::field([
             "status_id",
             'COUNT(*)' => 'count',
-            'SUM(`money`)' => 'sum'
+            'SUM(`money`)' => 'sum',
+            'type_id'
         ])
             ->where($where)
             ->whereNotIn('is_end', '1,2,3')
@@ -485,7 +506,7 @@ class Business extends Common
             ->select();
         $res = queryCache($sql, 200);
         $res = array_column($res, null, 'status_id');
-
+        
         $sum_money = 0;
         $count = 0; # 商机数总和
         $moneyCount = 0; # 金额总和
@@ -493,20 +514,20 @@ class Business extends Common
             $v['count'] = $res[$v['status_id']]['count'] ?: 0;
             $v['money'] = $res[$v['status_id']]['sum'] ?: 0;
             $v['status_name'] = $v['name'];
-
+            
             $statusList[$k] = $v;
-
+            
             $sum_money += $v['money'];
             $moneyCount += $v['money'];
             $count += $v['count'];
         }
-        $data['list'] = $statusList;
+        
         $data['list'] = $statusList;
         $data['sum_ying'] = $res_a[0]['sum_ying'] ?: 0;
         $data['sum_shu'] = $res_a[0]['sum_shu'] ?: 0;
         $data['sum_money'] = $sum_money ?: 0;
         $data['total'] = ['name' => '合计', 'money_count' => $moneyCount, 'count' => $count];
-
+        
         return $data ?: [];
     }
 

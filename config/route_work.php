@@ -47,7 +47,9 @@ return [
 	//【项目】删除参与人
 	'work/work/ownerDel' => ['work/work/ownerDel', ['method' => 'POST']],	
 	//【项目】参与人列表
-	'work/work/ownerList' => ['work/work/ownerList', ['method' => 'POST']],	
+	'work/work/ownerList' => ['work/work/ownerList', ['method' => 'POST']],
+    //【项目】项目列表排序
+    'work/work/updateWorkOrder' => ['work/work/updateWorkOrder', ['method' => 'POST']],
 
 	//【我的任务】查看我的任务
 	'work/task/myTask'  => ['work/task/myTask', ['method' => 'POST']],
@@ -108,7 +110,7 @@ return [
     //【任务】导入
     'work/task/excelImport'  => ['work/task/excelImport', ['method' => 'POST']],
     // 【任务】导入模板下载
-    'work/task/excelDownload' => ['crm/customer/excelDownload', ['method' => 'GET']],
+    'work/task/excelDownload' => ['work/task/excelDownload', ['method' => 'GET']],
 
 	//【标签】编辑
 	'work/tasklable/update' => ['work/tasklable/update', ['method' => 'POST']],		

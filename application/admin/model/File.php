@@ -272,6 +272,7 @@ class File extends Common
 		if (!is_array($request['module_id'])) {
 			$module_ids = array($request['module_id']);
 		}
+		$moduleName = $request['module'];
 
 		switch ($request['module']) {
 			case 'crm_leads' : $r = db('crm_leads_file'); $module = db('crm_leads'); break;
@@ -302,6 +303,17 @@ class File extends Common
 		unset($request['module_id']);
 		unset($request['by']);
 
+        # 查询活动附件，用于判断是否可以删除附件（活动添加的附件只能在活动中删除）
+        $activityFileIds = [];
+        $activityType = ['crm_leads' => 1, 'crm_customer' => 2, 'crm_contacts' => 3, 'crm_business' => 5, 'crm_contract' => 6];
+        if (!empty($activityType[$moduleName])) {
+            $activityFileIds = db('crm_activity')->alias('activity')
+                ->join('__CRM_ACTIVITY_FILE__ file', 'file.activity_id = activity.activity_id', 'LEFT')
+                ->where(['type' => 1, 'activity_type' => $activityType[$moduleName], 'activity_type_id' => ['in', $module_ids]])
+                ->column('file.file_id');
+            $activityFileIds = array_filter($activityFileIds);
+        }
+
 		$userModel = new \app\admin\model\User();
 		$request = $this->fmtRequest( $request );
         $map = $request['map'];
@@ -321,6 +333,7 @@ class File extends Common
         	$list[$k]['ext'] = getExtension($v['save_name']);
         	$list[$k]['file_path'] = getFullPath($v['file_path']);
         	$list[$k]['file_path_thumb'] = getFullPath($v['file_path_thumb']);
+        	$list[$k]['readOnly'] = !empty($activityType[$moduleName]) && in_array($v['file_id'], $activityFileIds) ? 1 : 0; # 活动中上次的附件，只能在活动中删除
         }
         $data = [];
         $data['list'] = $list ? : [];

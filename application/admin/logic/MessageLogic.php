@@ -12,7 +12,7 @@ class MessageLogic
         switch ($label) {
             
             case '1':  //任务
-                $where = array('in', [1, 2, 3]);//
+                $where = array('in', [1, 2, 3,27]);//
                 break;
             case '2':  //日志
                 $where = array('in', [4, 5]);//27项目导入
@@ -27,12 +27,12 @@ class MessageLogic
                 $where = 10;
                 break;
             case '6' :  //客户管理
-                $where = array('in', [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 16, 27, 28, 29, 30]);
+                $where = array('in', [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 28, 29, 30]);
                 break;
             case '4' :
                 break;
             default:
-                $where = array('in', [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 16, 27, 28, 29, 30]);//17181920
+                $where = array('in', [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]);//17181920
         }
         return $where;
     }
@@ -97,8 +97,8 @@ class MessageLogic
                         ])
                     ->select();
                 $list[$k]['content'] = $content[$k]['content'];
-            } elseif (in_array($v['type'], ['7','12', '15',25])) {
-                $content = db('admin_examine_record')->where(['types_id' => $v['action_id'], 'types' => ['like', '%' . $v['controller_name' . '%']], 'check_user_id' => $v['from_user_id']])->field('content')->find();
+            } elseif (in_array($v['type'], [7,12, 15,25])) {
+                $content = db('admin_examine_record')->where(['types_id' => $v['action_id'], 'types' => ['like', '%' . $v['controller_name'] . '%'], 'check_user_id' => $v['from_user_id']])->field('content')->find();
                 if ($content['content']) {
                     $list[$k]['content'] = $content['content'];
                 }

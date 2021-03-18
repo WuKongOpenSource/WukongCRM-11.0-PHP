@@ -681,6 +681,10 @@ class Field extends Model
                     'value' => []
                 ];
             }
+            # 产品基本信息增加负责人信息
+            if ($param['action'] == 'read' && $param['types'] == 'crm_product') {
+                $new_field_list[] = db('admin_field')->where(['types_id' => 0, 'field' => 'owner_user_id'])->find();
+            }
             if ($new_field_list) $field_list = array_merge(collection($field_list)->toArray(), $new_field_list);
             foreach ($field_list as $k => $v) {
                 # 处理字段授权
@@ -696,6 +700,11 @@ class Field extends Model
 
                     # 编辑权限
                     $field_list[$k]['writeStatus'] = $status['write'];
+                }
+
+                # （联系人，商机，合同，回款，回访）关联其他模块的字段在详情页面不允许修改；创建人、负责人不允许修改
+                if ($param['action'] == 'read' && in_array($v['field'], ['customer_id', 'business_id', 'contacts_id', 'contract_id', 'create_user_id', 'owner_user_id'])) {
+                    $field_list[$k]['writeStatus'] = 0;
                 }
 
                 //处理setting内容
@@ -915,6 +924,14 @@ class Field extends Model
                 ]
             ];
         }
+        if ($param['types'] == 'crm_customer') {
+            $field_arr[] = [
+                'field' => 'detail_address',
+                'name' => '详细地址',
+                'form_type' => 'text',
+                'setting' => []
+            ];
+        }
         if ($field_arr) $field_list = array_merge($field_list, $field_arr);
         foreach ($field_list as $k => $v) {
             //处理setting内容
@@ -947,7 +964,7 @@ class Field extends Model
                 $businessStatusModel = new \app\crm\model\BusinessStatus();
                 $userInfo = $userModel->getUserById($user_id);
                 $setting = db('crm_business_type')
-                    ->where(['structure_id' => $userInfo['structure_id'], 'status' => 1])
+                    ->where(['structure_id' => ['like', ',%' . $userInfo['structure_id'] . '%,'], 'status' => 1])
                     ->whereOr('structure_id', '')
                     ->select();
                 foreach ($setting as $key => $val) {
@@ -1387,21 +1404,24 @@ class Field extends Model
         $userModel = new \app\admin\model\User();
         $structureModel = new \app\admin\model\Structure();
         switch ($form_type) {
-            case 'datetime' :
-                $val = $val > 0 ? date('Y-m-d H:i:s', $val) : '';
-                break;
+//            case 'datetime' :
+//                $val = $val > 0 ? date('Y-m-d H:i:s', $val) : '';
+//                break;
             case 'user' :
-                $val = count($userModel->getUserNameByArr($val)) > 1 ? ArrayToString($userModel->getUserNameByArr($val)) : implode(',', $userModel->getUserNameByArr($val));
+                $val = count($userModel->getUserNameByArr($val)) > 1 ? ArrayToString($userModel->getUserNameByArr($val)) : implode(',', $userModel->getUserNameByArr(stringToArray($val)));
                 break;
             case 'userStr' :
                 $val = explode(',', $val);
                 $val = count($userModel->getUserNameByArr($val)) > 1 ? ArrayToString($userModel->getUserNameByArr($val)) : implode(',', $userModel->getUserNameByArr($val));
                 break;
             case 'structure' :
-                $val = ArrayToString($structureModel->getStructureNameByArr($val));
+                $val = implode(',', $structureModel->getStructureNameByArr(stringToArray($val)));
                 break;
             case 'customer' :
                 $val = db('crm_customer')->where(['customer_id' => $val])->value('name');
+                break;
+            case 'contract' :
+                $val = db('crm_contract')->where(['customer_id' => $val])->value('num');
                 break;
             case 'business' :
                 $val = db('crm_business')->where(['business_id' => $val])->value('name');
@@ -1530,177 +1550,223 @@ class Field extends Model
 
     public function resetField($types, $data)
     {
-        # 线索
-        if ($types == 'crm_leads') {
-            foreach ($data as $key => $value) {
-                switch ($value['field']) {
-                    case 'create_user_id' :
-                        $data[$key]['fieldName'] = 'create_user_name';
-                        break;
-                    case 'owner_user_id' :
-                        $data[$key]['fieldName'] = 'owner_user_name';
-                        break;
-                    default :
-                        $data[$key]['fieldName'] = $value['field'];
-                }
+        foreach ($data AS $key => $value) {
+            switch ($value['field']) {
+                case 'create_user_id' :
+                    $data[$key]['fieldName'] = 'create_user_name';
+                    break;
+                case 'owner_user_id' :
+                    $data[$key]['fieldName'] = 'owner_user_name';
+                    break;
+                case 'customer_id' :
+                    $data[$key]['fieldName'] = 'customer_name';
+                    break;
+                case 'type_id' :
+                    $data[$key]['fieldName'] = 'type_id_info';
+                    break;
+                case 'status_id' :
+                    $data[$key]['fieldName'] = 'status_id_info';
+                    break;
+                case 'business_id' :
+                    $data[$key]['fieldName'] = 'business_name';
+                    break;
+                case 'contacts_id' :
+                    $data[$key]['fieldName'] = 'contacts_name';
+                    break;
+                case 'order_user_id' :
+                    $data[$key]['fieldName'] = 'order_user_name';
+                    break;
+                case 'contract_id' :
+                    $data[$key]['fieldName'] = 'contract_num';
+                    break;
+                case 'plan_id' :
+                    $data[$key]['fieldName'] = 'plan_id_info';
+                    break;
+                case 'category_id' :
+                    $data[$key]['fieldName'] = 'category_name';
+                    break;
+                default :
+                    $data[$key]['fieldName'] = $value['field'];
+            }
+
+            if (in_array($value['form_type'], ['user', 'structure']) && !in_array($value['field'], ['create_user_id', 'owner_user_id'])) {
+                $data[$key]['fieldName'] = $value['field'] . '_name';
             }
         }
+
+        # 线索
+//        if ($types == 'crm_leads') {
+//            foreach ($data as $key => $value) {
+//                switch ($value['field']) {
+//                    case 'create_user_id' :
+//                        $data[$key]['fieldName'] = 'create_user_name';
+//                        break;
+//                    case 'owner_user_id' :
+//                        $data[$key]['fieldName'] = 'owner_user_name';
+//                        break;
+//                    default :
+//                        $data[$key]['fieldName'] = $value['field'];
+//                }
+//            }
+//        }
 
         # 客户
-        if ($types == 'crm_customer') {
-            foreach ($data as $key => $value) {
-                switch ($value['field']) {
-                    case 'create_user_id' :
-                        $data[$key]['fieldName'] = 'create_user_name';
-                        break;
-                    case 'owner_user_id' :
-                        $data[$key]['fieldName'] = 'owner_user_name';
-                        break;
-                    default :
-                        $data[$key]['fieldName'] = $value['field'];
-                }
-            }
-        }
+//        if ($types == 'crm_customer') {
+//            foreach ($data as $key => $value) {
+//                switch ($value['field']) {
+//                    case 'create_user_id' :
+//                        $data[$key]['fieldName'] = 'create_user_name';
+//                        break;
+//                    case 'owner_user_id' :
+//                        $data[$key]['fieldName'] = 'owner_user_name';
+//                        break;
+//                    default :
+//                        $data[$key]['fieldName'] = $value['field'];
+//                }
+//            }
+//        }
 
         # 联系人
-        if ($types == 'crm_contacts') {
-            foreach ($data as $key => $value) {
-                switch ($value['field']) {
-                    case 'customer_id' :
-                        $data[$key]['fieldName'] = 'customer_name';
-                        break;
-                    case 'create_user_id' :
-                        $data[$key]['fieldName'] = 'create_user_name';
-                        break;
-                    case 'owner_user_id' :
-                        $data[$key]['fieldName'] = 'owner_user_name';
-                        break;
-                    default :
-                        $data[$key]['fieldName'] = $value['field'];
-                }
-            }
-        }
+//        if ($types == 'crm_contacts') {
+//            foreach ($data as $key => $value) {
+//                switch ($value['field']) {
+//                    case 'customer_id' :
+//                        $data[$key]['fieldName'] = 'customer_name';
+//                        break;
+//                    case 'create_user_id' :
+//                        $data[$key]['fieldName'] = 'create_user_name';
+//                        break;
+//                    case 'owner_user_id' :
+//                        $data[$key]['fieldName'] = 'owner_user_name';
+//                        break;
+//                    default :
+//                        $data[$key]['fieldName'] = $value['field'];
+//                }
+//            }
+//        }
 
         # 商机
-        if ($types == 'crm_business') {
-            foreach ($data as $key => $value) {
-                switch ($value['field']) {
-                    case 'customer_id' :
-                        $data[$key]['fieldName'] = 'customer_name';
-                        break;
-                    case 'type_id' :
-                        $data[$key]['fieldName'] = 'type_id_info';
-                        break;
-                    case 'status_id' :
-                        $data[$key]['fieldName'] = 'status_id_info';
-                        break;
-                    case 'create_user_id' :
-                        $data[$key]['fieldName'] = 'create_user_name';
-                        break;
-                    case 'owner_user_id' :
-                        $data[$key]['fieldName'] = 'owner_user_name';
-                        break;
-                    default :
-                        $data[$key]['fieldName'] = $value['field'];
-                }
-            }
-        }
+//        if ($types == 'crm_business') {
+//            foreach ($data as $key => $value) {
+//                switch ($value['field']) {
+//                    case 'customer_id' :
+//                        $data[$key]['fieldName'] = 'customer_name';
+//                        break;
+//                    case 'type_id' :
+//                        $data[$key]['fieldName'] = 'type_id_info';
+//                        break;
+//                    case 'status_id' :
+//                        $data[$key]['fieldName'] = 'status_id_info';
+//                        break;
+//                    case 'create_user_id' :
+//                        $data[$key]['fieldName'] = 'create_user_name';
+//                        break;
+//                    case 'owner_user_id' :
+//                        $data[$key]['fieldName'] = 'owner_user_name';
+//                        break;
+//                    default :
+//                        $data[$key]['fieldName'] = $value['field'];
+//                }
+//            }
+//        }
 
         # 合同
-        if ($types == 'crm_contract') {
-            foreach ($data as $key => $value) {
-                switch ($value['field']) {
-                    case 'customer_id' :
-                        $data[$key]['fieldName'] = 'customer_name';
-                        break;
-                    case 'business_id' :
-                        $data[$key]['fieldName'] = 'business_name';
-                        break;
-                    case 'contacts_id' :
-                        $data[$key]['fieldName'] = 'contacts_name';
-                        break;
-                    case 'order_user_id' :
-                        $data[$key]['fieldName'] = 'order_user_name';
-                        break;
-                    case 'create_user_id' :
-                        $data[$key]['fieldName'] = 'create_user_name';
-                        break;
-                    case 'owner_user_id' :
-                        $data[$key]['fieldName'] = 'owner_user_name';
-                        break;
-                }
-            }
-        }
+//        if ($types == 'crm_contract') {
+//            foreach ($data as $key => $value) {
+//                switch ($value['field']) {
+//                    case 'customer_id' :
+//                        $data[$key]['fieldName'] = 'customer_name';
+//                        break;
+//                    case 'business_id' :
+//                        $data[$key]['fieldName'] = 'business_name';
+//                        break;
+//                    case 'contacts_id' :
+//                        $data[$key]['fieldName'] = 'contacts_name';
+//                        break;
+//                    case 'order_user_id' :
+//                        $data[$key]['fieldName'] = 'order_user_name';
+//                        break;
+//                    case 'create_user_id' :
+//                        $data[$key]['fieldName'] = 'create_user_name';
+//                        break;
+//                    case 'owner_user_id' :
+//                        $data[$key]['fieldName'] = 'owner_user_name';
+//                        break;
+//                    default :
+//                        $data[$key]['fieldName'] = $value['field'];
+//                }
+//            }
+//        }
 
         # 回款
-        if ($types == 'crm_receivables') {
-            foreach ($data as $key => $value) {
-                switch ($value['field']) {
-                    case 'customer_id' :
-                        $data[$key]['fieldName'] = 'customer_name';
-                        break;
-                    case 'contract_id' :
-                        $data[$key]['fieldName'] = 'contract_num';
-                        break;
-                    case 'create_user_id' :
-                        $data[$key]['fieldName'] = 'create_user_name';
-                        break;
-                    case 'owner_user_id' :
-                        $data[$key]['fieldName'] = 'owner_user_name';
-                        break;
-                    case 'plan_id' :
-                        $data[$key]['fieldName'] = 'plan_id_info';
-                        break;
-                    default :
-                        $data[$key]['fieldName'] = $value['field'];
-                }
-            }
-        }
+//        if ($types == 'crm_receivables') {
+//            foreach ($data as $key => $value) {
+//                switch ($value['field']) {
+//                    case 'customer_id' :
+//                        $data[$key]['fieldName'] = 'customer_name';
+//                        break;
+//                    case 'contract_id' :
+//                        $data[$key]['fieldName'] = 'contract_num';
+//                        break;
+//                    case 'create_user_id' :
+//                        $data[$key]['fieldName'] = 'create_user_name';
+//                        break;
+//                    case 'owner_user_id' :
+//                        $data[$key]['fieldName'] = 'owner_user_name';
+//                        break;
+//                    case 'plan_id' :
+//                        $data[$key]['fieldName'] = 'plan_id_info';
+//                        break;
+//                    default :
+//                        $data[$key]['fieldName'] = $value['field'];
+//                }
+//            }
+//        }
 
         # 回访
-        if ($types == 'crm_visit') {
-            foreach ($data as $key => $value) {
-                switch ($value['field']) {
-                    case 'customer_id' :
-                        $data[$key]['fieldName'] = 'customer_name';
-                        break;
-                    case 'owner_user_id' :
-                        $data[$key]['fieldName'] = 'owner_user_name';
-                        $data[$key]['name'] = '回访人';
-                        break;
-                    case 'contacts_id' :
-                        $data[$key]['fieldName'] = 'contacts_name';
-                        break;
-                    case 'contract_id' :
-                        $data[$key]['fieldName'] = 'contract_number';
-                        break;
-                    case 'create_user_id' :
-                        $data[$key]['fieldName'] = 'create_user_name';
-                        break;
-                    default :
-                        $data[$key]['fieldName'] = $value['field'];
-                }
-            }
-        }
+//        if ($types == 'crm_visit') {
+//            foreach ($data as $key => $value) {
+//                switch ($value['field']) {
+//                    case 'customer_id' :
+//                        $data[$key]['fieldName'] = 'customer_name';
+//                        break;
+//                    case 'owner_user_id' :
+//                        $data[$key]['fieldName'] = 'owner_user_name';
+//                        $data[$key]['name'] = '回访人';
+//                        break;
+//                    case 'contacts_id' :
+//                        $data[$key]['fieldName'] = 'contacts_name';
+//                        break;
+//                    case 'contract_id' :
+//                        $data[$key]['fieldName'] = 'contract_number';
+//                        break;
+//                    case 'create_user_id' :
+//                        $data[$key]['fieldName'] = 'create_user_name';
+//                        break;
+//                    default :
+//                        $data[$key]['fieldName'] = $value['field'];
+//                }
+//            }
+//        }
 
         # 产品
-        if ($types == 'crm_product') {
-            foreach ($data as $key => $value) {
-                switch ($value['field']) {
-                    case 'category_id' :
-                        $data[$key]['fieldName'] = 'category_name';
-                        break;
-                    case 'create_user_id' :
-                        $data[$key]['fieldName'] = 'create_user_name';
-                        break;
-                    case 'owner_user_id' :
-                        $data[$key]['fieldName'] = 'owner_user_name';
-                        break;
-                    default :
-                        $data[$key]['fieldName'] = $value['field'];
-                }
-            }
-        }
+//        if ($types == 'crm_product') {
+//            foreach ($data as $key => $value) {
+//                switch ($value['field']) {
+//                    case 'category_id' :
+//                        $data[$key]['fieldName'] = 'category_name';
+//                        break;
+//                    case 'create_user_id' :
+//                        $data[$key]['fieldName'] = 'create_user_name';
+//                        break;
+//                    case 'owner_user_id' :
+//                        $data[$key]['fieldName'] = 'owner_user_name';
+//                        break;
+//                    default :
+//                        $data[$key]['fieldName'] = $value['field'];
+//                }
+//            }
+//        }
 
         return $data;
     }

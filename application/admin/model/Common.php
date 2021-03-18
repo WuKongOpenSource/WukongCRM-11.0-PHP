@@ -295,38 +295,43 @@ class Common extends Model
 	 */
 	public function exportHandle($list, $field_list, $type = '')
 	{
-	 
+	
 		foreach ($list as &$val) {
 			foreach ($field_list as $field) {
 				switch ($field['form_type']) {
 					case 'user':
-						if (isset($val[$field['field'] . '_info']['realname'])) {
-							$val[$field['field']] = $val[$field['field'] . '_info']['realname'];
-						} else {
-							$val[$field['field']] = implode(',', array_column($val[$field['field'] . '_info'], 'realname'));
+						if (isset($val[$field['field'] . 'name'])) {
+							$val[$field['field']] = $val[$field['field'] . 'name'];
 						}
+//						else {
+//							$val[$field['field']] = implode(',', array_column($val[$field['field'] . '_info'], 'realname'));
+//						}
 						break;
 					case 'structure':
-						$temp = array_map(function ($val) { return $val->toarray(); }, $val[$field['field'] . '_info']);
-						$val[$field['field']] = implode(',', array_column($temp, 'name'));
+//						$temp = array_map(function ($val) { return $val->toarray(); }, $val[$field['field'] . '_name']);
+//						$val[$field['field']] = implode(',', array_column($temp, 'name'));
+//						$val[$field['field']] = implode(',', array_column($temp, 'name'));
 						break;
 					case 'datetime':
 						$val[$field['field']] = strtotime($val[$field['field']]) ? $val[$field['field']] : '';
 						break;
-					case 'customer':
-					case 'business':
-					case 'contacts':
+					case 'customer':break;
+					case 'business':break;
+					case 'contacts':break;
 						$val[$field['field']] = $val[$field['field'] . '_info']['name'];
 						break;
-                    case 'contacts':
-                        $val[$field['field']] = $val[$field['field'] . '_info']['name'];
-                        break;
 					default :
 						switch ($field['field']) {
 							// 商机销售阶段、商机状态组
 							case 'status_id':
-							case 'type_id':
-								$val[$field['field']] = $val[$field['field'] . '_info'];
+							    if($val['is_end']!=0){
+                                    $val[$field['field']]= $val['is_end'];
+                                }
+							    break;
+							case 'type_id':break;
+//								$val[$field['field']] = $val[$field['field'] . '_info'];
+                            case 'check_status' :
+                                $val[$field['field']] = $val[$field['field'] . '_info'];
 								break;
 						}
 				}

@@ -258,9 +258,22 @@ class ExamineFlow extends ApiCommon
     {
         $param = $this->param;
         $userInfo = $this->userInfo;
+       $data= $this->checkFlow($param,$userInfo);
+        return resultArray(['data' => $data]);
+    }
+    
+    /**
+     * 固定审批流审批流程人员数据
+     * @param $param
+     * @param $userInfo
+     *
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/3/15 0015 13:37
+     */
+    public function checkFlow($param,$userInfo){
         $examineStepModel = model('ExamineStep');
         $examineFlowModel = model('ExamineFlow');
-
         $check_user_id = $userInfo['id'];
         $flow_id = $param['flow_id'];
         $types = $param['types'];
@@ -269,7 +282,7 @@ class ExamineFlow extends ApiCommon
         if (!$types || !in_array($types, $typesArr)) {
             return resultArray(['error' => '参数错误']);
         }
-        
+    
         if ($flow_id) {
             $examineFlowData = $examineFlowModel->getDataById($param['flow_id']);
             if (!$examineFlowData) {
@@ -281,8 +294,8 @@ class ExamineFlow extends ApiCommon
                 $user_id = $typesInfo['dataInfo']['create_user_id'];
             }
             if (!$user_id) {
-                return resultArray(['error' => '参数错误']);    
-            }      
+                return resultArray(['error' => '参数错误']);
+            }
         } else {
             $user_id = $check_user_id;
             // 获取符合条件的审批流
@@ -292,10 +305,10 @@ class ExamineFlow extends ApiCommon
                 if (in_array($types, ['crm_contract', 'crm_receivables', 'crm_invoice'])) {
                     return resultArray(['data' => ['examineStatus' => false]]);
                 }
-
+            
                 return resultArray(['error' => '无可用审批流，请联系管理员']);
-            } 
-            $flow_id = $examineFlowData['flow_id'];         
+            }
+            $flow_id = $examineFlowData['flow_id'];
         }
         if ($types == 'oa_examine') {
             $category_id = db('oa_examine')->where(['examine_id' => $types_id])->value('category_id');
@@ -320,14 +333,13 @@ class ExamineFlow extends ApiCommon
         }
         $data = [];
         $data['config'] = (int) $examineFlowData['config']; //1固定,0自选
-        $data['stepList'] = $stepList ? : []; 
+        $data['stepList'] = $stepList ? : [];
         $data['examine_user'] = $list ? : [];
         $data['is_check'] = $stepInfo['is_check'] ? : 0;
         $data['is_recheck'] = $stepInfo['is_recheck'] ? : 0;
         $data['examineStatus'] = true;
-        return resultArray(['data' => $data]);
+        return $data;
     }
-
     /**
      * 自选审批人列表（授权审批类型）
      * @author Michael_xu
@@ -360,10 +372,8 @@ class ExamineFlow extends ApiCommon
      */
     public function recordList()
     {
-        $param = $this->param;
-        $userInfo = $this->userInfo;
         $examineRecordModel = model('ExamineRecord');
-        $list = $examineRecordModel->getDataList($param) ? : [];
-        return resultArray(['data' => $list]);
-    }        
+        $data = $examineRecordModel->getDataList($this->param);
+        return resultArray(['data' => $data]);
+    }
 }

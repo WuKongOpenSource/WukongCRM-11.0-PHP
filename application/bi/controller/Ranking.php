@@ -67,19 +67,24 @@ class Ranking extends ApiCommon
             $param = $this->param;
         }
 
-        if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
-        if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
+        if (!empty($param['start_time'])) $param['start_time'] =$param['start_time'] . ' 00:00:00';
+        if (!empty($param['end_time']))   $param['end_time']   = $param['end_time'] . ' 23:59:59';
 
         $whereArr = $this->com($param, 'contract');
         $whereArr['check_status'] = 2;
 
         //导出使用
-        if (!empty($param['excel_type'])) return $this->handel(
-            new \app\bi\model\Contract,
-            $whereArr,
-            ['field' => 'SUM(`money`)', 'alias' => 'money', 'default' => '0.00'],
-            $param['excel_type']
-        );
+        if (!empty($param['excel_type']))  {
+            $data=$this->handel(
+                new \app\bi\model\Contract,
+                $whereArr,
+                ['field' => 'SUM(`money`)', 'alias' => 'money', 'default' => '0.00'],
+                $param['excel_type']
+            );
+                return $data;
+}
+        
+     
         return $this->handel(
             new \app\bi\model\Contract,
             $whereArr,
@@ -96,18 +101,20 @@ class Ranking extends ApiCommon
         if($param['excel_type']!=1){
             $param = $this->param;
         }
-        if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
-        if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
+        if (!empty($param['start_time'])) $param['start_time'] = $param['start_time'] . ' 00:00:00';
+        if (!empty($param['end_time']))   $param['end_time']   = $param['end_time'] . ' 23:59:59';
         $whereArr = $this->com($param, 'receivables');
         $whereArr['check_status'] = 2;
-
         //导出使用
-        if (!empty($param['excel_type'])) return $this->handel(
-            new \app\bi\model\Receivables,
-            $whereArr,
-            ['field' => 'SUM(`money`)', 'alias' => 'money', 'default' => '0.00'],
-            $param['excel_type']
-        );
+        if (!empty($param['excel_type']))  {
+            $data=$this->handel(
+                new \app\bi\model\Receivables,
+                $whereArr,
+                ['field' => 'SUM(`money`)', 'alias' => 'money', 'default' => '0.00'],
+                $param['excel_type']
+            );
+            return $data;
+}
         return $this->handel(
             new \app\bi\model\Receivables,
             $whereArr,
@@ -124,18 +131,22 @@ class Ranking extends ApiCommon
         if($param['excel_type']!=1){
             $param = $this->param;
         }
-        if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
-        if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
+        if (!empty($param['start_time'])) $param['start_time'] = $param['start_time'] . ' 00:00:00';
+        if (!empty($param['end_time']))   $param['end_time']   = $param['end_time'] . ' 23:59:59';
         $whereArr = $this->com($param, 'contract');
         $whereArr['check_status'] = 2;
 
         //导出使用
-        if (!empty($param['excel_type'])) $this->handel(
-            new ContractModel,
-            $whereArr,
-            ['field' => 'COUNT(*)', 'alias' => 'count', 'default' => 0],
-            $param['excel_type']
-        );
+        if (!empty($param['excel_type'])) {
+            $data= $this->handel(
+                new ContractModel,
+                $whereArr,
+                ['field' => 'COUNT(*)', 'alias' => 'count', 'default' => 0],
+                $param['excel_type']
+            );
+            return $data;
+}
+        
         return $this->handel(
             new ContractModel,
             $whereArr,
@@ -152,8 +163,8 @@ class Ranking extends ApiCommon
         if($param['excel_type']!=1){
             $param = $this->param;
         }
-        if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
-        if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
+        if (!empty($param['start_time'])) $param['start_time'] = $param['start_time'] . ' 00:00:00';
+        if (!empty($param['end_time']))   $param['end_time']   = $param['end_time'] . ' 23:59:59';
         $whereArr = $this->com($param, 'customer');
 
         $poolWhere = $this->getWhereByPool();
@@ -181,8 +192,8 @@ class Ranking extends ApiCommon
     public function addContacts()
     {
         $param = $this->param;
-        if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
-        if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
+        if (!empty($param['start_time'])) $param['start_time'] = $param['start_time'] . ' 00:00:00';
+        if (!empty($param['end_time']))   $param['end_time']   = $param['end_time'] . ' 23:59:59';
         $whereArr = $this->com($param, 'contacts');
 
         //导出使用
@@ -213,8 +224,8 @@ class Ranking extends ApiCommon
         if($param['excel_type']!=1){
             $param = $this->param;
         }
-        if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
-        if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
+        if (!empty($param['start_time'])) $param['start_time'] = $param['start_time'] . ' 00:00:00';
+        if (!empty($param['end_time']))   $param['end_time']   = $param['end_time'] . ' 23:59:59';
         $whereArr = $this->com($param, 'record');
 
         # 权限内的员工列表
@@ -265,8 +276,8 @@ class Ranking extends ApiCommon
         if($param['excel_type']!=1){
             $param = $this->param;
         }
-        if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
-        if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
+        if (!empty($param['start_time'])) $param['start_time'] = $param['start_time'] . ' 00:00:00';
+        if (!empty($param['end_time']))   $param['end_time']   =$param['end_time'] . ' 23:59:59';
         $whereArr = $this->com($param, 'record');
 
         # 权限内的员工列表
@@ -316,8 +327,8 @@ class Ranking extends ApiCommon
         if($param['excel_type']!=1){
             $param = $this->param;
         }
-        if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
-        if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
+        if (!empty($param['start_time'])) $param['start_time'] = $param['start_time'] . ' 00:00:00';
+        if (!empty($param['end_time']))   $param['end_time']   = $param['end_time'] . ' 23:59:59';
         $whereArr = $this->com($param, 'record');
         $whereArr['category_id'] = 3; // 审批类型，3出差
         $whereArr['check_status'] = 2;
@@ -351,8 +362,8 @@ class Ranking extends ApiCommon
         if($param['excel_type']!=1){
             $param = $this->param;
         }
-        if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
-        if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
+        if (!empty($param['start_time'])) $param['start_time'] = $param['start_time'] . ' 00:00:00';
+        if (!empty($param['end_time']))   $param['end_time']   = $param['end_time'] . ' 23:59:59';
         $list = $productModel->getSortByProduct($param);
         $list = array_column($list, null, 'owner_user_id');
 
@@ -466,49 +477,48 @@ class Ranking extends ApiCommon
         switch ($param['excel_types']) {
             case 'contract':
                 $list = $this->contract($param);
-
-                foreach ($list as $key => $v) {
-                    $list[$key]['id'] = $key + 1;
-                }
-                $type['type'] = '合同金额排行';
+                $param['type'] = '合同金额排行';
                 break;
-            case'receivables':
+            case 'receivablesRanKingExport':
                 $list = $this->receivables($param);
-                $type['type'] = '回款金额排行';
+                $param['type'] = '回款金额排行';
                 break;
             case 'signing':
                 $list = $this->signing($param);
-                $type['type'] = '签约合同排行';
+                $param['type'] = '签约合同排行';
                 break;
             case 'product':
                 $list = $this->product($param);
-                $type['type'] = '产品销量排行';
+                $param['type'] = '产品销量排行';
                 break;
             case 'addCustomer':
                 $list = $this->addCustomer($param);
-                $type['type'] = '新增客户数排行';
+                $param['type'] = '新增客户数排行';
                 break;
             case 'addContacts':
                 $list = $this->addContacts($param);
-                $type['type'] = '新增联系人数排行';
+                $param['type'] = '新增联系人数排行';
                 break;
             case 'recordNun':
                 $list = $this->recordNun($param);
-                $type['type'] = '跟进次数排行';
+                $param['type'] = '跟进次数排行';
                 break;
             case 'recordCustomer':
                 $list = $this->recordCustomer($param);
-                $type['type'] = '跟进客户数排行';
+                $param['type'] = '跟进客户数排行';
                 break;
             case 'examine':
                 $list = $this->examine($param);
-                $type['type'] = '出差次数排行';
+                $param['type'] = '出差次数排行';
                 break;
         }
         if(empty($list)){
             return resultArray(['data'=>'数据不存在']);
         }
         $excelLogic = new ExcelLogic();
+        foreach ($list as $key => $v) {
+            $list[$key]['id'] = $key + 1;
+        }
         $data = $excelLogic->rankingExcle($param, $list);
         return $data;
     }

@@ -38,9 +38,9 @@ class ExcelLogic
             case 'recordMode':
                 $file_name = 'customerRecordCategoryStats';
                 $field_list = [
-                    '0' => ['name' => '员工姓名', 'field' => 'realname'],
-                    '1' => ['name' => '跟进次数', 'field' => 'record_num'],
-                    '2' => ['name' => '跟进客户数', 'field' => 'customer_num'],
+                    '0' => ['name' => '跟进方式', 'field' => 'category'],
+                    '1' => ['name' => '个数', 'field' => 'recordNum'],
+                    '2' => ['name' => '占比', 'field' => 'proportion'],
                 ];
                 break;
             case 'poolList':
@@ -52,10 +52,26 @@ class ExcelLogic
                     '3' => ['name' => '进入公海客户数', 'field' => 'put_in'],
                 ];
                 break;
-            case 'userCycle':
+            case 'userCycleList':
                 $file_name = 'employeeCycleInfo';
                 $field_list = [
                     '0' => ['name' => '员工姓名', 'field' => 'realname'],
+                    '1' => ['name' => '成交周期（天）', 'field' => 'cycle'],
+                    '2' => ['name' => '成交客户数', 'field' => 'customer_num'],
+                ];
+                break;
+            case 'productCycle':
+                $file_name = 'addressCycleInfo';
+                $field_list = [
+                    '0' => ['name' => '地区', 'field' => 'address'],
+                    '1' => ['name' => '成交周期（天）', 'field' => 'cycle'],
+                    '2' => ['name' => '成交客户数', 'field' => 'customer_num'],
+                ];
+                break;
+            case 'addressCycle':
+                $file_name = 'productCycleInfo';
+                $field_list = [
+                    '0' => ['name' => '产品名称', 'field' => 'product_name'],
                     '1' => ['name' => '成交周期（天）', 'field' => 'cycle'],
                     '2' => ['name' => '成交客户数', 'field' => 'customer_num'],
                 ];
@@ -64,24 +80,24 @@ class ExcelLogic
                 $file_name = 'customerSatisfaction';
                 $field_list = [
                     '0' => ['name' => '员工姓名', 'field' => 'realname'],
-                    '1' => ['name' => '回访合同总数', 'field' => 'visit'],
-                    '2' => ['name' => '很满意', 'field' => 'satisfaction1'],
-                    '3' => ['name' => '满意', 'field' => 'satisfaction2'],
-                    '4' => ['name' => '一般', 'field' => 'satisfaction3'],
-                    '5' => ['name' => '不满意', 'field' => 'satisfaction4'],
-                    '6' => ['name' => '很不满意', 'field' => 'satisfaction5'],
+                    '1' => ['name' => '回访合同总数', 'field' => 'visitContractNum'],
+                    '2' => ['name' => '很满意', 'field' => '很满意'],
+                    '3' => ['name' => '满意', 'field' => '满意'],
+                    '4' => ['name' => '一般', 'field' => '一般'],
+                    '5' => ['name' => '不满意', 'field' => '不满意'],
+                    '6' => ['name' => '很不满意', 'field' => '很不满意'],
                 ];
                 break;
             case 'productSatisfaction':
                 $file_name = 'productSatisfaction';
                 $field_list = [
-                    '0' => ['name' => '员工姓名', 'field' => 'realname'],
-                    '1' => ['name' => '回访合同总数', 'field' => 'visit'],
-                    '2' => ['name' => '很满意', 'field' => 'satisfaction1'],
-                    '3' => ['name' => '满意', 'field' => 'satisfaction2'],
-                    '4' => ['name' => '一般', 'field' => 'satisfaction3'],
-                    '5' => ['name' => '不满意', 'field' => 'satisfaction4'],
-                    '6' => ['name' => '很不满意', 'field' => 'satisfaction5'],
+                    '0' => ['name' => '产品名称', 'field' => 'productName'],
+                    '1' => ['name' => '回访次数', 'field' => 'visitNum'],
+                    '2' => ['name' => '很满意', 'field' => '很满意'],
+                    '3' => ['name' => '满意', 'field' => '满意'],
+                    '4' => ['name' => '一般', 'field' => '一般'],
+                    '5' => ['name' => '不满意', 'field' => '不满意'],
+                    '6' => ['name' => '很不满意', 'field' => '很不满意'],
                 ];
                 break;
         }
@@ -101,7 +117,7 @@ class ExcelLogic
         if($type['excel_types']=='analysis'){
             $file_name = 'contractNumStats';
             $field_list = [];
-            p($excelModel->template_download($file_name, $field_list, $type['type'], $param));
+            
             return $excelModel->template_download($file_name, $field_list, $type['type'], $param);
         }elseif ($type['excel_types']=='summary'){
             $file_name = 'totalContract';
@@ -111,7 +127,7 @@ class ExcelLogic
                 '2' => ['name' => '签约合同金额（元）', 'field' => 'money'],
                 '3' => ['name' => '回款金额（元）', 'field' => 'back'],
             ];
-            return $excelModel->biExportExcel($file_name, $field_list, $type['type'], $param['items']);
+            return $excelModel->biExportExcel($file_name, $field_list, $type['type'], $param);
         }elseif ($type['excel_types']=='invoice'){
             $file_name = 'invoiceStats';
             $field_list = [
@@ -164,15 +180,14 @@ class ExcelLogic
     {
         $file_name = 'contractNumStats';
         $field_list = [
-            '0' => ['name' => '日期', 'field' => 'type'],
-            '1' => ['name' => '产品分类', 'field' => 'category_id_info'],
-            '2' => ['name' => '产品名称', 'field' => 'product_name'],
-            '3' => ['name' => '合同编号', 'field' => 'contract_name'],
-            '4' => ['name' => '负责人', 'field' => 'realname'],
-            '5' => ['name' => '客户名称', 'field' => 'name'],
-            '6' => ['name' => '销售单价', 'field' => 'price'],
-            '7' => ['name' => '数量', 'field' => 'num'],
-            '8' => ['name' => '订单产品小计', 'field' => 'subtotal'],
+            '0' => ['name' => '产品分类', 'field' => 'category_id_info'],
+            '1' => ['name' => '产品名称', 'field' => 'product_name'],
+            '2' => ['name' => '合同编号', 'field' => 'contract_num'],
+            '3' => ['name' => '负责人', 'field' => 'realname'],
+            '4' => ['name' => '客户名称', 'field' => 'contract_name'],
+            '5' => ['name' => '销售单价', 'field' => 'price'],
+            '6' => ['name' => '数量', 'field' => 'num'],
+            '7' => ['name' => '订单产品小计', 'field' => 'subtotal'],
         ];
         $type = '产品销售情况统计';
         $excelModel = new \app\admin\model\Excel();
@@ -199,7 +214,7 @@ class ExcelLogic
                     '3' => ['name' => '合同金额（元）', 'field' => 'money'],
                 ];
                 break;
-            case 'receivables':
+            case 'receivablesRanKingExport':
                 $file_name = 'receivablesRanKing';
                 $field_list = [
                     '0' => ['name' => '公司总排名', 'field' => 'id'],
@@ -281,7 +296,7 @@ class ExcelLogic
      * @param $param
      * @return mixed
      */
-    public function achienementExcel($type, $param)
+    public function achienementExcel($param)
     {
         $file_name = 'contractNumStats';
         $field_list = [
@@ -289,11 +304,17 @@ class ExcelLogic
             '1' => ['name' => '月份', 'field' => 'month'],
             '2' => ['name' => '目标', 'field' => 'achievement'],
             '3' => ['name' => '完成', 'field' => 'money'],
-            '4' => ['name' => 'rate', 'field' => 'realname'],
+            '4' => ['name' => '完成率', 'field' => 'rate'],
         ];
         $type = '业绩目标完成情况';
         $excelModel = new \app\admin\model\Excel();
-        return $excelModel->biExportExcel($file_name, $field_list, $type, $param);
+        $item=[];
+        foreach ($param as $value) {
+            foreach ($value as $v) {
+                $item[] = $v;
+            }
+        }
+        return $excelModel->biExportExcel($file_name, $field_list, $type, $item);
     }
 
 

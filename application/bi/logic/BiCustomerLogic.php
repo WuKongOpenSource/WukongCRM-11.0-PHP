@@ -29,11 +29,23 @@ class BiCustomerLogic
         $result = [];
 
         $userModel = new \app\admin\model\User();
-
+        $adminModel      = new \app\admin\model\Admin();
         $perUserIds = $userModel->getUserByPer('bi', 'customer', 'read'); # 权限范围内userIds
-        $userIds    = $perUserIds; # 数组交集
-        if (empty($userIds)) return [];
-
+        $whereData = $adminModel->getWhere($param, '', $perUserIds); //统计条件
+        $userIds = $whereData['userIds'];
+        if (empty($userIds)) {
+            # 普通员工没有查看权限，返回固定数据（根据员工筛选）
+            $result[] = [
+                'realname' => db('admin_user')->where('id', $param['user_id'])->value('realname'),
+                'visitContractNum' => 0,
+                '很满意' => 0,
+                '满意' => 0,
+                '一般' => 0,
+                '不满意' => 0,
+                '很不满意' => 0,
+            ];
+            return $result;
+        }
         # 员工信息
         $userList = db('admin_user')->field(['id', 'realname'])->whereIn('id', $userIds)->select();
         foreach ($userList AS $key => $value) {
@@ -94,10 +106,9 @@ class BiCustomerLogic
 
         $perUserIds = $userModel->getUserByPer('bi', 'customer', 'read'); # 权限范围内userIds
         $userIds    = !empty($param['user_id']) ? array_intersect([$param['user_id']], $perUserIds) : $perUserIds; # 数组交集
-        if (empty($userIds)) return [];
 
         # 产品列表（上架中）
-        $productList = db('crm_product')->field(['product_id', 'name'])->where('status', '上架')->select();
+        $productList = db('crm_product')->field(['product_id', 'name'])->where( 'delete_user_id',0)->select();
         foreach ($productList AS $key => $value) {
             $productData[$value['product_id']] = [
                 'productName' => $value['name'],
@@ -109,6 +120,9 @@ class BiCustomerLogic
                 '很不满意' => 0,
             ];
         }
+
+        # 普通员工没有查询权限，返回固定数据（根据员工筛选）
+        if (empty($userIds)) array_values($productData);
 
         # 回访条件
         $where['visit.owner_user_id'] = ['in', $userIds];

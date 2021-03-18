@@ -138,6 +138,7 @@ class Task extends Common
             $map['is_archive'] = 0;
             $map['main_user_id']=$request['main_user_id'];
             $taskList = [];
+            $map['search']=$request['search'];
             $resTaskList = $this->getTaskList($map);
             $data[$key]['count'] = $resTaskList['count'];
             $data[$key]['list'] = $resTaskList['list'];
@@ -449,7 +450,7 @@ class Task extends Common
                         'title' => $param['name'],
                         'action_id' => $task_id
                     ],
-                    trim(',',$param['owner_user_id'])
+                    stringToArray($param['owner_user_id'])
                 );
             }
 
@@ -463,10 +464,10 @@ class Task extends Common
                     'create_user_id' => $param['create_user_id'],
                     'update_time' => time(),
                     'create_time' => time(),
-                    'customer_ids' => !empty($rdata['customer_ids']) ? trim($rdata['customer_ids'], ',') : '',
-                    'contacts_ids' => !empty($rdata['contacts_ids']) ? trim($rdata['contacts_ids'], ',') : '',
-                    'business_ids' => !empty($rdata['business_ids']) ? trim($rdata['business_ids'], ',') : '',
-                    'contract_ids' => !empty($rdata['contract_ids']) ? trim($rdata['contract_ids'], ',') : ''
+                    'customer_ids' => !empty($rdata['customer_ids']) ? $rdata['customer_ids'] : '',
+                    'contacts_ids' => !empty($rdata['contacts_ids']) ? $rdata['contacts_ids'] : '',
+                    'business_ids' => !empty($rdata['business_ids']) ? $rdata['business_ids'] : '',
+                    'contract_ids' => !empty($rdata['contract_ids']) ? $rdata['contract_ids'] : ''
                 ]);
             }
 
@@ -679,7 +680,7 @@ class Task extends Common
                 }
             }
             # 删除活动记录
-            Db::name('crm_activity')->where(['activity_type' => 8, 'activity_type_id' => $param['task_id']])->delete();
+            Db::name('crm_activity')->where(['activity_type' => 11, 'activity_type_id' => $param['task_id']])->delete();
             # 添加活动记录
             if (!empty($rdata['customer_ids']) || !empty($rdata['contacts_ids']) || !empty($rdata['business_ids']) || !empty($rdata['contract_ids'])) {
                 Db::name('crm_activity')->insert([
@@ -690,10 +691,10 @@ class Task extends Common
                     'create_user_id'   => $createUserId,
                     'update_time'      => time(),
                     'create_time'      => time(),
-                    'customer_ids'     => !empty($rdata['customer_ids']) ? trim($rdata['customer_ids'], ',') : '',
-                    'contacts_ids'     => !empty($rdata['contacts_ids']) ? trim($rdata['contacts_ids'], ',') : '',
-                    'business_ids'     => !empty($rdata['business_ids']) ? trim($rdata['business_ids'], ',') : '',
-                    'contract_ids'     => !empty($rdata['contract_ids']) ? trim($rdata['contract_ids'], ',') : ''
+                    'customer_ids'     => !empty($rdata['customer_ids']) ? $rdata['customer_ids'] : '',
+                    'contacts_ids'     => !empty($rdata['contacts_ids']) ? $rdata['contacts_ids'] : '',
+                    'business_ids'     => !empty($rdata['business_ids']) ? $rdata['business_ids'] : '',
+                    'contract_ids'     => !empty($rdata['contract_ids']) ? $rdata['contract_ids'] : ''
                 ]);
             }
             return true;
@@ -785,6 +786,8 @@ class Task extends Common
             if (!$taskInfo['pid']) {
                 actionLog($taskInfo['task_id'], $taskInfo['owner_user_id'], $taskInfo['structure_ids'], '删除了任务');
             }
+            # 删除任务的活动记录
+            db('crm_activity')->where(['type' => 2, 'activity_type' => 11, 'activity_type_id' => $param['task_id']])->delete();
             return true;
         } else {
             $this->error = '删除失败';
@@ -906,9 +909,9 @@ class Task extends Common
         $main_user_id = $request['main_user_id'] ?: '';
         $taskSearch = !empty($request['taskSearch']) ? $request['taskSearch'] : '';
         $isArchive = !empty($request['is_archive']) ? $request['is_archive'] : 0;
-//        unset($request['search']);
-//        unset($request['whereStr']);
-//        unset($request['lable_id']);
+        unset($request['search']);
+        unset($request['whereStr']);
+        unset($request['lable_id']);
         unset($request['main_user_id']);
         $request = $this->fmtRequest($request);
         $requestMap = $request['map'] ?: [];
@@ -916,11 +919,11 @@ class Task extends Common
         $lableModel = new \app\work\model\WorkLable();
         $map = $requestMap;
         $map['ishidden'] = $requestMap['ishidden'] ?: 0;
+        $map = where_arr($map, 'work', 'task', 'index');
         if ($search) {
             //普通筛选
-            $map['name'] = ['like', '%' . $search . '%'];
+            $map['task.name'] = ['like', '%' . $search . '%'];
         }
-        $map = where_arr($map, 'work', 'task', 'index');
         if ($lable_id) {
             $map['task.lable_id'] = array('like', '%' . $lable_id . '%');
         }

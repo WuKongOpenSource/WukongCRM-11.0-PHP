@@ -56,7 +56,28 @@ class ExamineRecord extends Common
 
         $result = [];
 
-        # 获取创建者信息
+        # 获取创建者信息（办公审批）
+        if ($param['types'] == 'oa_examine' && !empty($param['is_record'])) {
+            $info     = db('oa_examine')->field(['create_time', 'create_user_id'])->where('examine_id', $param['types_id'])->find();
+            $userInfo = $userModel->getUserById($info['create_user_id']);
+
+            $result[] = [
+                'check_date'         => date('Y-m-d H:i:s', $info['create_time']),
+                'check_time'         => $info['create_time'],
+                'check_user_id'      => $info['create_user_id'],
+                'check_user_id_info' => $userInfo,
+                'content'            => '',
+                'flow_id'            => 0,
+                'is_end'             => 0,
+                'order_id'           => 1,
+                'record_id'          => 0,
+                'status'             => 3,
+                'types'              => $param['types'],
+                'types_id'           => $param['types_id']
+            ];
+        }
+
+        # 获取创建者信息（业务审批）
         if (in_array($param['types'], ['crm_contract', 'crm_receivables', 'crm_invoice']) && !empty($param['is_record'])) {
             $model      = db($param['types']);
             $primaryKey = null;
@@ -75,7 +96,7 @@ class ExamineRecord extends Common
                 'content'            => '',
                 'flow_id'            => 0,
                 'is_end'             => 0,
-                'order_id'           => 0,
+                'order_id'           => 1,
                 'record_id'          => 0,
                 'status'             => 3,
                 'types'              => $param['types'],
@@ -88,6 +109,7 @@ class ExamineRecord extends Common
         foreach ($list as $k=>$v) {
             $list[$k]['check_user_id_info'] = $userModel->getUserById($v['check_user_id']);
             $list[$k]['check_date'] = date('Y-m-d H:i:s', $v['check_time']);
+            $list[$k]['order_id'] = $k + 2;
 
             $result[] = $list[$k];
         }

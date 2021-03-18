@@ -203,6 +203,7 @@ class Announcement extends Common
 		}
 		$userModel = new \app\admin\model\User();
 		$dataInfo['create_user_info'] = $userModel->getUserById($dataInfo['create_user_id']);
+        $dataInfo['create_time'] = $dataInfo['create_time']?date('Y-m-d H:i:s',$dataInfo['create_time']):null;
 		$structureModel = new \app\admin\model\Structure();
 		$dataInfo['structureList'] = $structureModel->getDataByStr($dataInfo['structure_ids'])?:array();
 		$dataInfo['announcement_id'] = $announcement_id;

@@ -180,16 +180,18 @@ class Message extends ApiCommon
             cache('remindReceivablesPlanCount'.$userInfo['id'], $data['remindReceivablesPlan']);
             cache('remindReceivablesPlanTime'.$userInfo['id'], time() + 180);
         }
-        # 待回访合同
-        $visitContractTime  = cache('visitContractTime'.$userInfo['id']);
-        $visitContractCount = cache('visitContractCount'.$userInfo['id']);
-        if (time() <= $visitContractTime) {
-            $data['returnVisitRemind'] = (int)$visitContractCount;
-        } else {
-            $visitContract = $this->visitContract(true);
-            $data['returnVisitRemind'] = $visitContract['dataCount'] ? : 0;
-            cache('visitContractCount'.$userInfo['id'], $data['returnVisitRemind']);
-            cache('visitContractTime'.$userInfo['id'], time() + 180);
+        if ($configData['visit_config'] == 1) {
+            # 待回访合同
+            $visitContractTime  = cache('visitContractTime'.$userInfo['id']);
+            $visitContractCount = cache('visitContractCount'.$userInfo['id']);
+            if (time() <= $visitContractTime) {
+                $data['returnVisitRemind'] = (int)$visitContractCount;
+            } else {
+                $visitContract = $this->visitContract(true);
+                $data['returnVisitRemind'] = $visitContract['dataCount'] ? : 0;
+                cache('visitContractCount'.$userInfo['id'], $data['returnVisitRemind']);
+                cache('visitContractTime'.$userInfo['id'], time() + 180);
+            }
         }
         # 即将到期合同
         if ($configData['contract_config'] == 1) {
@@ -249,13 +251,15 @@ class Message extends ApiCommon
         switch ($type) {
             case '1' :
                 $param['next_time'] = ['between', [$todayTime[0], $todayTime[1]]];
+                $param['is_dealt'] = ['neq', 1];
                 break;
             case '2' :
                 $param['next_time'] = ['between', [1, time()]];
+                $param['is_dealt'] = ['neq', 1];
                 break;
             case '3' :
                 $param['last_time'] = ['between', [$todayTime[0], $todayTime[1]]];
-                $param['follow']    = ['eq', '已跟进'];
+                $param['is_dealt'] = ['eq', 1];
                 break;
         }
 
@@ -293,16 +297,16 @@ class Message extends ApiCommon
 
         switch ($type) {
             case '1' : 
-                $param['next_time'] = ['between',array($todayTime[0],$todayTime[1])]; 
-                // $param['follow'] = ['neq','已跟进'];
+                $param['next_time'] = ['between',array($todayTime[0],$todayTime[1])];
+                $param['is_dealt'] = ['neq', 1];
                 break;
             case '2' : 
-                $param['next_time'] = ['between',array(1,time())]; 
-                // $param['today_param'] = 'customer.next_time>record.update_time'; 
+                $param['next_time'] = ['between',array(1,time())];
+                $param['is_dealt'] = ['neq', 1];
                 break;
             case '3' : 
                 $param['last_time'] = ['between',array($todayTime[0],$todayTime[1])];
-                $param['follow'] = ['eq','已跟进'];
+                $param['is_dealt'] = ['eq', 1];
                 break;
         }
         $data = $customerModel->getDataList($param);
@@ -343,12 +347,15 @@ class Message extends ApiCommon
         switch ($type) {
             case '1' :
                 $param['next_time'] = ['between', [$todayTime[0], $todayTime[1]]];
+                $param['is_dealt'] = ['neq', 1];
                 break;
             case '2' :
                 $param['next_time'] = ['between', [1, time()]];
+                $param['is_dealt'] = ['neq', 1];
                 break;
             case '3' :
                 $param['last_time'] = ['between', [$todayTime[0], $todayTime[1]]];
+                $param['is_dealt'] = ['eq', 1];
                 break;
         }
 
@@ -361,7 +368,7 @@ class Message extends ApiCommon
     }
 
     /**
-     * 待跟进线索
+     * 分配给我的线索
      * @author Michael_xu
      * @return 
      */
@@ -382,8 +389,14 @@ class Message extends ApiCommon
         $param['owner_user_id'] = $userInfo['id'];
 
         switch ($type) {
-            case '1' : $param['follow'] = ['neq','已跟进']; break;
-            case '2' : $param['follow'] = ['eq','已跟进']; break;
+            case '1' :
+                $param['follow'] = [['neq','已跟进'], null, 'or'];
+                $param['is_allocation'] = 1;
+                break;
+            case '2' :
+                $param['follow'] = ['eq','已跟进'];
+                $param['is_allocation'] = 1;
+                break;
         }
         $param['user_id'] = $userInfo['id'];
         $data = $leadsModel->getDataList($param);
@@ -394,7 +407,7 @@ class Message extends ApiCommon
     }        
 
     /**
-     * 待跟进客户
+     * 分配给我的客户
      * @author Michael_xu
      * @return 
      */
@@ -416,8 +429,14 @@ class Message extends ApiCommon
         $param['owner_user_id'] = $userInfo['id'];
 
         switch ($type) {
-            case '1' : $param['follow'] = ['eq','待跟进']; break;
-            case '2' : $param['follow'] = ['eq','已跟进']; break;
+            case '1' :
+                $param['follow'] = [['eq','待跟进'], null, 'or'];
+                $param['is_allocation'] = 1;
+                break;
+            case '2' :
+                $param['follow'] = ['eq','已跟进'];
+                $param['is_allocation'] = 1;
+                break;
         }
         $data = $customerModel->getDataList($param);
         if ($types == 'list') {
@@ -450,15 +469,18 @@ class Message extends ApiCommon
         switch ($type) {
             case '1' : 
                 $param['check_status'] = ['lt','2']; 
-                $param['check_user_id'] = ['like','%,'.$userInfo['id'].',%'];
+                $param['check_user_id'] = ['like',',%'.$userInfo['id'].'%,'];
+                # 要提醒的合同ID
+                $contractIdArray = db('crm_dealt_relation')->where(['types' => ['eq', 'crm_contract'], 'user_id' => ['eq', $userInfo['id']]])->column('types_id');
+                $param['contractIdArray'] = !empty($contractIdArray) ? $contractIdArray : -1;
                 break;
-            case '2' : 
-                // $param['check_status'] = ['egt','2']; 
-                $param['flow_user_id'] = ['like','%,'.$userInfo['id'].',%'];
+            case '2' :
+                $param['flow_user_id'] = ['like',',%'.$userInfo['id'].'%,'];
                 break;
         }
         $param['user_id'] = $userInfo['id'];
         $data = $contractModel->getDataList($param);
+
         if ($types == 'list') {
             return resultArray(['data' => $data]);
         }
@@ -487,11 +509,14 @@ class Message extends ApiCommon
             case '1' :
                 # 待审核、审核中
                 $param['check_status'] = ['lt','2']; 
-                $param['check_user_id'] = ['like','%,'.$userInfo['id'].',%'];
+                $param['check_user_id'] = ['like',',%'.$userInfo['id'].'%,'];
+                # 要提醒的回款ID
+                $receivablesIdArray = db('crm_dealt_relation')->where(['types' => ['eq', 'crm_receivables'], 'user_id' => ['eq', $userInfo['id']]])->column('types_id');
+                $param['receivablesIdArray'] = !empty($receivablesIdArray) ? $receivablesIdArray : -1;
                 break;
             case '2' :
                 # 全部
-                $param['flow_user_id'] = ['like','%,'.$userInfo['id'].',%'];
+                $param['flow_user_id'] = ['like',',%'.$userInfo['id'].'%,'];
                 break;
         }
         $param['user_id'] = $userInfo['id'];
@@ -527,11 +552,16 @@ class Message extends ApiCommon
             case '1' :
                 # 待审核、审核中
                 $param['check_status']  = ['lt', 2];
-                $param['check_user_id'] = ['like', '%,'. $userId .',%'];
+                $param['check_user_id'] = ['like', ',%'. $userId .'%,'];
+                # 要提醒的发票ID
+                $invoiceIdArray = db('crm_dealt_relation')->where(['types' => ['eq', 'crm_invoice'], 'user_id' => ['eq', $userId]])->column('types_id');
+                $param['invoiceIdArray'] = !empty($invoiceIdArray) ? $invoiceIdArray : -1;
+                $param['dealt'] = 1;
                 break;
             case '2' :
                 # 全部
-                $param['flow_user_id'] = ['like', '%,'. $userId .',%'];
+                $param['flow_user_id'] = ['like', ',%'. $userId .'%,'];
+                $param['dealt'] = 1;
                 break;
         }
 
@@ -566,18 +596,23 @@ class Message extends ApiCommon
             $param['owner_user_id'] = array('in',getSubUserId(false));
         }       
         switch ($type) {
-            case '1' : $param['receivables_id'] = 0; 
-                       $param['check_status'] = array('lt',2); 
-                       $param['remind_date'] = array('elt',date('Y-m-d',time())); 
-                       $param['return_date'] = array('egt',date('Y-m-d',time())); 
-                       $param['types'] = 1;
-                       break;
-            case '2' : $param['receivables_id'] = array('gt',0);
-                        $param['check_status'] = 2; 
-                        break;
-            case '3' : $param['receivables_id'] = 0;
-                        $param['remind_date'] = array('lt',date('Y-m-d',time())); 
-                        break;
+            case '1' :
+                $param['receivables_id'] = 0;
+                $param['check_status'] = array('lt',2);
+                $param['remind_date'] = array('elt',date('Y-m-d',time()));
+                $param['return_date'] = array('egt',date('Y-m-d',time()));
+                $param['types'] = 1;
+                $param['is_dealt'] = 0;
+                break;
+            case '2' :
+                $param['receivables_id'] = ['gt', 0];
+                $param['check_status'] = 2;
+                $param['dealt'] = 1;
+                break;
+            case '3' :
+                $param['receivables_id'] = 0;
+                $param['remind_date'] = array('lt',date('Y-m-d',time()));
+                break;
         }
         $data = $receivablesPlanModel->getDataList($param);
         if ($types == 'list') {
@@ -725,13 +760,15 @@ class Message extends ApiCommon
             $where['owner_user_id'] = !empty($isSub) ? ['in', getSubUserId(false)] : $userId;
             # 下次联系时间
             $where['next_time'] = ['between', [$todayTime[0], $todayTime[1]]];
+            # 是否已处理（联系）
+            $where['is_dealt'] = 0;
 
             # 线索
             if ($type == 'todayLeads') {
                 $leadsId = !empty($typeId) ? $typeId : Db::name('crm_leads')->where($where)->column('leads_id');
                 Db::name('crm_leads')->whereIn('leads_id', $leadsId)->update([
-                    'next_time' => 0,
                     'last_time' => time(),
+                    'is_dealt'  => 1,
                     'follow'    => '已跟进'
                 ]);
             }
@@ -739,8 +776,8 @@ class Message extends ApiCommon
             if ($type == 'todayCustomer') {
                 $customerId = !empty($typeId) ? $typeId : Db::name('crm_customer')->where($where)->column('customer_id');
                 Db::name('crm_customer')->whereIn('customer_id', $customerId)->update([
-                    'next_time' => 0,
                     'last_time' => time(),
+                    'is_dealt'  => 1,
                     'follow'    => '已跟进'
                 ]);
             }
@@ -748,8 +785,8 @@ class Message extends ApiCommon
             if ($type == 'todayBusiness') {
                 $businessId = !empty($typeId) ? $typeId : Db::name('crm_business')->where($where)->column('business_id');
                 Db::name('crm_business')->whereIn('business_id', $businessId)->update([
-                    'next_time' => 0,
-                    'last_time' => time()
+                    'last_time' => time(),
+                    'is_dealt'  => 1
                 ]);
             }
         }
@@ -757,7 +794,8 @@ class Message extends ApiCommon
         # 处理分配给我的线索、客户
         if (in_array($type, ['followLeads', 'followCustomer'])) {
             $where['owner_user_id'] = $userId;
-            $where['follow']        = ['neq','已跟进'];
+            $where['follow']        = [['neq','已跟进'], null, 'or'];
+            $where['is_allocation'] = 1;
 
             # 线索
             if ($type == 'followLeads') {
@@ -774,31 +812,24 @@ class Message extends ApiCommon
         # 处理待审核合同、回款、发票
         if (in_array($type, ['checkContract', 'checkReceivables', 'checkInvoice'])) {
             $where['check_status']  = ['lt','2'];
-            $where['check_user_id'] = ['like','%,' . $userId . ',%'];
-
-            $update = [
-                'check_status'  => 2,
-                'flow_id'       => 0,
-                'order_id'      => 0,
-                'check_user_id' => '',
-                'flow_user_id'  => ',' . $userId . ','
-            ];
+            $where['check_user_id'] = ['like',',%' . $userId . '%,'];
 
             # 合同
             if ($type == 'checkContract') {
                 $contractId = !empty($typeId) ? $typeId : Db::name('crm_contract')->where($where)->column('contract_id');
-                Db::name('crm_contract')->whereIn('contract_id', $contractId)->update($update);
+                db('crm_dealt_relation')->where('user_id', $userId)->where('types', 'crm_contract')->whereIn('types_id', $contractId)->delete();
             }
             # 回款
             if ($type == 'checkReceivables') {
                 $receivablesId = !empty($typeId) ? $typeId : Db::name('crm_receivables')->where($where)->column('receivables_id');
-                Db::name('crm_receivables')->whereIn('receivables_id', $receivablesId)->update($update);
+                db('crm_dealt_relation')->where('user_id', $userId)->where('types', 'crm_receivables')->whereIn('types_id', $receivablesId)->delete();
             }
             # 发票
             if ($type == 'checkInvoice') {
                 $invoiceId = !empty($typeId) ? $typeId : Db::name('crm_invoice')->where($where)->column('invoice_id');
-                Db::name('crm_invoice')->whereIn('invoice_id', $invoiceId)->update($update);
+                db('crm_dealt_relation')->where('user_id', $userId)->where('types', 'crm_invoice')->whereIn('types_id', $invoiceId)->delete();
             }
+
         }
 
         # 处理到期合同
@@ -831,14 +862,16 @@ class Message extends ApiCommon
                 Db::name('crm_customer')->whereIn('customer_id', $typeId)->update([
                     'follow'      => '已跟进',
                     'last_time'   => time(),
-                    'update_time' => time()
+                    'deal_time'   => time(),
+                    'update_time' => time(),
                 ]);
             } else {
                 $whereData['page']      = 1;
-                $whereData['limit']     = 30;
+                $whereData['limit']     = 100;
                 $whereData['is_remind'] = db('crm_config')->where('name', 'remind_config')->value('value');;
                 $whereData['user_id']   = $userId;
                 $whereData['scene_id']  = db('admin_scene')->where(['types' => 'crm_customer','bydata' => empty($isSub) ? 'me' : 'sub'])->value('scene_id');
+                $whereData['owner_user_id'] = !empty($isSub) ? ['in', getSubUserId(false, 0, $userId)] : $userId;
                 $poolCustomers = (new \app\crm\model\Customer())->getDataList($whereData);
                 $ids = [];
                 foreach ($poolCustomers['list'] AS $key => $value) {
@@ -847,9 +880,33 @@ class Message extends ApiCommon
                 if (!empty($ids)) Db::name('crm_customer')->whereIn('customer_id', $ids)->update([
                     'follow'      => '已跟进',
                     'last_time'   => time(),
-                    'update_time' => time()
+                    'deal_time'   => time(),
+                    'update_time' => time(),
                 ]);
             }
+        }
+
+        # 带回款提醒
+        if ($type == 'remindReceivablesPlan') {
+            $planId = [];
+            if (!empty($typeId)) {
+                $planId = $typeId;
+            } else {
+                $param['owner_user_id']  = $isSub ? ['in',getSubUserId(false)] : $userId;
+                $param['receivables_id'] = 0;
+                $param['check_status']   = ['lt', 2];
+                $param['remind_date']    = ['elt', date('Y-m-d',time())];
+                $param['return_date']    = ['egt', date('Y-m-d',time())];
+                $param['types']          = 1;
+                $param['page']           = 1;
+                $param['limit']          = 1000;
+                $receivablesPlanModel    = model('ReceivablesPlan');
+                $data = $receivablesPlanModel->getDataList($param);
+                foreach ($data['list'] AS $key => $value) {
+                    $planId[] = $value['plan_id'];
+                }
+            }
+            if (!empty($planId)) db('crm_receivables_plan')->whereIn('plan_id', $planId)->update(['is_dealt' => 1]);
         }
 
 

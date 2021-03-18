@@ -33,7 +33,7 @@ class ReceivablesPlan extends Common
      * @return    [array]                    [description]
      */		
 	public function getDataList($request)
-    {  	
+    {
     	$userModel = new \app\admin\model\User();
 		$search = $request['search'];
     	$user_id = $request['user_id'];
@@ -42,6 +42,7 @@ class ReceivablesPlan extends Common
     	$types = $request['types'];
         $getCount = $request['getCount'];
         $status = isset($request['status']) ? $request['status'] : 1;
+        $dealt = $request['dealt']; # 待办事项
 		unset($request['scene_id']);
 		unset($request['search']);
 		unset($request['user_id']);	    	
@@ -49,6 +50,7 @@ class ReceivablesPlan extends Common
 		unset($request['types']);
         unset($request['getCount']);
         unset($request['status']);
+        unset($request['dealt']);
 
         $request = $this->fmtRequest( $request );
         $map = $request['map'] ? : [];
@@ -81,19 +83,27 @@ class ReceivablesPlan extends Common
 		// @ymob 2019-12-11 17:51:54
 		// 修改回款时，回款计划选项列表应该包含该回款对应的回款计划 不能过滤
 		// 将types改为status，status：可用的回款计划 fanqi
-		if ($request['map']['receivables_id']) {
-		    if (!empty($request['map']['contract_id'])) {
-                $map = " 
+        if (empty($dealt)) { # 不是待办事项
+            if ($request['map']['receivables_id']) {
+                if (!empty($request['map']['contract_id'])) {
+                    $map = " 
                     (`receivables_plan`.`contract_id` = {$request['map']['contract_id']} AND `receivables_plan`.`receivables_id` = {$request['map']['receivables_id']}) 
                     OR 
                     (`receivables_plan`.`contract_id` = {$request['map']['contract_id']} AND `receivables_plan`.`receivables_id` = 0)
                 ";
-            } else {
-                $map = " (`receivables_plan`.`receivables_id` = 0 )";
+                } else {
+                    $map = " (`receivables_plan`.`receivables_id` = 0 )";
+                }
+            } elseif ($status == 0) {
+                $map['receivables_plan.receivables_id'] = 0;
             }
-		} elseif ($status == 0) {
-			$map['receivables_plan.receivables_id'] = 0;
-		}
+        }
+
+        # 待办事项-待回款提醒-已回款
+        if (!empty($dealt)) {
+            $map = " (`receivables_plan`.`receivables_id` > ".$request['map']['receivables_id'][1]." )";
+        }
+
 
         $dataCount = db('crm_receivables_plan')
             ->alias('receivables_plan')

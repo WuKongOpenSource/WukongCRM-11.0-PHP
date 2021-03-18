@@ -92,7 +92,11 @@ class VisitLogic extends Common
         $userField = $fieldModel->getFieldByFormType('crm_visit', 'user'); //人员类型
         $structureField = $fieldModel->getFieldByFormType('crm_visit', 'structure');  //部门类型
         $datetimeField = $fieldModel->getFieldByFormType('crm_visit', 'datetime'); //日期时间类型
-
+        # 处理人员和部门类型的排序报错问题(前端传来的是包含_name的别名字段)
+        $temporaryField = str_replace('_name', '', $order_field);
+        if (in_array($temporaryField, $userField) || in_array($temporaryField, $structureField)) {
+            $order_field = $temporaryField;
+        }
         //排序
         if ($order_type && $order_field) {
             $order = $fieldModel->getOrderByFormtype('crm_visit', 'visit', $order_field, $order_type);
@@ -130,17 +134,18 @@ class VisitLogic extends Common
             ->where($map)->where($partMap)->where($authMap)->group('visit.visit_id')->count('visit.visit_id');
 
         foreach ($list as $k => $v) {
+            $list[$k]['contract_num'] = $v['contract_number'];
             $list[$k]['create_user_id_info'] = isset($v['create_user_id']) ? $userModel->getUserById($v['create_user_id']) : [];
             $list[$k]['owner_user_id_info'] = isset($v['owner_user_id']) ? $userModel->getUserById($v['owner_user_id']) : [];
             $list[$k]['create_user_name'] = !empty($list[$k]['create_user_id_info']['realname']) ? $list[$k]['create_user_id_info']['realname'] : '';
             $list[$k]['owner_user_name'] = !empty($list[$k]['owner_user_id_info']['realname']) ? $list[$k]['owner_user_id_info']['realname'] : '';
             foreach ($userField as $key => $val) {
-                $usernameField  = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
-                $list[$k][$val] = implode($usernameField, ',');
+                $usernameField = !empty($v[$val]) ? db('admin_user')->whereIn('id', stringToArray($v[$val]))->column('realname') : [];
+                $list[$k][$val.'_name'] = implode($usernameField, ',');
             }
             foreach ($structureField as $key => $val) {
                 $structureNameField = !empty($v[$val]) ? db('admin_structure')->whereIn('id', stringToArray($v[$val]))->column('name') : [];
-                $list[$k][$val]     = implode($structureNameField, ',');
+                $list[$k][$val.'_name'] = implode($structureNameField, ',');
             }
             foreach ($datetimeField as $key => $val) {
                 $list[$k][$val] = !empty($v[$val]) ? date('Y-m-d H:i:s', $v[$val]) : null;
@@ -237,7 +242,6 @@ class VisitLogic extends Common
             if ($v == 'visit_user_id') continue;
             $param[$v] = arrayToString($param[$v]);
         }
-        $param['update_time'] = '';
         $visitModel = new Visit();
         if ($visitModel->data($param)->allowField(true)->save()) {
             $visit_id = $visitModel->visit_id;

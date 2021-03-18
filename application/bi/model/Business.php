@@ -67,27 +67,23 @@ class Business extends Common
         $perUserIds = $userModel->getUserByPer('bi', 'business', 'read'); //权限范围内userIds
         $whereData  = $adminModel->getWhere($param, '', $perUserIds); //统计条件
         $userIds    = $whereData['userIds'];
-
-        if (!empty($whereData['between_time']['last_time'])) unset($whereData['between_time']['last_time']);
+        if (!empty($whereData['between_time'][0])) unset($whereData['between_time'][1]);
         $between_time = $whereData['between_time'];
         $where['business.owner_user_id'] = array('in',$userIds);
-        $where['business.create_time'] = ['between', $between_time];
-        $where['check_status'] = 2;
+        $where['business.create_time'] = ['between', [$param['start_time'],$param['end_time']]];
         if (!empty($param['is_end']) && $param['is_end'] == 1) $where['is_end'] = 1;
 
         $count = db('crm_business')->alias('business')
             ->join('__CRM_CONTRACT__ contract', 'contract.business_id = business.business_id', 'left')
             ->where($where)->group('business.business_id')->count();
         $sql = db('crm_business')->alias('business')
-            ->field('business.business_id,business.customer_id,business.money,business.type_id,business.status_id,business.deal_date,business.create_user_id,business.owner_user_id')
+            ->field('business.business_id,business.customer_id,business.money,business.type_id,business.status_id,business.deal_date,business.create_user_id,business.owner_user_id,business.is_end')
             ->join('__CRM_CONTRACT__ contract', 'contract.business_id = business.business_id', 'left')
             ->where($where)
-            ->fetchSql()
             ->limit(($page - 1) * $limit, $limit)
             ->order(['money' => 'DESC'])
             ->group('business.business_id')
             ->select();
-
-        return ['dataCount' => $count, 'list' => queryCache($sql)];
+        return ['dataCount' => $count, 'list' => $sql];
    }
 }

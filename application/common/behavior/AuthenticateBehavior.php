@@ -6,6 +6,7 @@
 // +----------------------------------------------------------------------
 namespace app\common\behavior;
 
+use think\Cache;
 use think\Request;
 use think\Db;
 
@@ -30,18 +31,18 @@ class AuthenticateBehavior
 		$permission = $params['permission']; //无限制
 		/*获取头部信息*/ 
         $header = $request->header();
-        $authKey = $header['authkey'];
+        $authKey = trim($header['authkey']);
         
 		$paramArr = $request->param();
         $platform = $paramArr['platform'] ? '_'.$paramArr['platform'] : ''; //请求分类(mobile,ding)
-        $cache = cache('Auth_'.$authKey.$platform); 
+        $cache = Cache::get('Auth_'.$authKey.$platform);
         $userInfo = $cache['userInfo'];
     	
     	if (in_array($a, $permission)) {
     		return true;
     	}   
 
-    	if (empty($userInfo)) {
+    	if (empty($userInfo['id'])) {
 			header('Content-Type:application/json; charset=utf-8');
             exit(json_encode(['code'=>101,'error'=>'请先登录']));
     	}

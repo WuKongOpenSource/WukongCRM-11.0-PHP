@@ -24,7 +24,7 @@ class Index extends ApiCommon
         $action = [
             'permission' => [],
             'allow' => ['fields', 'fieldrecord', 'authlist','sort','updatesort',
-            'importnum','importinfo','importlist'],
+            'importnum','importinfo','importlist','readnotice'],
         ];
         Hook::listen('check_auth', $action);
         $request = Request::instance();
@@ -151,5 +151,20 @@ class Index extends ApiCommon
         $excelModel = model('Excel');
         $data = $excelModel->importList($param);
         return resultArray(['data'=>$data]);
+    }
+
+    /**
+     * 升级公告
+     * @author fanqi
+     * @date 2021-03-15
+     * @return \think\response\Json
+     */
+    public function readNotice()
+    {
+        $userInfo = $this->userInfo;
+
+        if (!empty($userInfo['id'])) db('admin_user')->where('id', $userInfo['id'])->update(['is_read_notice' => 1]);
+
+        return resultArray(['data' => '']);
     }
 }

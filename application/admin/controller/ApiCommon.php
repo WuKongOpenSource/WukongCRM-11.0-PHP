@@ -7,6 +7,7 @@
 
 namespace app\admin\controller;
 
+use think\Cache;
 use think\Request;
 use think\Db;
 use app\common\adapter\AuthAdapter;
@@ -22,11 +23,12 @@ class ApiCommon extends Common
         $header = Request::instance()->header();
         $request = Request::instance();
         
-        $authKey = $header['authkey'];
-        $sessionId = $header['sessionid'];
+        $authKey = trim($header['authkey']);
+        $sessionId = trim($header['sessionid']);
         $paramArr = $request->param();
         $platform = $paramArr['platform'] ? '_'.$paramArr['platform'] : ''; //请求平台(mobile,ding)
-        $cache = cache('Auth_'.$authKey.$platform);         
+        $cache = Cache::get('Auth_'.$authKey.$platform);
+//        $cache = cache('Auth_'.$authKey.$platform);
 
         // 校验sessionid和authKey
         if (empty($sessionId) || empty($authKey) || empty($cache)) {
@@ -36,7 +38,7 @@ class ApiCommon extends Common
         }
         //登录有效时间
         $cacheConfig = config('cache');
-        $loginExpire = $cacheConfig['expire'] ? : 86400*3;
+        $loginExpire = !empty($cacheConfig['expire']) ? $cacheConfig['expire'] : 86400 * 30;
 
         // 检查账号有效性
         $userInfo = $cache['userInfo'];
@@ -49,7 +51,8 @@ class ApiCommon extends Common
         }
         session('user_id', $userInfo['id']);
         // 更新缓存
-        cache('Auth_'.$authKey, $cache, $loginExpire);           
+        Cache::set('Auth_'.$authKey, $cache, $loginExpire);
+//        cache('Auth_'.$authKey, $cache, $loginExpire, 'UserToken');
         // $GLOBALS['userInfo'] = $userInfo;
     }
 }
