@@ -38,6 +38,10 @@ UI框架：Element-UI 2.6.3
 悟空crm11.0的运行环境要求PHP5.6以上
 
 
+## 注意事项
+
+:exclamation:  :exclamation:  :exclamation: v11.0.2版本开始，cache类缓存方式由原file类型改为redis类型，因此需要开启PHP Redis扩展（必须确保已经安装了Redis服务以及PHP Redis驱动）
+
 ## 一键安装
 
 代码中已集成前端vue打包后文件，可免去打包操作：
