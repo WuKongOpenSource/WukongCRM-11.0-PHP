@@ -3,13 +3,15 @@
 
 悟空的发展受益于开源，也会回馈于开源。2019年，悟空CRM会继续秉承“拥抱开放、合作共赢、创造价值”的理念，在开源的道路上继续砥砺前行，和更多的社区开发者一起为国内外开源做出积极贡献。
 
-官网：[http://www.5kcrm.com](http://www.5kcrm.com/)
+官网：[http://www.5kcrm.com](https://www.5kcrm.com/)
 
-官网：[http://www.72crm.com](http://www.72crm.com/)
+官网：[http://www.72crm.com](https://www.72crm.com/)
 
-论坛：[http://bbs.72crm.net](http://bbs.72crm.net/)
+论坛：[http://bbs.72crm.net](https://bbs.72crm.net/)
 
 演示地址：[demo11.5kcrm.net](http://demo11.5kcrm.net/)(帐号：18888888888   密码：123456a)
+
+码云gitee地址：[码云仓库地址](https://gitee.com/wukongcrm)
 
 QQ群交流群⑩群：[486745026](https:////shang.qq.com/wpa/qunwpa?idkey=f4687b809bf63f08f707aa1c56dee8dbcb9526237c429c4532222021d65bf83c)
 
@@ -19,7 +21,7 @@ QQ群交流群⑩群：[486745026](https:////shang.qq.com/wpa/qunwpa?idkey=f4687
 
 悟空CRM采用全新的前后端分离模式，本仓库代码中已集成前端vue打包后文件，可免去打包操作
 
-如需调整前端代码，请单独下载前端代码，[查看11.0PHP版前端仓库](https://gitee.com/wukongcrm/P72crm_web)
+如需调整前端代码，请单独下载前端代码，[查看11.0PHP版前端仓库](https://github.com/72wukong/72crm-11.0-web-PHP)
 
  **特别声明：如9.0版本升级至11.0版本，执行升级脚本前，请先备份数据库！！！** 
 
