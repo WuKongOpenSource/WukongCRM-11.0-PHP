@@ -3,6 +3,7 @@
 
 悟空的发展受益于开源，也会回馈于开源。2019年，悟空CRM会继续秉承“拥抱开放、合作共赢、创造价值”的理念，在开源的道路上继续砥砺前行，和更多的社区开发者一起为国内外开源做出积极贡献。
 
+
 官网：[http://www.5kcrm.com](https://www.5kcrm.com/)
 
 官网：[http://www.72crm.com](https://www.72crm.com/)
@@ -15,9 +16,13 @@
 
 QQ群交流群⑩群：[486745026](https:////shang.qq.com/wpa/qunwpa?idkey=f4687b809bf63f08f707aa1c56dee8dbcb9526237c429c4532222021d65bf83c)
 
-赞赏一下吧~~
+扫码添加小悟官方客服微信，邀您加入千人微信交流群：
 
-![](https://github.com/72crm/72crm/blob/master/ux/intro_img/g11.png)
+<img src="https://images.gitee.com/uploads/images/2019/1231/115927_f9c580c8_345098.png" width="200">
+
+关注悟空CRM公众号，了解更多悟空资讯
+
+<img src="https://images.gitee.com/uploads/images/2019/1202/135713_d3566c6a_345098.jpeg" width="200">
 
 悟空CRM采用全新的前后端分离模式，本仓库代码中已集成前端vue打包后文件，可免去打包操作
 
