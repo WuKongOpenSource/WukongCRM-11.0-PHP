@@ -6,6 +6,7 @@
 // +----------------------------------------------------------------------
 namespace app\crm\model;
 
+use app\admin\controller\ApiCommon;
 use think\Db;
 use app\admin\model\Common;
 use think\Request;
@@ -60,7 +61,11 @@ class ProductCategory extends Common
 		if ($this->data($param)->allowField(true)->save()) {
 			$data = [];
 			$data['id'] = $this->category_id;
-			return $data;
+            # 系统操作日志
+            $user=new ApiCommon();
+            $userInfo=$user->userInfo;
+            SystemActionLog($userInfo['id'], 'crm_product','customer', $this->category_id, 'save',$param['name'] , '', '','添加了产品分类：'.$param['name']);
+            return $data;
 		} else {
 			$this->error = '添加失败';
 			return false;
@@ -90,7 +95,11 @@ class ProductCategory extends Common
 		}
 
 		if ($this->allowField(true)->save($param, ['category_id' => $category_id])) {
-			return true;
+            # 系统操作日志
+            $user=new ApiCommon();
+            $userInfo=$user->userInfo;
+            SystemActionLog($userInfo['id'], 'crm_product','customer', $category_id,  'update',$dataInfo['name'] , '', '','编辑了产品分类：'.$dataInfo['name']);
+            return true;
 		} else {
 			$this->error = '编辑失败';
 			return false;
@@ -126,6 +135,7 @@ class ProductCategory extends Common
 			$this->error = '请先移除该类型及子类下的相关产品';
 			return false;			
 		}
+        $data=db('crm_product_category')->where('category_id' , $id)->find();
 		//提交事务
 		$this->startTrans();
 		try {
@@ -137,8 +147,12 @@ class ProductCategory extends Common
 					$this->where('category_id', 'in', $childIds)->delete();
 				}
 			}
-			$this->commit();
-			return true;					
+            # 系统操作日志
+            $user=new ApiCommon();
+            $userInfo=$user->userInfo;
+            SystemActionLog($userInfo['id'], 'crm_product','customer', $id,  'update',$data['name'] , '', '','删除了产品分类：'.$data['name']);
+            $this->commit();
+			return true;
 		} catch(\Exception $e) {
 			$this->error = '删除失败';
 			$this->rollback();

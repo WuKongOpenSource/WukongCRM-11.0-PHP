@@ -60,9 +60,10 @@ class Tasklable extends ApiCommon
      * @return
      */
     public function index()
-    {   
+    {
+        $userInfo = $this->userInfo;
         $lableModel = model('WorkLable');
-        $list = $lableModel->getDataList();
+        $list = $lableModel->getDataList($userInfo['id']);
         return resultArray(['data'=>$list]);
     }
 
@@ -169,6 +170,8 @@ class Tasklable extends ApiCommon
 		$param['create_user_id'] = $userInfo['id']; 
         $flag = $taskLableModel->delDataById($param);
         if ($flag) {
+            # 删除标签排序
+            db('work_lable_order')->where('lable_id', $param['lable_id'])->delete();
             return resultArray(['data'=>'删除成功']);
         } else {
             return resultArray(['error'=>$taskLableModel->getError()]);
@@ -187,5 +190,24 @@ class Tasklable extends ApiCommon
         $taskLableModel = model('WorkLable');
         $data = $taskLableModel->getDataById($param['lable_id']);
         return resultArray(['data'=>$data]);
+    }
+
+    /**
+     * 标签排序
+     *
+     * @author fanqi
+     * @since 2021-03-27
+     * @return \think\response\Json
+     */
+    public function updateOrder()
+    {
+        $param = $this->param;
+        $userInfo = $this->userInfo;
+        $param['user_id'] = $userInfo['id'];
+
+        $labelModel = model('WorkLable');
+        $labelModel->updateOrder($param);
+
+        return resultArray(['data' => '操作成功！']);
     }
 }

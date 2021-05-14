@@ -48,7 +48,6 @@ class Initialize extends ApiCommon
             ['type' => 4, 'name' => '日志'],
             ['type' => 5, 'name' => '项目管理'],
             ['type' => 6, 'name' => '日历'],
-//            ['type' => 7, 'name' => '知识库'],
         ];
 
         return resultArray(['data' => $data]);
@@ -65,6 +64,8 @@ class Initialize extends ApiCommon
      */
     public function update(InitializeLogic $initializeLogic)
     {
+        $userInfo = $this->userInfo;
+
         if (empty($this->param['type']) || !is_array($this->param['type'])) return resultArray(['error' => '模块类型错误！']);
 
         if (!empty($this->param['password']) && !$initializeLogic->verification($this->userInfo['id'], $this->param['password'])) {
@@ -72,6 +73,9 @@ class Initialize extends ApiCommon
         }
 
         $initializeLogic->update($this->param['type']);
+
+        # 系统操作日志
+        SystemActionLog($userInfo['id'], 'admin_user','work_task', 1, 'update', '重置数据' , '', '','重置了数据');
 
         return resultArray(['data' => $initializeLogic->log]);
     }

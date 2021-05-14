@@ -134,7 +134,7 @@ class Ranking extends ApiCommon
         if (!empty($param['start_time'])) $param['start_time'] = $param['start_time'] . ' 00:00:00';
         if (!empty($param['end_time']))   $param['end_time']   = $param['end_time'] . ' 23:59:59';
         $whereArr = $this->com($param, 'contract');
-        $whereArr['check_status'] = 2;
+//        $whereArr['check_status'] = 2;
 
         //导出使用
         if (!empty($param['excel_type'])) {

@@ -7,6 +7,7 @@
 
 namespace app\admin\model;
 
+use app\admin\controller\ApiCommon;
 use app\admin\model\Common;
 
 class Group extends Common 
@@ -85,9 +86,11 @@ class Group extends Common
 			//项目模块下角色
 			$param['type'] = 0;
 		}
+		$userInfo=new ApiCommon();
+		$user_id=$userInfo->userInfo;
 		$flag = $this->insertGetId($param);
 		if ($flag) {
-			return $flag;
+          return $flag;
 		} else {
 			$this->error = '操作失败';
 			return false;
@@ -122,7 +125,10 @@ class Group extends Common
         }
 		$flag = $this->where('id = '.$group_id)->update($param);
 		if ($flag) {
-			return true;
+		    $user=new ApiCommon();
+		    $user_id=$user->userInfo;
+            SystemActionLog($user_id['id'], 'admin_group','role', $group_id,  'update', $dataInfo['title'], '', '','编辑了：'.$dataInfo['title']);
+            return true;
 		} else {
 			$this->error = '操作失败';
 			return false;
@@ -143,7 +149,11 @@ class Group extends Common
 		}
 		$flag = $this->where('id = '.$group_id)->delete();
 		if ($flag) {
-			return true;
+		    # 系统操作记录
+            $user=new ApiCommon();
+            $user_id=$user->userInfo;
+            SystemActionLog($user_id['id'], 'admin_group','role', $group_id,  'update', $dataInfo['title'], '', '','删除了角色：'.$dataInfo['title']);
+            return true;
 		} else {
 			$this->error = '删除失败';
 			return false;

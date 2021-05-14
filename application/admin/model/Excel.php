@@ -13,7 +13,7 @@ use app\work\model\Task;
 use com\PseudoQueue as Queue;
 use think\Cache;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
-
+use think\cache\driver\Redis;
 class Excel extends Common
 {
     /**
@@ -72,7 +72,7 @@ class Excel extends Common
     public function excelImportDownload($field_list, $types, $save_path = '')
     {
         $fieldModel = new \app\admin\model\Field();
-        
+    
         //实例化主文件
         $objPHPExcel = new Spreadsheet();
         $objProps = $objPHPExcel->getProperties(); // 设置excel文档的属性
@@ -86,7 +86,7 @@ class Excel extends Common
         $objPHPExcel->setActiveSheetIndex(0); //设置当前的sheet
         $objActSheet = $objPHPExcel->getActiveSheet();
         $objActSheet->setTitle('导入模板' . date('Y-m-d', time())); //设置sheet的标题
-        
+    
         //存储Excel数据源到其他工作薄
         $objPHPExcel->createSheet();
         $subObject = $objPHPExcel->getSheet(1);
@@ -121,11 +121,13 @@ class Excel extends Common
                 }
             } else {
                 $objActSheet->getColumnDimension($this->stringFromColumnIndex($k))->setWidth(20); //设置单元格宽度
-                if ($field['form_type'] == 'select' || $field['form_type'] == 'checkbox' || $field['form_type'] == 'radio' || $field['form_type'] == 'category') {
+                if ($field['form_type'] == 'select' || $field['form_type'] == 'checkbox' || $field['form_type'] == 'radio' || $field['form_type'] == 'category' || $field['form_type']=='user') {
                     //产品类别
                     if ($field['form_type'] == 'category' && $field['types'] == 'crm_product') {
                         $setting = db('crm_product_category')->order('pid asc')->column('name');
-                    } else {
+                    } elseif($field['form_type']=='user' && $field['field'] == 'owner_user_id') {
+                        $setting = db('admin_user')->order('id asc')->column('realname');
+                    }else{
                         $setting = $field['setting'] ?: [];
                     }
                     $select_value = implode(',', $setting);
@@ -554,16 +556,16 @@ class Excel extends Common
             $save_path = UPLOAD_PATH . $save_name;
             
             // 队列-判断是否需要排队
-            if (!$queue->canExec()) {
-                $this->error = [
-                    'temp_file' => $save_name,
-                    'page' => -2,
-                    'import_queue_index' => $import_queue_index,
-                    'info' => $queue->error
-                ];
-                return true;
-            }
-            
+//            if (!$queue->canExec()) {
+//                $this->error = [
+//                    'temp_file' => $save_name,
+//                    'page' => -2,
+//                    'import_queue_index' => $import_queue_index,
+//                    'info' => $queue->error
+//                ];
+//                return true;
+//            }
+
             // 加载类库
             vendor("phpexcel.PHPExcel");
             vendor("phpexcel.PHPExcel.Writer.Excel5");
@@ -647,10 +649,16 @@ class Excel extends Common
                     break;
             }
             // 字段
+    
             $fieldModel = new \app\admin\model\Field();
             $fieldParam['types'] = $types;
             $fieldParam['action'] = 'excel';
             $field_list = $fieldModel->field($fieldParam);
+            if(!empty($param['pool_id'])){
+                $pool_list=db('crm_customer_pool_field_setting')->where(['pool_id'=>$param['pool_id'],'is_hidden'=>0])->select();
+                $merge_list = $fieldModel->field($fieldParam);
+                $field_list=array_intersect($merge_list,$pool_list);
+            }
             $field_list = array_map(function ($val) {
                 if (method_exists($val, 'toArray')) {
                     return $val->toArray();
@@ -659,6 +667,40 @@ class Excel extends Common
                 }
             }, $field_list);
             $field_key_name_list = array_column($field_list, 'name', 'field');
+            # 下次升级
+//            $fieldModel = new \app\admin\model\Field();
+//            $fieldParam['types'] = $types;
+//            $fieldParam['action'] = 'excel';
+//            if(!empty($param['pool_id'])){
+//                $pool_list=db('crm_customer_pool_field_setting')->where(['pool_id'=>$param['pool_id'],'is_hidden'=>0])->select();
+//                $merge_list = $fieldModel->field($fieldParam);
+//                $field_list=array_intersect($merge_list,$pool_list);
+//            }else{
+//                $field_list = $fieldModel->field($fieldParam);
+//                $field=[1=>[
+//                    'field'=>'owner_user_id',
+//                    'types'=>'crm_leads',
+//                    'name'=>'负责人',
+//                    'form_type'=>'user',
+//                    'default_value'=>'',
+//                    'is_unique' => 1,
+//                    'is_null' => 1,
+//                    'input_tips' =>'',
+//                    'setting' => Array(),
+//                    'is_hidden'=>0,
+//                    'writeStatus' => 1,
+//                    'value' => '']
+//                ];
+//                $first_array = array_splice($field_list, 0, 2);
+//            }
+//            $field_list = array_map(function ($val) {
+//                if (method_exists($val, 'toArray')) {
+//                    return $val->toArray();
+//                } else {
+//                    return $val;
+//                }
+//            }, $field_list);
+//            $field_key_name_list = array_column($field_list, 'name', 'field');
             // 加载导入数据文件
             $objRender = \PhpOffice\PhpSpreadsheet\IOFactory::createReader('Xls');
             $objRender->setReadDataOnly(true);
@@ -675,6 +717,7 @@ class Excel extends Common
             // 检测导入文件是否使用最新模板
             $header = $sheet->rangeToArray("A2:{$max_col}2")[0];
             $temp = 0;
+           
             for ($i = 0; $i < count($field_list); $i++) {
                 if (
                     $header[$i] == $field_list[$i]['name']
@@ -725,20 +768,31 @@ class Excel extends Common
             // 数据重复时的处理方式 0跳过  1覆盖
             $config = $param['config'] ?: 0;
             // 默认数据
-            
-            $default_data = [
-                'create_user_id' => $param['create_user_id'],
-                'owner_user_id' => $param['owner_user_id'],
-                'create_time' => time(),
-                'update_time' => time(),
-            ];
-            
+            if(!empty($param['pool_id'])){
+                //公海导入
+                $default_data = [
+                    'create_user_id' => $param['create_user_id'],
+                    'create_time' => time(),
+                    'update_time' => time(),
+                    'owner_user_id' => 0,
+                    'before_owner_user_id'=>$param['create_user_id'],
+                    'into_pool_time'=>time(),
+                    'pool_id' => $param['pool_id'],
+                ];
+            }else{
+                $default_data = [
+                    'create_user_id' => $param['create_user_id'],
+                    'owner_user_id' => $param['owner_user_id'],
+                    'create_time' => time(),
+                    'update_time' => time(),
+                ];
+            }
             if ($temp !== count($field_list)) {
 //                $this->error = '请使用最新导入模板';
                 @unlink($save_path);
                 $queue->dequeue();
                 foreach ($dataList as $val) {
-                    $error_data_func($val, '请使用最新导入模板');
+                    $error_data_func($val, '请使用最新导入模板1');
                 }
                 $objWriter = \PHPExcel_IOFactory::createWriter($err_PHPExcel, 'Excel5');
                 $objWriter->save($error_path);
@@ -833,22 +887,26 @@ class Excel extends Common
                             $old_data_id_list = $dataModel->whereOr($unique_where)->column($db_id);
                         }
                     }
+                    #下次升级
+//                    if(empty($param['pool_id'])){
+//                        $user_id=db('admin_user')->where('realname',$val[2])->value('id');
+//                        $data['owner_user_id']=$user_id?:0;
+//                    }
+                    $owner = db('crm_customer_pool')->where(['pool_id' => $param['pool_id']])->value('admin_user_ids');
+                    $auth=db('admin_access')->where('user_id',$param['create_user_id'])->column('group_id');
                     // 数据重复时
-                    if ($old_data_id_list) {
-                        // 是否覆盖
+                    if (!empty($old_data_id_list) && empty($param['pool_id'])) {
                         if ($config) {
                             $data = array_merge($data, $default_data);
-                            $data['user_id'] = $param['create_user_id'];
-                            $data['update_time'] = time();
+                            $data['create_user_id'] = $param['create_user_id'];
                             $data['update_time'] = time();
                             $dataModel->startTrans();
                             try {
                                 $up_success_count = 0;
                                 foreach ($old_data_id_list as $id) {
                                     if ($types == 'crm_customer') {
-                                        $owner = db('crm_customer')->where(['name' => $data['name']])->find();
-                                        if (!empty($owner) && $owner['owner_user_id'] == 0) {
-                                            $temp_error = $owner['name'] . ' ' . '公海数据，无覆盖权限';
+                                        if (!in_array($param['create_user_id'],trim(stringToArray($owner),',')) && !in_array(1, $auth) && $param['create_user_id']!=1) {
+                                            $temp_error ='当前导入人员对该公海数据，无导入权限';
                                             $error_data_func($val, $temp_error);
                                             break;
                                         }
@@ -886,11 +944,21 @@ class Excel extends Common
                             $unique_field = array_unique($unique_field);
                             $error_data_func($val, implode(', ', $unique_field) . ' 根据查重规则，该条数据重复');
                         }
+                    }elseif(!empty($old_data_id_list) && !empty($param['pool_id'])){
+                        $error_data_func($val,  ' 重复数据不在当前公海，无权覆盖');
                     } else {
-                        $data = array_merge($data, $default_data);
-                        if (!$resData = $dataModel->createData($data)) {
-                            $error_data_func($val, $dataModel->getError());
+                        if ($types == 'crm_customer') {
+                        if (!in_array($param['create_user_id'],trim(stringToArray($owner),',')) && !in_array(1, $auth) && $param['create_user_id']!=1) {
+                            $temp_error = '当前导入人员对该公海数据，无导入权限';
+                            $error_data_func($val, $temp_error);
                         }
+                        }else{
+                            $data = array_merge($data, $default_data);
+                            if (!$resData = $dataModel->createData($data)) {
+                                $error_data_func($val, $dataModel->getError());
+                            }
+                        }
+                        
                     }
                 }
                 
@@ -933,6 +1001,7 @@ class Excel extends Common
                     'error' => $error
                 ]);
                 // 执行完成
+                $redis= new Redis();
                 if ($done >= $total) {
                     // 出队
                     $queue->dequeue();
@@ -955,6 +1024,9 @@ class Excel extends Common
                         'user_id' => $user_id,
                         'error_data_file_path' => $error ? 'temp/' . $error_data_file_name : ''
                     ]);
+                  
+                    Cache::rm('item');
+                    Cache::rm('excel_item');
                     Cache::set('item', 1, config('import_cache_time'));
                     Cache::set('excel_item', serialize($this->error), config('import_cache_time'));
                 } else {
@@ -969,6 +1041,8 @@ class Excel extends Common
                     $excelData['config'] = $config;
                     $excelData['owner_user_id'] = $user_id;
                     $excelData['base'] = 'batchImportData';
+                    Cache::rm('item');
+                    Cache::rm('excel');
                     Cache::set('item', 0, config('import_cache_time'));
                     Cache::set('excel', $excelData, config('import_cache_time'));
                 }
@@ -1701,8 +1775,8 @@ class Excel extends Common
         }
         // 将标题名称通过fputcsv写到文件句柄
         fputcsv($fp, $title_cell);
-        $export_data = $callback(0);
-        foreach ($export_data as $item) {
+//        $export_data = $callback(0);
+        foreach ($callback as $item) {
             $rows = [];
             foreach ($field_list as $rule) {
                 $rows[] = $item[$rule['field']];
@@ -1727,7 +1801,7 @@ class Excel extends Common
      *
      * @author Ymob
      */
-    public function batchTaskImportData($file,$field_list, $param, $controller = null)
+    public function batchTaskImportData($file, $field_list, $param, $controller = null)
     {
         // 导入模块
         $types = $param['types'];
@@ -1892,8 +1966,8 @@ class Excel extends Common
                 // return false;
             }
             
-            // 开始行  +3 跳过表头
-            $start_row = ($page - 1) * $page_size + 3;
+            // 开始行  +2 跳过表头
+            $start_row = ($page - 1) * $page_size + 2;
             // 结束行
             $end_row = $start_row + $page_size - 1;
             if ($end_row > $max_row) {
@@ -2075,12 +2149,13 @@ class Excel extends Common
         $objActSheet = $objPHPExcel->getActiveSheet(0);
         $objPHPExcel->getActiveSheet()->mergeCells('A1:' . $cellKey[count($field_list) - 1] . '1');//合并单元格（如果要拆分单元格是需要先合并再拆分的，否则程序会报错）
         $objPHPExcel->setActiveSheetIndex(0)->setCellValue('A1', $title);
+        $objPHPExcel->getActiveSheet()->getStyle('A1')->getFont()->setName('宋体');
         $objPHPExcel->getActiveSheet()->getDefaultRowDimension()->setRowHeight(18);//所有单元格（行）默认高度
         $objPHPExcel->getActiveSheet()->getDefaultColumnDimension()->setWidth(18);//所有单元格（列）默认宽度
         $objPHPExcel->getActiveSheet()->getStyle('A1')->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle('A1')->getFont()->setSize(16);
-        $objPHPExcel->getActiveSheet()->getStyle('A1:' . $cellKey[count($field_list) - 1] . '1')->getAlignment()->setHorizontal(\PHPExcel_Style_Alignment::HORIZONTAL_CENTER);
-        $objPHPExcel->getActiveSheet()->getStyle('A1:' . $cellKey[count($field_list) - 1] . '1')->getAlignment()->setVertical(\PHPExcel_Style_Alignment::VERTICAL_CENTER);
+        $objPHPExcel->getActiveSheet()->getStyle('A1')->getFont()->setSize(11);
+        $objPHPExcel->getActiveSheet()->getStyle('A1:' . $cellKey[count($field_list) - 1] . '1')->getAlignment()->setHorizontal(\PHPExcel_Style_Alignment::HORIZONTAL_LEFT);
+        $objPHPExcel->getActiveSheet()->getStyle('A1:' . $cellKey[count($field_list) - 1] . '1')->getAlignment()->setVertical(\PHPExcel_Style_Alignment::HORIZONTAL_LEFT);
         $objActSheet->getStyle('A1:' . $cellKey[count($field_list) - 1] . '1')->getFont()->getColor()->setARGB('FF000000');
         $objActSheet->getStyle('A1:' . $cellKey[count($field_list) - 1] . '1')->getFill()->setFillType(\PHPExcel_Style_Fill::FILL_SOLID)->getStartColor()->setARGB('##00BFFF');
         
@@ -2088,10 +2163,12 @@ class Excel extends Common
         foreach ($field_list as $k => $v) {
             $objPHPExcel->setActiveSheetIndex(0)->setCellValue($cellKey[$k] . $topNumber, $v['name']);//设置表头数据
             $objPHPExcel->getActiveSheet()->freezePane($cellKey[$k] . ($topNumber + 1));//冻结窗口
+            $objPHPExcel->getActiveSheet()->getStyle('A1')->getFont()->setName('宋体');
+            $objPHPExcel->getActiveSheet()->getStyle('A1')->getFont()->setSize(11);
             $objPHPExcel->getActiveSheet()->getStyle($cellKey[$k] . $topNumber)->getFont()->setBold(true);//设置是否加粗
-            $objPHPExcel->getActiveSheet()->getStyle($cellKey[$k] . $topNumber)->getAlignment()->setVertical(\PHPExcel_Style_Alignment::VERTICAL_CENTER);//垂直居中
-            $objPHPExcel->getActiveSheet()->getStyle('A2:' . $cellKey[count($field_list) - 1] . '2')->getAlignment()->setHorizontal(\PHPExcel_Style_Alignment::HORIZONTAL_CENTER);
-            $objPHPExcel->getActiveSheet()->getStyle('A2:' . $cellKey[count($field_list) - 1] . '2')->getAlignment()->setVertical(\PHPExcel_Style_Alignment::VERTICAL_CENTER);
+            $objPHPExcel->getActiveSheet()->getStyle($cellKey[$k] . $topNumber)->getAlignment()->setVertical(\PHPExcel_Style_Alignment::HORIZONTAL_LEFT);//垂直居中
+            $objPHPExcel->getActiveSheet()->getStyle('A2:' . $cellKey[count($field_list) - 1] . '2')->getAlignment()->setHorizontal(\PHPExcel_Style_Alignment::HORIZONTAL_LEFT);
+            $objPHPExcel->getActiveSheet()->getStyle('A2:' . $cellKey[count($field_list) - 1] . '2')->getAlignment()->setVertical(\PHPExcel_Style_Alignment::HORIZONTAL_LEFT);
             if ($v[3] > 0)//大于0表示需要设置宽度
             {
                 $objPHPExcel->getActiveSheet()->getColumnDimension($cellKey[$k])->setWidth($v[3]);//设置列宽度
@@ -2153,12 +2230,13 @@ class Excel extends Common
         $objActSheet = $objPHPExcel->getActiveSheet(0);
         $objPHPExcel->getActiveSheet()->mergeCells('A1:' . $cellKey[count($field_list) - 1] . '1');//合并单元格（如果要拆分单元格是需要先合并再拆分的，否则程序会报错）
         $objPHPExcel->setActiveSheetIndex(0)->setCellValue('A1', $title);
+        $objPHPExcel->getActiveSheet()->getStyle('A1')->getFont()->setName('宋体');
         $objPHPExcel->getActiveSheet()->getDefaultRowDimension()->setRowHeight(18);//所有单元格（行）默认高度
         $objPHPExcel->getActiveSheet()->getDefaultColumnDimension()->setWidth(18);//所有单元格（列）默认宽度
         $objPHPExcel->getActiveSheet()->getStyle('A1')->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle('A1')->getFont()->setSize(16);
+        $objPHPExcel->getActiveSheet()->getStyle('A1')->getFont()->setSize(11);
         $objPHPExcel->getActiveSheet()->getStyle('A1:' . $cellKey[count($field_list) - 1] . '1')->getAlignment()->setHorizontal(\PHPExcel_Style_Alignment::HORIZONTAL_CENTER);
-        $objPHPExcel->getActiveSheet()->getStyle('A1:' . $cellKey[count($field_list) - 1] . '1')->getAlignment()->setVertical(\PHPExcel_Style_Alignment::VERTICAL_CENTER);
+        $objPHPExcel->getActiveSheet()->getStyle('A1:' . $cellKey[count($field_list) - 1] . '1')->getAlignment()->setVertical(\PHPExcel_Style_Alignment::HORIZONTAL_CENTER);
         $objActSheet->getStyle('A1:' . $cellKey[count($field_list) - 1] . '1')->getFont()->getColor()->setARGB('FF000000');
         $objActSheet->getStyle('A1:' . $cellKey[count($field_list) - 1] . '1')->getFill()->setFillType(\PHPExcel_Style_Fill::FILL_SOLID)->getStartColor()->setARGB('##00BFFF');
         
@@ -2166,11 +2244,13 @@ class Excel extends Common
         foreach ($field_list as $k => $v) {
             $objPHPExcel->setActiveSheetIndex(0)->setCellValue($cellKey[$k] . $topNumber, $v['name']);//设置表头数据
             $objPHPExcel->getActiveSheet()->freezePane($cellKey[$k] . ($topNumber + 1));//冻结窗口
+            $objPHPExcel->getActiveSheet()->getStyle('A1')->getFont()->setName('宋体');
             $objPHPExcel->getActiveSheet()->getStyle($cellKey[$k] . $topNumber)->getFont()->setBold(true);//设置是否加粗
-            $objPHPExcel->getActiveSheet()->getStyle($cellKey[$k] . $topNumber)->getAlignment()->setVertical(\PHPExcel_Style_Alignment::VERTICAL_CENTER);//垂直居中
+            $objPHPExcel->getActiveSheet()->getStyle('A1')->getFont()->setSize(11);
+            $objPHPExcel->getActiveSheet()->getStyle($cellKey[$k] . $topNumber)->getAlignment()->setVertical(\PHPExcel_Style_Alignment::HORIZONTAL_CENTER);//垂直居中
             
             $objPHPExcel->getActiveSheet()->getStyle('A2:' . $cellKey[count($field_list) - 1] . '2')->getAlignment()->setHorizontal(\PHPExcel_Style_Alignment::HORIZONTAL_CENTER);
-            $objPHPExcel->getActiveSheet()->getStyle('A2:' . $cellKey[count($field_list) - 1] . '2')->getAlignment()->setVertical(\PHPExcel_Style_Alignment::VERTICAL_CENTER);
+            $objPHPExcel->getActiveSheet()->getStyle('A2:' . $cellKey[count($field_list) - 1] . '2')->getAlignment()->setVertical(\PHPExcel_Style_Alignment::HORIZONTAL_CENTER);
             
             if ($v[3] > 0)//大于0表示需要设置宽度
             {
@@ -2189,8 +2269,8 @@ class Excel extends Common
         $objActSheet->getStyle('A1:' . $cellKey[count($field_list) - 1] . $callCount)->applyFromArray($style_array);
         foreach ($callback as $k => $item) {
             foreach ($field_list as $key => $rule) {
-                $objPHPExcel->getActiveSheet()->getStyle($cellKey[$key] . ($k + 1 + $topNumber) . ':' . $cellKey[count($field_list) - 1] . ($k + 1 + $topNumber))->getAlignment()->setHorizontal(\PHPExcel_Style_Alignment::HORIZONTAL_CENTER);
-                $objPHPExcel->getActiveSheet()->getStyle($cellKey[$key] . ($k + 1 + $topNumber) . ':' . $cellKey[count($field_list) - 1] . ($k + 1 + $topNumber))->getAlignment()->setVertical(\PHPExcel_Style_Alignment::VERTICAL_CENTER);
+                $objPHPExcel->getActiveSheet()->getStyle($cellKey[$key] . ($k + 1 + $topNumber) . ':' . $cellKey[count($field_list) - 1] . ($k + 1 + $topNumber))->getAlignment()->setHorizontal(\PHPExcel_Style_Alignment::HORIZONTAL_LEFT);
+                $objPHPExcel->getActiveSheet()->getStyle($cellKey[$key] . ($k + 1 + $topNumber) . ':' . $cellKey[count($field_list) - 1] . ($k + 1 + $topNumber))->getAlignment()->setVertical(\PHPExcel_Style_Alignment::HORIZONTAL_LEFT);
                 $objPHPExcel->getActiveSheet()->setCellValue($cellKey[$key] . ($k + 1 + $topNumber), $item[$rule['field']]);
             }
         }
@@ -2233,25 +2313,28 @@ class Excel extends Common
         $objActSheet = $objPHPExcel->getActiveSheet(0);
         $objPHPExcel->getActiveSheet()->mergeCells('A1:M1');//合并单元格（如果要拆分单元格是需要先合并再拆分的，否则程序会报错）
         $objPHPExcel->setActiveSheetIndex(0)->setCellValue('A1', $title);
-        
         $objPHPExcel->getActiveSheet()->getDefaultRowDimension()->setRowHeight(18);//所有单元格（行）默认高度
         $objPHPExcel->getActiveSheet()->getDefaultColumnDimension()->setWidth(18);//所有单元格（列）默认宽度
+        // 设置字体
+        $objPHPExcel->getActiveSheet()->getStyle('A1')->getFont()->setName('宋体');
         $objPHPExcel->getActiveSheet()->getStyle('A1')->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle('A1')->getFont()->setSize(16);
-        $objPHPExcel->getActiveSheet()->getStyle('A1:M1')->getAlignment()->setHorizontal(\PHPExcel_Style_Alignment::HORIZONTAL_CENTER);
-        $objPHPExcel->getActiveSheet()->getStyle('A1:M1')->getAlignment()->setVertical(\PHPExcel_Style_Alignment::VERTICAL_CENTER);
+        $objPHPExcel->getActiveSheet()->getStyle('A1')->getFont()->setSize(11);
+        $objPHPExcel->getActiveSheet()->getStyle('A1:M1')->getAlignment()->setHorizontal(\PHPExcel_Style_Alignment::HORIZONTAL_LEFT);
+        $objPHPExcel->getActiveSheet()->getStyle('A1:M1')->getAlignment()->setVertical(\PHPExcel_Style_Alignment::HORIZONTAL_LEFT);
         $objActSheet->getStyle('A1:M1')->getFont()->getColor()->setARGB('FF000000');
         $objActSheet->getStyle('A1:M1')->getFill()->setFillType(\PHPExcel_Style_Fill::FILL_SOLID)->getStartColor()->setARGB('##00BFFF');
         
         //处理表头
-        
         $objPHPExcel->getActiveSheet()->freezePane('A2');//冻结窗口
+        // 设置字体为
+        $objPHPExcel->getActiveSheet()->getStyle('A1')->getFont()->setName('宋体');
         $objPHPExcel->getActiveSheet()->getStyle('A2')->getFont()->setBold(true);//设置是否加粗
-        $objPHPExcel->getActiveSheet()->getStyle('A2')->getAlignment()->setVertical(\PHPExcel_Style_Alignment::VERTICAL_CENTER);//垂直居中
+        $objPHPExcel->getActiveSheet()->getStyle('A2')->getFont()->setSize(11);
+        $objPHPExcel->getActiveSheet()->getStyle('A2')->getAlignment()->setVertical(\PHPExcel_Style_Alignment::HORIZONTAL_LEFT);//垂直居中
         
-        $objPHPExcel->getActiveSheet()->getStyle('A2:M2')->getAlignment()->setHorizontal(\PHPExcel_Style_Alignment::HORIZONTAL_CENTER);
-        $objPHPExcel->getActiveSheet()->getStyle('A2:M2')->getAlignment()->setVertical(\PHPExcel_Style_Alignment::VERTICAL_CENTER);
-        $objPHPExcel->getActiveSheet()->getStyle('A2:M2')->getAlignment()->setHorizontal(\PHPExcel_Style_Alignment::HORIZONTAL_CENTER);//文字居中
+        $objPHPExcel->getActiveSheet()->getStyle('A2:M2')->getAlignment()->setHorizontal(\PHPExcel_Style_Alignment::HORIZONTAL_LEFT);
+        $objPHPExcel->getActiveSheet()->getStyle('A2:M2')->getAlignment()->setVertical(\PHPExcel_Style_Alignment::HORIZONTAL_LEFT);
+        $objPHPExcel->getActiveSheet()->getStyle('A2:M2')->getAlignment()->setHorizontal(\PHPExcel_Style_Alignment::HORIZONTAL_LEFT);//文字居中
         
         $objActSheet->getStyle('A2:M2')->getFont()->getColor()->setARGB('FF000000');
         $objActSheet->getStyle('A2:M2')->getFill()->setFillType(\PHPExcel_Style_Fill::FILL_SOLID)->getStartColor()->setARGB('##00BFFF');
@@ -2299,6 +2382,7 @@ class Excel extends Common
         $objWriter = \PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel5');  //excel5为xls格式，excel2007为xlsx格式
         $objWriter->save('php://output');
     }
+    
     /**
      * 运行中
      * @param $param
@@ -2319,7 +2403,7 @@ class Excel extends Common
         } elseif ($param == 1) {
             $data = '';
         }
-        
+    
         return $data;
     }
     
@@ -2377,4 +2461,466 @@ class Excel extends Common
         return $data;
     }
     
+    /**
+     * 跟进记录导入
+     * @param $file 文件
+     * @param $param 数据
+     * @param $field_list 导入字段
+     *
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/4/9 0009 16:31
+     */
+    public function ActivityImport($file,$field_list,$param,$controller = null)
+    {
+        // 导入模块
+        $types = $param['types'];
+        if (!in_array($types, $this->types_arr)) {
+            $this->error = '参数错误！';
+            $queue->dequeue();
+            return false;
+        }
+       
+        // 采用伪队列  允许三人同时导入数据
+        $queue = new Queue(self::IMPORT_QUEUE, 30000);
+        $import_queue_index = input('import_queue_index');
+     
+        // 队列任务ID
+        if (!$import_queue_index) {
+            if (!$import_queue_index = $queue->makeTaskId()) {
+                $this->error = $queue->error;
+                $queue->dequeue();
+                return false;
+            }
+        } else {
+            if (!$queue->setTaskId($import_queue_index)) {
+                $this->error = $queue->error;
+                $queue->dequeue();
+                return false;
+            }
+        }
+        // 取消导入
+        if ($param['page'] == -1) {
+           
+            @unlink(UPLOAD_PATH . $param['temp_file']);
+            $this->error = [
+                'msg' => '导入已取消',
+                'page' => -1
+            ];
+           
+            if ($param['error']) {
+                $this->error['error_file_path'] = 'temp/' . $param['error_file'];
+            } else {
+               
+                @unlink(TEMP_DIR . $param['error_file']);
+            }
+            $temp = $queue->cache('last_import_cache');
+           
+            (new ImportRecord())->createData([
+                'type' => $types,
+                'total' => $temp['total'],
+                'done' => $temp['done'],
+                'cover' => $temp['cover'],
+                'error' => $temp['error'],
+                'error_data_file_path' => $temp['error'] ? 'temp/' . $error_data_file_name : ''
+            ]);
+            $queue->dequeue();
+            return true;
+        }
+        if (!empty($file) || $param['temp_file']) {
+            // 导入初始化  上传文件
+            if (!empty($file)) {
+                $save_name = $this->upload($file);
+                if ($save_name === false) {
+                    $queue->dequeue();
+                    return false;
+                }
+            } else {
+                $save_name = $param['temp_file'];
+            }
+            // 文件类型
+            $ext = pathinfo($save_name, PATHINFO_EXTENSION);
+            // 文件路径
+            $save_path = UPLOAD_PATH . $save_name;
+            
+            // 队列-判断是否需要排队
+            if (!$queue->canExec()) {
+                $this->error = [
+                    'temp_file' => $save_name,
+                    'page' => -2,
+                    'import_queue_index' => $import_queue_index,
+                    'info' => $queue->error
+                ];
+                return true;
+            }
+            
+            // 加载类库
+            vendor("phpexcel.PHPExcel");
+            vendor("phpexcel.PHPExcel.Writer.Excel5");
+            vendor("phpexcel.PHPExcel.Writer.Excel2007");
+            vendor("phpexcel.PHPExcel.IOFactory");
+           
+            // 错误数据临时文件路径  错误数据开始行数
+            if ($param['error_file']) {
+                $error_path = TEMP_DIR . $param['error_file'];
+                $error_row = $param['error'] + 3;
+                $cover = $param['cover'] ?: 0;
+            } else {
+                // 生成临时文件名称
+                $error_path = tempFileName($ext);
+                // 将导入模板保存至临时路径
+                $controller->excelDownload($error_path);
+                $error_row = 3;
+                $cover = 0;
+            }
+            // 错误数据临时文件名称 相对于临时目录
+            $error_data_file_name = \substr($error_path, strlen(TEMP_DIR));
+            // 加载错误数据文件
+            
+            $err_PHPExcel = \PHPExcel_IOFactory::load($error_path);
+           
+            $error_sheet = $err_PHPExcel->setActiveSheetIndex(0);
+            /**
+             * 添加错误数据到临时文件
+             *
+             * @param array $data 原数据
+             * @param string $error 错误原因
+             * @return void
+             */
+            $error_data_func = function ($data, $error) use ($error_sheet, &$error_row) {
+                
+                foreach ($data as $key => $val) {
+                    // 第一列为错误原因 所以+1
+                    $error_col = \PHPExcel_Cell::stringFromColumnIndex($key + 1);
+                    $error_sheet->setCellValue($error_col . $error_row, $val);
+                }
+                $error_sheet->setCellValue('A' . $error_row, $error);
+                $error_sheet->getStyle('A' . $error_row)->getFont()->getColor()->setARGB('FF000000');
+                $error_sheet->getStyle('A' . $error_row)->getFill()->setFillType(\PHPExcel_Style_Fill::FILL_SOLID)->getStartColor()->setARGB('FFFF0000');
+                
+                $error_row++;
+            };
+            
+            // 加载导入数据文件
+            $objRender = \PhpOffice\PhpSpreadsheet\IOFactory::createReader('Xls');
+            $objRender->setReadDataOnly(true);
+            $ExcelObj = $objRender->load($save_path);
+          
+            // 指定工作表
+            $sheet = $ExcelObj->getSheet(0);
+            // 总行数
+            $max_row = $sheet->getHighestRow();
+            // 最大列数
+            $max_col_num = count($field_list) - 1;
+            $max_col_num += 3 * array_count_values(array_column($field_list, 'form_type'))['map_address'];
+            $max_col = \PHPExcel_Cell::stringFromColumnIndex($max_col_num);
+            
+            // 每次导入条数
+            $page_size = 100;
+            
+            // 当前页码
+            $page = ((int)$param['page']) ?: 1;
+            
+            // 数据总数
+            $total = $max_row - 2;
+            
+            // 总页数
+            $max_page = ceil($total / $page_size);
+            if ($page > $max_page) {
+                // $this->error = 'page参数错误';
+                // @unlink($save_path);
+                // $queue->dequeue();
+                // return false;
+            }
+            
+            // 开始行  +3 跳过表头
+            $start_row = ($page - 1) * $page_size + 3;
+            // 结束行
+            $end_row = $start_row + $page_size - 1;
+            if ($end_row > $max_row) {
+                $end_row = $max_row;
+            }
+            // 读取数据
+            $dataList = $sheet->rangeToArray("A{$start_row}:{$max_col}{$end_row}");
+            // 默认数据
+            $default_data = [
+            ];
+            switch ($types){
+                case 'crm_business':
+                    $dataModel = new \app\crm\model\Business();
+                    $db = db('crm_business');
+                    $db_id = 'business_id';
+                    $activity_type=5;
+                    break;
+                case 'crm_contract':
+                    $db = db('crm_contract');
+                    $db_id = 'contract_id';
+                    $activity_type=6;
+                    break;
+                case 'crm_leads' :
+                    $dataModel = new \app\crm\model\Leads();
+                    $db = db('crm_leads');
+                    $db_id = 'leads_id';
+                    $activity_type=1;
+                    break;
+                case 'crm_customer' :
+                    $dataModel = new \app\crm\model\Customer();
+                    $db = db('crm_customer');
+                    $db_id = 'customer_id';
+                    $fieldParam['form_type'] = ['not in', ['file', 'form', 'user', 'structure']];
+                    $activity_type=2;
+                    break;
+                case 'crm_contacts' :
+                    $dataModel = new \app\crm\model\Contacts();
+                    $db = db('crm_contacts');
+                    $db_id = 'contacts_id';
+                    $activity_type=3;
+                    break;
+            }
+         
+            // 开始导入数据
+            foreach ($dataList as $val) {
+                $fk = 0;
+                $data = [];
+                foreach ($field_list as $field) {
+                    $temp_value = trim($val[$fk]);
+                    // 特殊字段特殊处理
+//                    $temp_value = $this->handleData($temp_value, $field);
+                    $data[$field['field']] = $temp_value;
+                    if ($temp_value == '') {
+                        if ($field['is_null']) {
+                            $not_null_field[] = $field['name'];
+                        }
+                        $empty_count++;
+                    }
+                    $fk++;
+                }
+                if (!empty($not_null_field)) {
+                    $error_data_func($val, implode(', ', $not_null_field) . '不能为空');
+                    continue;
+                }
+                if ($empty_count == count($field_list)) {
+                    $error_data_func($val, '空行');
+                    continue;
+                }
+                $activityLogic = new \app\crm\logic\ActivityLogic();
+                $userData=db('admin_user')->where(['realname'=>$val[1],'status'=>['neq',0]])->value('id');
+                $customerData=$db->where('name',$val[2])->value($db_id);
+                $classData = db('crm_activity')->where(['content' => $val[0], 'activity_type' => $param['activity_type'],'activity_type_id'=>$customerData])->order('activity_id', 'asc')->select();
+                if (empty($customerData)) {
+                    $error_data_func($val, '所属客户'.$val[2].'不存在');
+                    continue;
+                }
+                if (empty($userData)) {
+                    $error_data_func($val, '管理员'.$val[1].'不存在');
+                    continue;
+                }
+                if($types=='crm_customer' && (!empty($val[5]) || !empty($val[6]))){
+                    $contactsData=db('crm_contacts')->where('name',$val[5])->value($db_id);
+                    $businessData=$db->where('crm_business',$val[6])->value($db_id);
+                    if (empty($contactsData)&&eempty($businessData)) {
+                        $error_data_func($val, '联系人'.$val[5].'不存在或商机'.$val[6].'不存在');
+                        continue;
+                    }
+                }
+                if ($classData[0]['activity_id'] != '') {
+                    
+                    $data['activity_id'] = $classData[0]['activity_id'];
+                    $data = array_merge($data, $default_data);
+                    $data['create_user_id'] = $userData;
+                    $data['activity_type_id'] = $customerData;
+                    $data['activity_type'] = $activity_type;
+                    if (!$resData = $activityLogic->update($data)) {
+                        $error_data_func($val, $dataModel->getError());
+                    }
+                }else{
+                    $data = array_merge($data, $default_data);
+                    $data['user_id']=$userData;
+                    $data['activity_type_id'] = $customerData;
+                    $data['activity_type'] = $activity_type;
+                    unset($data['create_user_id']);
+                    if (!$resData = $activityLogic->save($data)) {
+                        $error_data_func($val, $dataModel->getError());
+                    }
+                }
+            }
+            // 完成数(已导入数)
+            $done = ($page - 1) * $page_size + count($dataList);
+            if ($page == $max_page) {
+                $done = $total;
+            }
+            
+            // 错误数
+            $error = $error_row - 3;
+            // 错误数据文件保存
+            $objWriter = \PHPExcel_IOFactory::createWriter($err_PHPExcel, 'Excel5');
+            $objWriter->save($error_path);
+           
+            $this->error = [
+                // 数据导入文件临时路径
+                'temp_file' => $save_name,
+                // 错误数据文件路径
+                'error_file' => $error_data_file_name,
+                // 文件总计条数
+                'total' => $total,
+                // 已完成条数
+                'done' => $done,
+                // 覆盖
+                'cover' => $cover,
+                // 错误数据写入行号
+                'error' => $error,
+                // 下次页码
+                'page' => $page + 1,
+                // 导入任务ID
+                'import_queue_index' => $import_queue_index
+            ];
+           
+            $queue->cache('last_import_cache', [
+                'total' => $total,
+                'done' => $done,
+                'cover' => $cover,
+                'error' => $error
+            ]);
+            // 执行完成
+            if ($done >= $total) {
+                // 出队
+                $queue->dequeue();
+                // 错误数据文件路径
+                $this->error['error_file_path'] = 'temp/' . $error_data_file_name;
+                // 删除导入文件
+                @unlink($save_path);
+                // 没有错误数据时，删除错误文件
+                if ($error == 0) {
+                    @unlink($error_path);
+                }
+                
+                (new ImportRecord())->createData([
+                    'type' => $types,
+                    'total' => $total,
+                    'done' => $done,
+                    'cover' => $cover,
+                    'error' => $error,
+                    'error_data_file_path' => $error ? 'temp/' . $error_data_file_name : ''
+                ]);
+                Cache::set('item', 1, config('import_cache_time'));
+                Cache::set('excel_item', serialize($this->error), config('import_cache_time'));
+            } else {
+                $excelData['cover'] = $cover;
+                $excelData['page'] = $page + 1;
+                $excelData['types'] = $types;
+                $excelData['temp_file'] = $save_name;
+                $excelData['error_file'] = $error_data_file_name;
+                $excelData['create_user_id'] = $param['create_user_id'];
+                $excelData['import_queue_index'] = $import_queue_index;
+                $excelData['total'] = $total;
+                $excelData['done'] = $done;
+                $excelData['error'] = $error;
+                $excelData['base'] = 'ActivityImport';
+                Cache::set('item', 0, config('import_cache_time'));
+                Cache::set('excel', $excelData, config('import_cache_time'));
+            }
+            return true;
+        } else {
+            $this->error = '请选择导入文件';
+            $queue->dequeue();
+            return false;
+        }
+    }
+    
+    /**
+     * 自定义excel导入样式
+     * @param $field_list
+     * @param $param
+     * @param $types
+     *
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/4/10 0010 09:27
+     */
+    public function importDown($field_list,$types,$save_path='')
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet(); //创建一个新的工作表
+        //实例化主文件
+        $objPHPExcel = new Spreadsheet();
+        $worksheet = $spreadsheet->getActiveSheet();
+        if ($save_path) {
+            $worksheet->setCellValue('A2', '错误原因(导入时需删除本列)');
+            $worksheet->getColumnDimension('A')->setWidth(40); //设置单元格宽度
+            $k = 1;
+        } else {
+            $k = 0;
+        }
+        $worksheet->getColumnDimension('A1')->setWidth(70); //设置A列宽度为30
+        foreach ($field_list as $v) {
+            for ($j = 3; $j <= 70; $j++) {
+                $worksheet->getStyle($this->stringFromColumnIndex($k).$j)->getNumberFormat()
+                    ->setFormatCode(\PHPExcel_Style_NumberFormat::FORMAT_TEXT);
+               }
+            $worksheet->getColumnDimension($this->stringFromColumnIndex($k))->setWidth(40); //自动设置B列宽度
+            //检查该字段若必填，加上"*"
+            $v['name'] = sign_required($v['is_null'], $v['name']);
+            $worksheet->setCellValue($this->stringFromColumnIndex($k) . '2', $v['name']);
+            $k++;
+        }
+        //加上"*"颜色变红
+        $worksheet -> getStyle('A2:C2') -> getFont()
+            -> getColor() -> setARGB(\PhpOffice\PhpSpreadsheet\Style\Color::COLOR_RED);
+        $max_row = $this->stringFromColumnIndex($k-1);//列
+        $mark_row = $this->stringFromColumnIndex($k);
+        //样式设置 - 字体
+        $worksheet->getStyle('A1:' . $max_row . '1')->getFont()
+            ->setBold(true)->setName('宋体')
+            ->setSize(11); //设置单元格A7:G10的字体样式
+        $worksheet->getStyle('A2:' . $max_row . '2')->getFont()
+           ->setBold(true)->setName('宋体')
+            ->setSize(11); //设置单元格A7:G10的字体样式; //设置单元格A1的字体颜色
+        //样式设置 - 行高
+        $worksheet->getRowDimension('1')->setRowHeight(200); //设置第10行高度为100
+        //样式设置 - 水平、垂直居中
+        $styleArray = [
+            'alignment' => [
+                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT,
+                'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT
+            ],
+        ];
+        $worksheet->getStyle('A1:'.$max_row.'1')->applyFromArray($styleArray);
+        //样式设置 - 边框
+        $styleArray = [
+            'borders' => [
+                'outline' => [
+                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THICK,
+                ],
+                'inside' => [
+                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                ]
+            ],
+        ];
+        $worksheet->getStyle('A1:'.$max_row.'1')->applyFromArray($styleArray);
+        //样式设置 - 合并和拆分
+        $worksheet->mergeCells('A1:'.$max_row.'1'); //合并单元格
+        //内容设置
+        $worksheet->setCellValue('A1', "
+        注意事项：\n
+        1、表头标“*”的红色字体为必填项\n
+        2、跟进时间：推荐格式为2020-2-1\n
+        3、若相关数据有多条时用“/”区分例如：杭州科技有限公司／卡卡罗特软件科技有限公司\n
+        4、所属客户中的客户需要存在系统中，且填写的所属客户名称与系统中的客户名称必须保持一致否则会导入失败\n
+        5、创建人为系统员工，请填写系统员工“姓名”，若匹配不到系统员工，则会导致导入失败\n
+        6、如果系统中存在多个名称重复的情况，会默认导入到最新的数据中"
+        ); //设置A1单元格内容为
+        $worksheet->getStyle('A1')->getAlignment()->setWrapText(true);//合并单元格换行
+
+        //下载工作表
+        ob_end_clean();
+        if ($save_path) {
+                $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($spreadsheet, 'Xls');
+                $writer -> save($save_path);
+        } else {
+            header('Content-Type: application/vnd.ms-excel');
+            header('Content-Disposition: attachment;filename="1.xls"');
+            header('Cache-Control: max-age=0');
+            $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($spreadsheet, 'Xls');
+            $writer->save('php://output');
+        }
+    }
 }

@@ -31,8 +31,52 @@ class Base extends Common
         if (!$data) {
             return resultArray(['error' => $userModel->getError()]);
         }
+
+        # 数据库更新 todo 在线升级正常使用后删除
+        $updateStatus = $this->executeUpdateSql();
+        if (empty($updateStatus['status'])) return resultArray(['error' => $updateStatus['message']]);
+
         return resultArray(['data' => $data]);
-    }     
+    }
+
+    /**
+     * 更新SQL
+     *
+     * @author fanqi
+     * @since 2021-05-08
+     */
+    public function executeUpdateSql()
+    {
+        # 表前缀
+        $prefix = config('database.prefix');
+
+        # 检查更新记录表是否存在
+        if (!db()->query("SHOW TABLES LIKE '".$prefix."admin_upgrade_record'")) {
+            db()->query("
+                CREATE TABLE `".$prefix."admin_upgrade_record` (
+                  `version` int(10) unsigned DEFAULT NULL COMMENT '版本号',
+                  UNIQUE KEY `version` (`version`) USING BTREE
+                ) ENGINE = InnoDB DEFAULT CHARSET = utf8 COMMENT = 'SQL更新记录，用于防止重复执行更新。'
+            ");
+        }
+
+        # 检查是否执行过11.0.3版本的更新
+        if (!db('admin_upgrade_record')->where('version', 1103)->value('version')) {
+            # 添加跟进记录导入导出权限数据
+            UpdateSql::addFollowRuleData();
+
+            # 添加公海默认数据
+            $poolStatus = UpdateSql::addPoolDefaultData();
+            if (!$poolStatus) return ['status' => false, 'message' => '添加公海默认配置失败，请在后台手动添加！'];
+
+            # 添加此次升级标记
+            db('admin_upgrade_record')->insert(['version' => 1103]);
+
+            return ['status' => true, 'message' => '更新完成！'];
+        }
+
+        return ['status' => true, 'message' => '没有可用更新！'];
+    }
 
     //退出登录
     public function logout()

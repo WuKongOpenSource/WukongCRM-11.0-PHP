@@ -176,8 +176,11 @@ class Complex
                 list($realPart, $imaginaryPart, $suffix) = self::parseComplex($realPart);
             }
         }
-        if ($imaginaryPart <> 0.0 && empty($suffix)) {
+
+        if ($imaginaryPart != 0.0 && empty($suffix)) {
             $suffix = 'i';
+        } elseif ($imaginaryPart == 0.0 && !empty($suffix)) {
+            $suffix = '';
         }
 
         // Set parsed values in our properties
@@ -373,12 +376,12 @@ class Complex
         $functionName = strtolower(str_replace('_', '', $functionName));
 
         // Test for function calls
-        if (in_array($functionName, self::$functions)) {
+        if (in_array($functionName, self::$functions, true)) {
             $functionName = "\\" . __NAMESPACE__ . "\\{$functionName}";
             return $functionName($this, ...$arguments);
         }
         // Test for operation calls
-        if (in_array($functionName, self::$operations)) {
+        if (in_array($functionName, self::$operations, true)) {
             $functionName = "\\" . __NAMESPACE__ . "\\{$functionName}";
             return $functionName($this, ...$arguments);
         }

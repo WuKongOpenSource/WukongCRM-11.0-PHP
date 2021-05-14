@@ -153,6 +153,7 @@ class Invoice extends ApiCommon
         # 更新crm_number_sequence表中的last_date、create_time字段
         if (!empty($numberInfo['data'])) (new NumberSequence())->batchUpdate($numberInfo['data']);
         updateActionLog($param['create_user_id'], 'crm_invoice', $invoice_id, '', '', '创建了发票');
+        RecordActionLog($param['create_user_id'],'crm_invoice','save',$param['invoice_apple_number'],'','','新增了发票'.$param['invoice_apple_number']);
 
         # 创建待办事项的关联数据
         $checkUserIds = db('crm_invoice')->where('invoice_id', $invoice_id)->value('check_user_id');
@@ -229,8 +230,8 @@ class Invoice extends ApiCommon
         if (empty($param['invoice_type']))         return resultArray(['error' => '请选择开票类型！']);
         if (empty($param['title_type']))           return resultArray(['error' => '请选择抬头类型！']);
         if (empty($param['examineStatus']))        return resultArray(['error' => '缺少审批状态！']);
-        $userId = $this->userInfo['id']; 
-
+        $userId = $this->userInfo['id'];
+        $dataInfo = $this->get($param['invoice_id']);
         # 审批是否停用
         $examineStatus = $param['examineStatus'];
         # 删除无用参数
@@ -320,8 +321,8 @@ class Invoice extends ApiCommon
         # 更新crm_number_sequence表中的last_date、create_time字段
         if (!empty($numberInfo['data'])) (new NumberSequence())->batchUpdate($numberInfo['data']);
         //修改记录
-        // updateActionLog($param['user_id'], 'crm_invoice', $param['invoice_id'], $dataInfo, $param);
-
+        updateActionLog($param['user_id'], 'crm_invoice', $param['invoice_id'], $dataInfo, $param);
+        RecordActionLog($param['user_id'], 'crm_invoice', 'update',$dataInfo['invoice_apple_number'], $dataInfo, $param);
         # 删除待办事项的关联数据
         db('crm_dealt_relation')->where(['types' => ['eq', 'crm_invoice'], 'types_id' => ['eq', $param['invoice_id']]])->delete();
         # 创建待办事项的关联数据
@@ -372,14 +373,17 @@ class Invoice extends ApiCommon
         }
 
         if (!$status) return resultArray(['error' => '不能删除审批中或审批结束的发票信息！']);
-
+        $dataInfo=db('crm_invoice')->where('invoice_id',['in',$idArray])->select();
         if (!$invoiceLogic->delete($idArray)) return resultArray(['error' => '删除失败！']);
 
         # 删除附件
         $fileModel->delRFileByModule('crm_invoice', $idArray);
         //删除关联操作记录
         $actionRecordModel->delDataById(['types'=>'crm_invoice','action_id'=>$idArray]);
-
+        $userInfo = $this->userInfo;
+        foreach ($dataInfo as $k => $v) {
+            RecordActionLog($userInfo['id'], 'crm_contacts', 'delete', $v['invoice_apple_number'], '', '', '删除了回款：' . $v['invoice_apple_number']);
+        }
         return resultArray(['data' => '删除成功！']);
     }
 
@@ -393,13 +397,19 @@ class Invoice extends ApiCommon
     {
         $ownerUserId = $this->param['owner_user_id'];
         $invoiceIds  = $this->param['invoice_id'];
-
+        $userModel = new \app\admin\model\User();
+        $userInfo=$this->userInfo;
         if (empty($ownerUserId))    return resultArray(['error' => '请选择负责人！']);
         if (empty($invoiceIds))     return resultArray(['error' => '请选择发票！']);
         if (!is_array($invoiceIds)) return resultArray(['error' => '发票ID类型错误！']);
 
         if ($invoiceLogic->transfer($invoiceIds, $ownerUserId) === false) return resultArray(['error' => '操作失败！']);
-
+        $owner_user_info = $userModel->getUserById($ownerUserId);
+        foreach ($invoiceIds as $v){
+            $invoice_info=db('crm_invoice')->where('invoice_id',$v)->find();
+            updateActionLog($userInfo['id'], 'crm_invoice', $v, '', '', '将发票转移给：' . $owner_user_info['realname']);
+            RecordActionLog($userInfo['id'], 'crm_invoice', 'transfer',$invoice_info['invoice_apple_number'], '','','将发票：'.$invoice_info['invoice_apple_number'].'转移给：' . $owner_user_info['realname']);
+        }
         return resultArray(['data' => '操作成功！']);
     }
 
@@ -628,14 +638,15 @@ class Invoice extends ApiCommon
     public function resetInvoiceStatus(InvoiceLogic $invoiceLogic)
     {
         if (empty($this->param['invoice_id'])) resultArray(['error' => '参数错误！']);
-
+        $userInfo = $this->userInfo;
         $this->param['real_invoice_date'] = !empty($this->param['real_invoice_date']) ? $this->param['real_invoice_date'] : date('Y-m-d');
 
         # 开票状态
         $this->param['invoice_status'] = 1;
-
+        $invoice_info=db('crm_invoice')->where('invoice_id',$this->param['invoice_id'])->find();
         if (!$invoiceLogic->setInvoice($this->param)) return resultArray(['error' => '操作失败！']);
-
+        RecordActionLog($userInfo['id'], 'crm_invoice', 'update',$invoice_info['invoice_apple_number'], '','','将发票：'.$invoice_info['invoice_apple_number'].'重置开票状态');
         return resultArray(['data' => '操作成功！']);
+
     }
 }

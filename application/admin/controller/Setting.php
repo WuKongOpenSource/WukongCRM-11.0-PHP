@@ -8,6 +8,7 @@
 namespace app\admin\controller;
 
 use app\admin\controller\ApiCommon;
+use app\admin\logic\PoolConfigLogic;
 use think\Hook;
 use think\Request;
 
@@ -23,7 +24,7 @@ class Setting extends ApiCommon
     {
         $action = [
             'permission'=>[''],
-            'allow'=>['']            
+            'allow'=>['pool','setpool','readpool','changepool','deletepool','transferpool','customerlevel','poolfield']
         ];
         Hook::listen('check_auth',$action);
         $request = Request::instance();
@@ -39,5 +40,140 @@ class Setting extends ApiCommon
             header('Content-Type:application/json; charset=utf-8');
             exit(json_encode(['code'=>102,'error'=>'无权操作']));
         }           
+    }
+
+    /**
+     * 公海配置列表
+     *
+     * @param PoolConfigLogic $poolConfigLogic
+     * @author fanqi
+     * @since 2021-03-30
+     * @return \think\response\Json
+     */
+    public function pool(PoolConfigLogic $poolConfigLogic)
+    {
+        $data = $poolConfigLogic->getPoolList($this->param);
+
+        return resultArray(['data' => $data]);
+    }
+
+    /**
+     * 设置公海规则
+     *
+     * @param
+     * @param PoolConfigLogic $poolConfigLogic 公海逻辑类
+     * @author fanqi
+     * @since 2021-03-29
+     * @return \think\response\Json
+     */
+    public function setPool(PoolConfigLogic $poolConfigLogic)
+    {
+        $userInfo = $this->userInfo;
+        $param = $this->param;
+        $param['user_id'] = $userInfo['id'];
+
+        if ($poolConfigLogic->setPoolConfig($param) === false) return resultArray(['error' => $poolConfigLogic->error]);
+
+        return resultArray(['data' => '操作成功！']);
+    }
+
+    /**
+     * 公海配置详情
+     *
+     * @param PoolConfigLogic $poolConfigLogic
+     * @author fanqi
+     * @since 2021-03-30
+     * @return \think\response\Json
+     */
+    public function readPool(PoolConfigLogic $poolConfigLogic)
+    {
+        $poolId = $this->param['pool_id'];
+
+        $data = $poolConfigLogic->readPool($poolId);
+
+        if ($data === false) return resultArray(['error' => $poolConfigLogic->error]);
+
+        return resultArray(['data' => $data]);
+    }
+
+    /**
+     * 变更公海配置状态
+     *
+     * @param PoolConfigLogic $poolConfigLogic
+     * @author fanqi
+     * @since 2021-03-30
+     * @return \think\response\Json
+     */
+    public function changePool(PoolConfigLogic $poolConfigLogic)
+    {
+        if ($poolConfigLogic->changePoolStatus($this->param) === false) return resultArray(['error' => $poolConfigLogic->error]);
+
+        return resultArray(['data' => '操作成功！']);
+    }
+
+    /**
+     * 删除公海配置
+     *
+     * @param PoolConfigLogic $poolConfigLogic
+     * @author fanqi
+     * @since 2021-03-30
+     * @return \think\response\Json
+     */
+    public function deletePool(PoolConfigLogic $poolConfigLogic)
+    {
+        $poolId = $this->param['pool_id'];
+
+        if ($poolConfigLogic->deletePool($poolId) === false) return resultArray(['error' => $poolConfigLogic->error]);
+
+        return resultArray(['data' => '操作成功！']);
+    }
+
+    /**
+     * 公海客户转移
+     *
+     * @param PoolConfigLogic $poolConfigLogic
+     * @author fanqi
+     * @since 2021-03-30
+     * @return \think\response\Json
+     */
+    public function transferPool(PoolConfigLogic $poolConfigLogic)
+    {
+        $param = $this->param;
+
+        if ($poolConfigLogic->transferPool($param) === false) {
+            return resultArray(['error' => $poolConfigLogic->error]);
+        }
+
+        return resultArray(['data' => '操作成功！']);
+    }
+
+    /**
+     * 客户级别列表
+     *
+     * @param PoolConfigLogic $poolConfigLogic
+     * @author fanqi
+     * @since 2021-04-22
+     * @return \think\response\Json
+     */
+    public function customerLevel(PoolConfigLogic $poolConfigLogic)
+    {
+        $data = $poolConfigLogic->getCustomerLevel();
+
+        return resultArray(['data' => $data]);
+    }
+
+    /**
+     * 公海字段
+     *
+     * @param PoolConfigLogic $poolConfigLogic
+     * @author fanqi
+     * @since 2021-04-29
+     * @return \think\response\Json
+     */
+    public function poolField(PoolConfigLogic $poolConfigLogic)
+    {
+        $data = $poolConfigLogic->getPoolFieldList($this->param);
+
+        return resultArray(['data' => $data]);
     }
 }

@@ -16,7 +16,7 @@
         }
     ],
     "require": {
-        "php": ">=5.4.0",
+        "php": ">=7.0",
         "topthink/framework": "5.0.24",
         "topthink/think-mongo": "^1.0",
         "topthink/think-image": "^1.0",
@@ -28,7 +28,9 @@
         "phpoffice/phpexcel": "1.8",
         "phpoffice/phpspreadsheet": "1.8",
         "phpoffice/phpword": "^0.17.0",
-         "ext-pdo": "*"
+        "ext-pdo": "*",
+        "ext-json": "*",
+        "topthink/think-worker": "1.0.0"
     },
     "extra": {
         "think-path": "thinkphp"
@@ -36,11 +38,5 @@
     "config": {
         "preferred-install": "dist",
         "secure-http": false
-    },
-    "repositories": {
-        "packagist": {
-            "type": "composer",
-            "url": "https://packagist.phpcomposer.com"
-        }
     }
 }

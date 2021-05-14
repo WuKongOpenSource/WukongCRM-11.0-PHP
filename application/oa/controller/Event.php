@@ -275,6 +275,7 @@ class Event extends ApiCommon
     {
         $eventModel = model('Event');
         $param = $this->param;
+        $userInfo=$this->userInfo;
         if (!$param['event_id']) {
             return resultArray(['error' => '参数错误']);
         }
@@ -289,6 +290,9 @@ class Event extends ApiCommon
         if (!$ret) {
             return resultArray(['error' => $eventModel->getError()]);
         }
+        
+        RecordActionLog($userInfo['id'], 'oa_event', 'delete', $flag['title'], '', '', '删除了日程：' . $flag['title']);
+    
         return resultArray(['data' => '删除成功']);
     }
 }

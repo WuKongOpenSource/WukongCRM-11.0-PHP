@@ -28,9 +28,11 @@ class TaskLogic
         }
         //状态
         $status = $param['status'] ?: '';
-        if ($status) {
+        if ($status==1) {
             $where['t.status'] = $status;
-        } else {
+        } elseif($status==6) {
+            $where['t.status'] = 5;
+        }else{
             $where['t.status'] = [['=', 1], ['=', 5], 'OR'];
         }
         
@@ -264,7 +266,6 @@ class TaskLogic
     public function excelExport($param)
     {
         $data = $this->getDataList($param);
-        p($data);
         $excelModel = new \app\admin\model\Excel();
         if ($param['work_id'] != 0) {
             $file_name = 'work_task';

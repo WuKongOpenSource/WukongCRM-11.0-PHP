@@ -98,7 +98,10 @@ class Setting extends Common
                 ]);
             }
         }
-
+        # 系统操作日志
+        $user=new ApiCommon();
+        $userInfo=$user->userInfo;
+        SystemActionLog($userInfo['id'], 'crm_config','customer', 1, 'update','客户回访提醒' , '', '','设置了客户回访提醒');
         return true;
     }
 
@@ -172,7 +175,10 @@ class Setting extends Common
             }
 
             Db::commit();
-
+            # 系统操作日志
+            $user=new ApiCommon();
+            $userInfo=$user->userInfo;
+            SystemActionLog($userInfo['id'], 'crm_number_sequence','customer', 1, 'update','编号规则设置' , '', '','设置了编号规则');
             return true;
         } catch (Exception $e) {
             Db::rollback();

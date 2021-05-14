@@ -84,8 +84,8 @@ class Customer extends ApiCommon
 
         if ($param['type']) {
             $timeArr = getTimeByType($param['type']);
-            $param['start_time'] = $timeArr[0];
-            $param['end_time'] = $timeArr[1];
+            $param['start_time'] = date('y-m-d 00:00:00',$timeArr[0]);
+            $param['end_time'] = date('y-m-d 23:59:59',$timeArr[1]);
         } else {
             if (!empty($param['start_time'])) $param['start_time'] = $param['start_time'] . ' 00:00:00';
             if (!empty($param['end_time']))   $param['end_time']   =$param['end_time'] . ' 23:59:59';
@@ -482,7 +482,6 @@ class Customer extends ApiCommon
      */
     public function pool()
     {
-        $actionRecordModel = new \app\bi\model\ActionRecord();
         $userModel         = new \app\admin\model\User();
         $adminModel        = new \app\admin\model\Admin();
         $param             = $this->param;
@@ -497,29 +496,45 @@ class Customer extends ApiCommon
         if (!empty($param['start_time'])) $param['start_time'] = strtotime($param['start_time'] . ' 00:00:00');
         if (!empty($param['end_time']))   $param['end_time']   = strtotime($param['end_time'] . ' 23:59:59');
         $time = getTimeArray($param['start_time'], $param['end_time']);
-        $sql = $actionRecordModel
-            ->field([
-                "FROM_UNIXTIME(`create_time`, '{$time['time_format']}')" => 'type',
-                'SUM(CASE WHEN `content` = "将客户放入公海" THEN 1 ELSE 0 END)' => 'put_in',
-                'SUM(CASE WHEN `content` = "领取了客户" THEN 1 ELSE 0 END)' => 'receive'
-            ])
-            ->where([
-                'user_id' => ['IN', !empty($userIds) ? $userIds : '9999999999'],
-                'create_time' => ['BETWEEN', $time['between']],
-                'content' => ['IN', ['将客户放入公海', '领取了客户']]
-            ])
-            ->group('type')
-            ->fetchSql()
-            ->select();
+//        $sql = db('crm_customer_pool_record')
+//                ->field([
+//                    "FROM_UNIXTIME(`create_time`, '{$time['time_format']}')" => 'time',
+//                    'SUM(CASE WHEN `type` = 2 THEN 1 ELSE 0 END)' => 'put_in',
+//                    'SUM(CASE WHEN `type` = 1 THEN 1 ELSE 0 END)' => 'receive'
+//                ])
+//                ->where([
+//                    'user_id' => ['IN', !empty($userIds) ? $userIds : 0],
+//                    'create_time' => ['BETWEEN', $time['between']],
+//                ])
+//                ->group('time')
+//                ->fetchSql()
+//                ->select();
+        $prefix = config('database.prefix');
+        $ids = !empty($userIds) ? implode(',', $userIds) : 0;
+        $sql = "SELECT 
+	                FROM_UNIXTIME( `create_time`, '%Y-%m' ) AS `time`, 
+	                SUM( CASE WHEN `type` = 2 THEN 1 ELSE 0 END ) AS `put_in`, 
+	                SUM( CASE WHEN `type` = 1 THEN 1 ELSE 0 END ) AS `receive` 
+                FROM 
+                    (SELECT * FROM `".$prefix."crm_customer_pool_record` GROUP BY `customer_id`, `type`) AS `record` 
+                WHERE 
+	                `user_id` IN ( ".$ids." ) AND `create_time` BETWEEN ".$time['between'][0]." AND ".$time['between'][1]." 
+                GROUP BY `time`";
         $res = queryCache($sql);
-        $res = array_column($res, null, 'type');
+        $res = array_column($res, null, 'time');
 
-        foreach ($time['list'] as &$val) {
-            $val['put_in'] = (int)$res[$val['type']]['put_in'];
-            $val['receive'] = (int)$res[$val['type']]['receive'];
+        $result = [];
+        foreach ($time['list'] AS $key => $value) {
+            $result[] = [
+                'type'       => $value['type'],
+                'start_time' => $value['start_time'],
+                'end_time'   => $value['end_time'],
+                'put_in'     => !empty($res[$value['type']]['put_in'])  ? (int)$res[$value['type']]['put_in']  : 0,
+                'receive'    => !empty($res[$value['type']]['receive']) ? (int)$res[$value['type']]['receive'] : 0
+            ];
         }
 
-        return resultArray(['data' => $time['list']]);
+        return resultArray(['data' => $result]);
     }
 
     /**
@@ -554,81 +569,79 @@ class Customer extends ApiCommon
         $whereArr = $adminModel->getWhere($param, '', $perUserIds); //统计条件
         $userIds = $whereArr['userIds'];
         $between_time = $whereArr['between_time'];
-        $sql = CustomerModel::field([
-            'COUNT(*)' => 'customer_num',
-            'owner_user_id'
-        ])
-            ->where([
-                'create_time' => ['BETWEEN', $between_time],
-                'owner_user_id' => ['IN', !empty($userIds) ? $userIds : '9999999999']
-            ])
-            ->group('owner_user_id')
-            ->fetchSql()
-            ->select();
-        $customer_num_list = queryCache($sql);
-        $customer_num_list = array_column($customer_num_list, null, 'owner_user_id');
 
-        $configModel = new \app\crm\model\ConfigData();
-        $configInfo = $configModel->getData();
-        $paramPool = [];
-        $paramPool['config'] = $configInfo['config'] ? : 0;
-        $paramPool['follow_day'] = $configInfo['follow_day'] ? : 0;
-        $paramPool['deal_day'] = $configInfo['deal_day'] ? : 0;
-        $paramPool['remind_config'] = $configInfo['remind_config'] ? : 0;
-        $customer_list='';
-        $action_record_list='';
-        if($paramPool['config']==1){
-            $sql = $CustomerModel
-                ->alias('customer')
-                ->field([
-                    'customer.create_user_id as user_id' ,
-                    'COUNT(customer.customer_id) as put_in'
-                ])
-                ->group('user_id')
-                ->where($CustomerModel->getWhereByPool())
-                ->where([
-                    'create_time' => ['BETWEEN', $between_time],
-                    'create_user_id' => ['IN', $userIds],
-                ])
-                ->fetchSql()
-                ->select();
-            $customer_list = queryCache($sql);
-            $customer_list = array_column($customer_list, null, 'user_id');
+//        $sql = db('crm_customer_pool_record')
+//            ->field([
+//                'user_id',
+//                'SUM(CASE WHEN `type` = 2 THEN 1 ELSE 0 END)' => 'put_in',
+//                'SUM(CASE WHEN `type` = 1 THEN 1 ELSE 0 END)' => 'receive'
+//            ])
+//            ->group('user_id')
+//            ->where([
+//                'create_time' => ['BETWEEN', $between_time],
+//                'user_id' => ['IN', !empty($userIds) ? $userIds : 0]
+//            ])
+//            ->fetchSql()
+//            ->select();
+        $prefix = config('database.prefix');
+        $ids = !empty($userIds) ? implode(',', $userIds) : 0;
+        $sql = "SELECT 
+	                `user_id`, 
+	                SUM( CASE WHEN `type` = 2 THEN 1 ELSE 0 END ) AS `put_in`, 
+	                SUM( CASE WHEN `type` = 1 THEN 1 ELSE 0 END ) AS `receive` 
+                FROM 
+	                (SELECT * FROM `".$prefix."crm_customer_pool_record` GROUP BY `customer_id`, `type`) AS `record` 
+                WHERE 
+	                `create_time` BETWEEN ".$between_time[0]." AND ".$between_time[1]." AND `user_id` IN ( ".$ids." ) 
+                GROUP BY `user_id`";
+        $poolRecord = queryCache($sql);
+        $recordData = [];
+        foreach ($poolRecord AS $key => $value) {
+            $recordData[$value['user_id']] = [
+                'put_in' => $value['put_in'],
+                'receive' => $value['receive']
+            ];
         }
-        $sql = $actionRecordModel
-            ->field([
-                'user_id',
-                'SUM(CASE WHEN `content` = "将客户放入公海" THEN 1 ELSE 0 END)' => 'put_in',
-                'SUM(CASE WHEN `content` = "领取了客户" THEN 1 ELSE 0 END)' => 'receive'
-            ])
-            ->group('user_id')
-            ->where([
-                'create_time' => ['BETWEEN', $between_time],
-                'user_id' => ['IN', $userIds],
-                'content' => ['IN', ['将客户放入公海', '领取了客户']],
-                'types' => 'crm_customer',
-            ])
-            ->fetchSql()
-            ->select();
-        $action_record_list = queryCache($sql);
-        $action_record_list = array_column($action_record_list, null, 'user_id');
-    
+//        $action_record_list = array_column($action_record_list, null, 'user_id');
+
+        # 部门列表
+        $structureData = [];
+        $structureList = db('admin_structure')->select();
+        foreach ($structureList AS $key => $value) {
+            $structureData[$value['id']] = $value['name'];
+        }
+
+        # 员工列表
+        $userList = db('admin_user')->field(['id', 'realname', 'structure_id'])->whereIn('id', $userIds)->select();
+
         $res = [];
         $receiveCount = 0; # 领取公海客户总数
         $putInCount = 0; # 进入公海客户总数
-        foreach ($userIds as $val) {
-            $item['put'] = !empty($customer_list[$val]['put_in'])?(int)$customer_list[$val]['put_in']:0;
-            $item['put_in'] = !empty($customer_list[$val]['put_in']) ?  $item['put'] : (int)$action_record_list[$val]['put_in'] + $item['put'];
-            $item['receive'] = !empty($action_record_list[$val]['receive']) ? (int)$action_record_list[$val]['receive'] : 0;
-            $item['customer_num'] = !empty($customer_num_list[$val]['customer_num']) ? (int)$customer_num_list[$val]['customer_num'] : 0;
-            $user_info = $userModel->getUserById($val);
-            $item['realname'] = $user_info['realname'];
-            $item['username'] = $user_info['structure_name'];
+        foreach ($userList as $val) {
+            $item['put'] = !empty($recordData[$val['id']]['put_in']) ? (int)$recordData[$val['id']]['put_in'] : 0;
+            $item['put_in'] = !empty($recordData[$val['id']]['put_in']) ? (int)$recordData[$val['id']]['put_in'] : 0;
+            $item['receive'] = !empty($recordData[$val['id']]['receive']) ? (int)$recordData[$val['id']]['receive'] : 0;
+            $item['customer_num'] = 0;
+            $item['realname'] = $val['realname'];
+            $item['username'] = !empty($structureData[$val['structure_id']]) ? $structureData[$val['structure_id']] : '';
             $res[] = $item;
 
             $receiveCount += $item['receive'];
             $putInCount += $item['put_in'];
         }
+//        foreach ($userIds as $val) {
+//            $item['put'] = !empty($customer_list[$val]['put_in'])?(int)$customer_list[$val]['put_in']:0;
+//            $item['put_in'] = !empty($customer_list[$val]['put_in']) ?  $item['put'] : (int)$action_record_list[$val]['put_in'] + $item['put'];
+//            $item['receive'] = !empty($action_record_list[$val]['receive']) ? (int)$action_record_list[$val]['receive'] : 0;
+//            $item['customer_num'] = !empty($customer_num_list[$val]['customer_num']) ? (int)$customer_num_list[$val]['customer_num'] : 0;
+//            $user_info = $userModel->getUserById($val);
+//            $item['realname'] = $user_info['realname'];
+//            $item['username'] = $user_info['structure_name'];
+//            $res[] = $item;
+//
+//            $receiveCount += $item['receive'];
+//            $putInCount += $item['put_in'];
+//        }
 
         $result = ['list' => $res, 'total' => ['realname' => '总计', 'receive' => $receiveCount, 'put_in' => $putInCount]];
 

@@ -61,7 +61,7 @@ class Log extends ApiCommon
         }
     }
 
-    /**
+    /**commentSave
      * 日志列表
      * @return
      * @author Michael_xu
@@ -293,6 +293,15 @@ class Log extends ApiCommon
         $log_id = $param['log_id'];
         $param['user_id']=$userInfo['id'];
         $logModel = model('Log');
+        if(!empty($param['is_relation'])){
+            $indexLogic = new LogLogic();
+            $save = $indexLogic->oneBulletin($param);
+            $param['save_customer'] = $save['data']['customerNum'];
+            $param['save_business'] = $save['data']['businessNum'];
+            $param['save_contract'] = $save['data']['contractNum'];
+            $param['save_receivables'] = $save['data']['receivablesMoneyNum'];
+            $param['save_activity'] = $save['data']['recordNum'];
+        }
         if ($log_id) {
             $dataInfo = db('oa_log')->where(['log_id' => $log_id])->find();
             //权限判断

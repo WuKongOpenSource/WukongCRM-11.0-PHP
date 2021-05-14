@@ -7,6 +7,7 @@
 
 namespace app\admin\model;
 
+use app\admin\controller\ApiCommon;
 use app\admin\model\Common;
 use think\Db;
 
@@ -31,7 +32,11 @@ class Structure extends Common
 		if ($type == 'tree') {
 			$tree = new \com\Tree();
 			$data = $tree->list_to_tree($data, 'id', 'pid', 'child', 0, true, array(''));
-		}		
+		}
+		
+		foreach ($data as $k=>$v){
+		    $data[$k]['owner_user_name']=foreachData('admin_structure',$v['owner_user_id'])?:null;
+        }
 		return $data;
 	}
 	
@@ -85,7 +90,12 @@ class Structure extends Common
 			$this->error = '删除失败';
 			return false;
 		} else {
-			return true;
+            $apiCommon = new ApiCommon();
+            $userInfo = $apiCommon->userInfo;
+		    $content='删除了部门：'.$dataInfo['name'];
+            # 添加记录
+            SystemActionLog($userInfo['id'], 'admin_structure','structures', $id,'delete', $dataInfo['name'], '', '', $content);
+            return true;
 		}	
 	}
 

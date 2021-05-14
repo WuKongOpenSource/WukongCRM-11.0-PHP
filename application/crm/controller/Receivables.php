@@ -66,8 +66,10 @@ class Receivables extends ApiCommon
         $param = $this->param;
         $userInfo = $this->userInfo;
         $param['user_id'] = $userInfo['id'];
+        $action_name = '导出全部';
         if ($param['receivables_id']) {
             $param['receivables_id'] = ['condition' => 'in', 'value' => $param['receivables_id'], 'form_type' => 'text', 'name' => ''];
+            $action_name='导出选中';
         }
         $excelModel = new \app\admin\model\Excel();
         // 导出的字段列表
@@ -81,6 +83,7 @@ class Receivables extends ApiCommon
         $page = $param['page'] ?: 1;
         unset($param['page']);
         unset($param['export_queue_index']);
+        RecordActionLog($userInfo['id'],'crm_receivables','excelexport',$action_name,'','','导出回款');
         return $excelModel->batchExportCsv($file_name, $temp_file, $field_list, $page, function ($page, $limit) use ($model, $param, $field_list) {
             $param['page'] = $page;
             $param['limit'] = $limit;
@@ -174,7 +177,8 @@ class Receivables extends ApiCommon
         $receivablesModel = model('Receivables');
         $userModel = new \app\admin\model\User();
         $param = $this->param;
-        $data = $receivablesModel->getDataById($param['id']);
+        $userInfo = $this->userInfo;
+        $data = $receivablesModel->getDataById($param['id'], $userInfo['id']);
         
         //判断权限
         $auth_user_ids = $userModel->getUserByPer('crm', 'receivables', 'read');
@@ -338,6 +342,7 @@ class Receivables extends ApiCommon
                 $delIds[] = $v;
             }
         }
+        $dataInfo = $receivablesModel->where('receivables_id',['in',$delIds])->select();
         if ($delIds) {
             $data = $receivablesModel->delDatas($delIds);
             if (!$data) {
@@ -349,7 +354,10 @@ class Receivables extends ApiCommon
             $fileModel->delRFileByModule('crm_receivables', $delIds);
             //删除关联操作记录
             $actionRecordModel->delDataById(['types' => 'crm_receivables', 'action_id' => $delIds]);
-            actionLog($delIds, '', '', '');
+            $userInfo = $this->userInfo;
+            foreach ($dataInfo as $k => $v) {
+                RecordActionLog($userInfo['id'], 'crm_contacts', 'delete', $v['number'], '', '', '删除了回款：' . $v['number']);
+            }
         }
         
         if ($errorMessage) {
@@ -594,6 +602,8 @@ class Receivables extends ApiCommon
                 continue;
             }
             updateActionLog($userInfo['id'], 'crm_receivables', $receivables_id, '', '', '将回款转移给：' . $owner_user_info['realname']);
+            RecordActionLog($userInfo['id'], 'crm_receivables', 'transfer',$receivables_info['number'], '','','将回款：'.$receivables_info['number'].'转移给：' . $owner_user_info['realname']);
+    
         }
         if (!$errorMessage) {
             return resultArray(['data' => '转移成功']);

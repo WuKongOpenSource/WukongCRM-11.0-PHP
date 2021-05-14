@@ -269,11 +269,19 @@ class Receivables extends Common
             return false;
         }
 
-		//处理部门、员工、附件、多选类型字段
+		// 处理部门、员工、附件、多选类型字段
 		$arrFieldAtt = $fieldModel->getArrayField('crm_receivables');
 		foreach ($arrFieldAtt as $k=>$v) {
 			$param[$v] = arrayToString($param[$v]);
 		}
+        // 处理日期（date）类型
+        $dateField = $fieldModel->getFieldByFormType('crm_receivables', 'date');
+        if (!empty($dateField)) {
+            foreach ($param AS $key => $value) {
+                if (in_array($key, $dateField) && empty($value)) $param[$key] = null;
+            }
+        }
+
 		if ($this->data($param)->allowField(true)->save()) {
             //站内信
             $send_user_id = stringToArray($param['check_user_id']);
@@ -291,7 +299,8 @@ class Receivables extends Common
 			$data['receivables_id'] = $this->receivables_id;
 
 			//修改记录
-			updateActionLog($param['create_user_id'], 'crm_receivables', $this->receivables_id, '', '', '创建了回款');			
+			updateActionLog($param['create_user_id'], 'crm_receivables', $this->receivables_id, '', '', '创建了回款');
+            RecordActionLog($param['create_user_id'],'crm_receivables','save',$param['number'],'','','新增了回款'.$param['number']);
 
             # 添加活动记录
             Db::name('crm_activity')->insert([
@@ -375,7 +384,8 @@ class Receivables extends Common
 		
 		$fieldModel = new \app\admin\model\Field();
 		// 自动验证
-		$validateArr = $fieldModel->validateField($this->name); //获取自定义字段验证规则
+//		$validateArr = $fieldModel->validateField($this->name); //获取自定义字段验证规则
+		$validateArr = $fieldModel->validateField($this->name, 0, 'update'); //获取自定义字段验证规则
 		$validate = new Validate($validateArr['rule'], $validateArr['message']);
 
 		$result = $validate->check($param);
@@ -384,15 +394,23 @@ class Receivables extends Common
 			return false;
 		}
 
-		//处理部门、员工、附件、多选类型字段
+		// 处理部门、员工、附件、多选类型字段
 		$arrFieldAtt = $fieldModel->getArrayField('crm_receivables');
 		foreach ($arrFieldAtt as $k=>$v) {
-			$param[$v] = arrayToString($param[$v]);
+            if (isset($param[$v])) $param[$v] = arrayToString($param[$v]);
 		}
+        // 处理日期（date）类型
+        $dateField = $fieldModel->getFieldByFormType('crm_receivables', 'date');
+        if (!empty($dateField)) {
+            foreach ($param AS $key => $value) {
+                if (in_array($key, $dateField) && empty($value)) $param[$key] = null;
+            }
+        }
 
 		if ($this->update($param, ['receivables_id' => $receivables_id], true)) {
 			//修改记录
 			updateActionLog($param['user_id'], 'crm_receivables', $receivables_id, $dataInfo, $param);
+            RecordActionLog($param['user_id'], 'crm_receivables', 'update',$dataInfo['number'], $dataInfo, $param);
 			//站内信
 			$send_user_id = stringToArray($param['check_user_id']);
             if ($send_user_id && empty($param['check_status'])) {
@@ -440,7 +458,7 @@ class Receivables extends Common
      * @throws \think\db\exception\ModelNotFoundException
      * @throws \think\exception\DbException
      */
-   	public function getDataById($id = '')
+   	public function getDataById($id = '', $userId = 0)
    	{   		
    		$map['receivables_id'] = $id;
 		$dataInfo = db('crm_receivables')->where($map)->find();
@@ -464,6 +482,33 @@ class Receivables extends Common
         }
         $dataInfo['create_time'] = !empty($dataInfo['create_time']) ? date('Y-m-d H:i:s', $dataInfo['create_time']) : null;
         $dataInfo['update_time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
+        // 字段授权
+        if (!empty($userId)) {
+            $grantData = getFieldGrantData($userId);
+            $userLevel = isSuperAdministrators($userId);
+            foreach ($dataInfo AS $key => $value) {
+                if (!$userLevel && !empty($grantData['crm_receivables'])) {
+                    $status = getFieldGrantStatus($key, $grantData['crm_receivables']);
+
+                    # 查看权限
+                    if ($status['read'] == 0) unset($dataInfo[$key]);
+                }
+            }
+            if (!$userLevel && !empty($grantData['crm_receivables'])) {
+                # 客户名称
+                $customerStatus = getFieldGrantStatus('customer_id', $grantData['crm_receivables']);
+                if ($customerStatus['read'] == 0) {
+                    $dataInfo['customer_name'] = '';
+                    $dataInfo['customer_id_info'] = [];
+                }
+                # 合同金额
+                $contractMoneyStatus = getFieldGrantStatus('contract_money', $grantData['crm_receivables']);
+                if ($contractMoneyStatus['read'] == 0) $dataInfo['contract_id_info']['money'] = '';
+                # 合同名称
+                $contractMoneyStatus = getFieldGrantStatus('contract_money', $grantData['crm_receivables']);
+                if ($contractMoneyStatus['read'] == 0) $dataInfo['contract_id_info']['money'] = '';
+            }
+        }
 		return $dataInfo;
    	}
 	
@@ -651,7 +696,7 @@ class Receivables extends Common
 		$contractMoney = db('crm_contract')->where(['contract_id' => $contract_id])->value('money');
 		$unMoney = $contractMoney-$doneMoney;
 		$data['doneMoney'] = $doneMoney ? : '0.00';
-		$data['unMoney'] = $unMoney ? : '0.00';
+		$data['unMoney'] = (int)$unMoney>0 ? (int)$unMoney : '0.00';
 		$data['contractMoney'] = $contractMoney ? : '0.00';
 		return $data;
 	}
@@ -673,9 +718,9 @@ class Receivables extends Common
         $realname = Db::name('admin_user')->where('id', $receivables['create_user_id'])->value('realname');
 
         return [
-            'create_user_name' => $realname,
-            'create_time'      => date('Y-m-d H:i:s', $receivables['create_time']),
-            'update_time'      => date('Y-m-d H:i:s', $receivables['update_time'])
+            'create_user_id' => $realname,
+            'create_time' => date('Y-m-d H:i:s', $receivables['create_time']),
+            'update_time' => date('Y-m-d H:i:s', $receivables['update_time'])
         ];
     }
 }

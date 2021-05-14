@@ -132,9 +132,11 @@ class Task extends ApiCommon
         }
         //状态
         $status = $param['status'] ?: '';
-        if ($status) {
+        if ($status==1) {
             $where['t.status'] = $status;
-        } else {
+        } elseif($status==6) {
+            $where['t.status'] = 5;
+        }else{
             $where['t.status'] = [['=', 1], ['=', 5], 'OR'];
         }
         if ($param['main_user_id']) {

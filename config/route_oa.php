@@ -162,7 +162,7 @@ return [
     'oa/log/queryLog' => ['oa/log/queryLog', ['method' => 'POST']],
     //日志销售简报
     'oa/log/oneBulletin' => ['oa/log/oneBulletin', ['method' => 'POST']],
-
+    
     // 【审批】类型列表
 	'oa/examine/category'=>['oa/examine/category', ['method' => 'POST']],
 	// 【审批】类型列表（添加）
@@ -193,7 +193,8 @@ return [
     'oa/examine/excelExport'=>['oa/examine/excelExport', ['method' => 'POST']],
     // 【审批】我的审批
     'oa/examine/myExamine'=>['oa/examine/myExamine', ['method' => 'POST']],
-
+    // 【审批】审批排序
+    'oa/examine/examineSort'=>['oa/examine/examineSort', ['method' => 'POST']],
     // 【审批】通讯录列表
     'oa/addresslist/queryList'=>['oa/addresslist/queryList', ['method' => 'POST']],
     // 【审批】关注通讯录列表

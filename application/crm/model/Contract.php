@@ -380,11 +380,18 @@ class Contract extends Common
         # 处理下次联系时间
         if (!empty($param['next_time'])) $param['next_time'] = strtotime($param['next_time']);
 
-		//处理部门、员工、附件、多选类型字段
+		// 处理部门、员工、附件、多选类型字段
 		$arrFieldAtt = $fieldModel->getArrayField('crm_contract');
 		foreach ($arrFieldAtt as $k=>$v) {
 			$param[$v] = arrayToString($param[$v]);
 		}
+        // 处理日期（date）类型
+        $dateField = $fieldModel->getFieldByFormType('crm_contract', 'date');
+        if (!empty($dateField)) {
+            foreach ($param AS $key => $value) {
+                if (in_array($key, $dateField) && empty($value)) $param[$key] = null;
+            }
+        }
 
 		# 下单时间
         $param['order_date'] = !empty($param['order_date']) ? $param['order_date'] : date('Y-m-d H:i:s', time());
@@ -420,8 +427,8 @@ class Contract extends Common
 			$this->commit();
 
 			//修改记录
-			updateActionLog($param['create_user_id'], 'crm_contract', $this->contract_id, '', '', '创建了合同');					
-
+			updateActionLog($param['create_user_id'], 'crm_contract', $this->contract_id, '', '', '创建了合同');
+            RecordActionLog($param['create_user_id'],'crm_contract','save',$param['name'],'','','新增了合同'.$param['name']);
             # 添加活动记录
             Db::name('crm_activity')->insert([
                 'type'             => 2,
@@ -476,7 +483,8 @@ class Contract extends Common
 		$param['contract_id'] = $contract_id;
 		$fieldModel = new \app\admin\model\Field();
 		// 自动验证
-		$validateArr = $fieldModel->validateField($this->name); //获取自定义字段验证规则
+//		$validateArr = $fieldModel->validateField($this->name); //获取自定义字段验证规则
+		$validateArr = $fieldModel->validateField($this->name, 0, 'update'); //获取自定义字段验证规则
 		$validate = new Validate($validateArr['rule'], $validateArr['message']);
 
 		$result = $validate->check($param);
@@ -492,17 +500,25 @@ class Contract extends Common
         if (empty($param['start_time'])) $param['start_time'] = null;
         if (empty($param['end_time']))   $param['end_time']   = null;
 
-		//处理部门、员工、附件、多选类型字段
+		// 处理部门、员工、附件、多选类型字段
 		$arrFieldAtt = $fieldModel->getArrayField('crm_contract');
 		foreach ($arrFieldAtt as $k=>$v) {
-			$param[$v] = arrayToString($param[$v]);
+            if (isset($param[$v])) $param[$v] = arrayToString($param[$v]);
 		}
+        // 处理日期（date）类型
+        $dateField = $fieldModel->getFieldByFormType('crm_contract', 'date');
+        if (!empty($dateField)) {
+            foreach ($param AS $key => $value) {
+                if (in_array($key, $dateField) && empty($value)) $param[$key] = null;
+            }
+        }
 
 		if ($this->update($param, ['contract_id' => $contract_id], true)) {
 			//产品数据处理
 	        $resProduct = $productModel->createObject('crm_contract', $param, $contract_id);			
 			//修改记录
 			updateActionLog($param['user_id'], 'crm_contract', $contract_id, $dataInfo, $param);
+            RecordActionLog($param['user_id'], 'crm_contract', 'update',$dataInfo['name'], $dataInfo, $param);
             //站内信
             $send_user_id = stringToArray($param['check_user_id']);
             if ($send_user_id && empty($param['check_status'])) {
@@ -549,7 +565,7 @@ class Contract extends Common
      * @throws \think\db\exception\ModelNotFoundException
      * @throws \think\exception\DbException
      */
-   	public function getDataById($id = '')
+   	public function getDataById($id = '', $userId = 0)
    	{   
    		$receivablesModel = new \app\crm\model\Receivables();
    		$userModel = new \app\admin\model\User();	
@@ -583,6 +599,30 @@ class Contract extends Common
         $dataInfo['create_time'] = !empty($dataInfo['create_time']) ? date('Y-m-d H:i:s', $dataInfo['create_time']) : null;
         $dataInfo['update_time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
         $dataInfo['last_time']   = !empty($dataInfo['last_time'])   ? date('Y-m-d H:i:s', $dataInfo['last_time'])   : null;
+        // 字段授权
+        if (!empty($userId)) {
+            $grantData = getFieldGrantData($userId);
+            $userLevel = isSuperAdministrators($userId);
+            foreach ($dataInfo AS $key => $value) {
+                if (!$userLevel && !empty($grantData['crm_contract'])) {
+                    $status = getFieldGrantStatus($key, $grantData['crm_contract']);
+
+                    # 查看权限
+                    if ($status['read'] == 0) unset($dataInfo[$key]);
+                }
+            }
+            if (!$userLevel && !empty($grantData['crm_contract'])) {
+                # 客户名称
+                $customerStatus = getFieldGrantStatus('customer_id', $grantData['crm_contract']);
+                if ($customerStatus['read'] == 0) {
+                    $dataInfo['customer_name'] = '';
+                    $dataInfo['customer_id_info'] = [];
+                }
+                # 回款金额
+                $doneMoneyStatus = getFieldGrantStatus('done_money', $grantData['crm_contract']);
+                if ($doneMoneyStatus['read'] == 0) $dataInfo['receivablesMoney'] = '';
+            }
+        }
 		return $dataInfo;
    	}
 
@@ -682,19 +722,17 @@ class Contract extends Common
         $business = Db::name('crm_contract')->where('contract_id', $id)->find();
         # 创建人
         $realname = Db::name('admin_user')->where('id', $business['create_user_id'])->value('realname');
-        # 跟进时间
-        $followTime = Db::name('crm_activity')->where(['type' => 1, 'activity_type' => 6, 'activity_type_id' => $id])->order('activity_id', 'desc')->value('update_time');
         # 回款
         $receivablesModel = new Receivables();
         $receivables = $receivablesModel->getMoneyByContractId($id);
 
         return [
-            'create_user_name' => $realname,
-            'create_time'      => date('Y-m-d H:i:s', $business['create_time']),
-            'update_time'      => date('Y-m-d H:i:s', $business['update_time']),
-            'follow_time'      => !empty($followTime) ? date('Y-m-d H:i:s', $followTime) : '',
-            'done_money'       => $receivables['doneMoney'],
-            'un_money'         => $receivables['unMoney']
+            'create_user_id' => $realname,
+            'create_time' => date('Y-m-d H:i:s', $business['create_time']),
+            'update_time' => date('Y-m-d H:i:s', $business['update_time']),
+            'last_time' => !empty($business['last_time']) ? date('Y-m-d H:i:s', $business['last_time']) : '',
+            'done_money' => $receivables['doneMoney'],
+            'un_money' => $receivables['unMoney']
         ];
     }
 

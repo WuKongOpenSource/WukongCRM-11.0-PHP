@@ -1,3 +1,3 @@
 insert into `5kcrm_admin_user` (`username`, `password`, `salt`, `realname`, `create_time`, `status`, `structure_id`, `parent_id`, `type`) values ( '18888888888', '05a9918b455b2209673c36676422bb81', '7217', '管理员', '1613611667', 1, 1, 0, 1);
 
-insert into `5kcrm_hrm_user_det` (`user_id`, `join_time`, `type`, `status`, `userstatus`, `create_time`, `update_time`) values ( 1, '1613611667', 1, 1, 2, '1613611667', '1613611667');
+insert into `5kcrm_hrm_user_det` (`user_id`, `join_time`, `type`, `status`, `userstatus`, `create_time`, `update_time`) values ( 1, '1620614383', 1, 1, 2, '1620614383', '1620614383');

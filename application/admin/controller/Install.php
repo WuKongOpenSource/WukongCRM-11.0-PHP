@@ -47,19 +47,34 @@ class Install extends Controller
      */    
     public function index()
     {
+        $protocol = strpos(strtolower($_SERVER['server_protocol']), 'https') === false ? 'http' : 'https';
+
+        if (strpos(request()->url(), "index.php") === false) {
+            $url =  $protocol. "://" .$_SERVER["HTTP_HOST"] . "/index.php" . request()->url();
+            header("Location:" . $url);
+        }
+
         if (file_exists(CONF_PATH . "install.lock")) {
-            echo "<meta http-equiv='content-type' content='text/html; charset=UTF-8'> <script>alert('请勿重复安装!');location.href='".$_SERVER["HTTP_HOST"]."';</script>";
+            echo "<meta http-equiv='content-type' content='text/html; charset=UTF-8'> <script>alert('请勿重复安装!');location.href='".$protocol."://".$_SERVER["HTTP_HOST"]."';</script>";
             die();     
         }
+
         if (!file_exists(getcwd() . "/public/sql/5kcrm.sql")) {
-            echo "<meta http-equiv='content-type' content='text/html; charset=UTF-8'> <script>alert('缺少必要的数据库文件!');location.href='".$_SERVER["HTTP_HOST"]."';</script>";
+            echo "<meta http-equiv='content-type' content='text/html; charset=UTF-8'> <script>alert('缺少必要的数据库文件!');location.href='".$protocol."://".$_SERVER["HTTP_HOST"]."';</script>";
             die();     
-        }         
-        return $this->fetch('index');      
+        }
+
+        return $this->fetch('index');
     }
 
     public function step1()
     {
+        if (strpos(request()->url(), "index.php") === false) {
+            $protocol = strpos(strtolower($_SERVER['server_protocol']), 'https') === false ? 'http' : 'https';
+            $url =  $protocol. "://" .$_SERVER["HTTP_HOST"] . "/index.php" . request()->url();
+            header("Location:" . $url);
+        }
+
 		session('install_error',null);
         $data           = [];
         $data['env']    = self::checkNnv();
@@ -80,6 +95,11 @@ class Install extends Controller
 		if (session('install_error')){
             echo "<meta http-equiv='content-type' content='text/html; charset=UTF-8'> <script>alert('环境检测未通过，不能进行下一步操作!');location.href='".$_SERVER["HTTP_REFERER"]."';</script>";
             die(); 
+        }
+        if (strpos(request()->url(), "index.php") === false) {
+            $protocol = strpos(strtolower($_SERVER['server_protocol']), 'https') === false ? 'http' : 'https';
+            $url =  $protocol. "://" .$_SERVER["HTTP_HOST"] . "/index.php" . request()->url();
+            header("Location:" . $url);
         }
         $data['os'] = PHP_OS;
         $data['php'] = phpversion();
@@ -352,13 +372,13 @@ INFO;
     {
         $items = [
             'os'      => ['操作系统', PHP_OS, '类Unix', 'ok'],
-            'php'     => ['PHP版本', PHP_VERSION, '7.3 ( <em style="color: #888; font-size: 12px;">>= 5.6</em> )', 'ok','性能更佳'],
+            'php'     => ['PHP版本', PHP_VERSION, '7.3 ( <em style="color: #888; font-size: 12px;">>= 7.0</em> )', 'ok','性能更佳'],
             'gd'      => ['gd', '开启', '开启', 'ok'],
             'openssl' => ['openssl', '开启', '开启', 'ok'],
             'pdo' => ['pdo', '开启', '开启', 'ok'],
         ];
         session('install_error','');
-        if (substr($items['php'][1],0,3) < '5.6') {
+        if (substr($items['php'][1],0,3) < '7.0') {
             $items['php'][3] = 'error';
             session('install_error', true);
         }

@@ -24,7 +24,6 @@ $worksheet->removeRow(1, 2);
 
 // Export to CSV (.csv)
 $helper->log('Write to CSV format');
-/** @var \PhpOffice\PhpSpreadsheet\Writer\Csv $writer */
 $writer = IOFactory::createWriter($spreadsheet, 'Csv');
 $filename = $helper->getFilename(__FILE__, 'csv');
 $callStartTime = microtime(true);

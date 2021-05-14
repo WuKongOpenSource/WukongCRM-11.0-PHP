@@ -29,7 +29,7 @@ class ApiCommon extends Common
         $platform = $paramArr['platform'] ? '_'.$paramArr['platform'] : ''; //请求平台(mobile,ding)
         $cache = Cache::get('Auth_'.$authKey.$platform);
 //        $cache = cache('Auth_'.$authKey.$platform);
-
+//        dump($request->action());die;
         // 校验sessionid和authKey
         if (empty($sessionId) || empty($authKey) || empty($cache)) {
             header('Content-Type:application/json; charset=utf-8');
@@ -52,7 +52,5 @@ class ApiCommon extends Common
         session('user_id', $userInfo['id']);
         // 更新缓存
         Cache::set('Auth_'.$authKey, $cache, $loginExpire);
-//        cache('Auth_'.$authKey, $cache, $loginExpire, 'UserToken');
-        // $GLOBALS['userInfo'] = $userInfo;
     }
 }

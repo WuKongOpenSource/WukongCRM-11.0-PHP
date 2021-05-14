@@ -56,9 +56,6 @@ class LogLogic extends Common
         if ($request['category_id']) {
             $map['log.category_id'] = $request['category_id'];
         }
-        if ($request['create_user_id']) {
-            $map['log.create_user_id'] = $request['create_user_id'];
-        }
         if ($request['type']) {
             $timeAry = ByDateTime($request['type']);
             $between_time = [$timeAry[0], $timeAry[1]];
@@ -77,8 +74,8 @@ class LogLogic extends Common
         $dataWhere['structure_id'] = $request['structure_id'];
         $dataWhere['auth_user_ids'] = $auth_user_ids;
         $logMap = '';
-        if ($request['send_user_id'] != '') {
-            $map['log.create_user_id'] = ['in', trim(arrayToString($request['send_user_id']), ',')];
+        if ($request['create_user_id'] != '') {
+            $map['log.create_user_id'] = ['in', trim(arrayToString($request['create_user_id']), ',')];
         }
         switch ($by) {
             case 'me' :
@@ -242,17 +239,22 @@ class LogLogic extends Common
         $between_time = [$start_time['start_time'], $start_time['end_time']];
         $map['owner_user_id'] = $user_id;
         $map['create_time'] = array('between', $between_time);
-        $map1['update_time'] = array('between', $between_time);
+        $logMap=function ($query) use ($between_time) {
+            $query->where('create_time', array('between', $between_time))
+                ->whereOr('obtain_time', array('between', $between_time));
+        };
         $customerNum = Db::name('CrmCustomer')
-            ->where($map1)
+            ->where($logMap)
             ->count();
         $businessNum = Db::name('CrmBusiness')
             ->where($map)
             ->count();
         $contractNum = Db::name('CrmContract')
+            ->where('check_status',2)
             ->where($map)
             ->count();
         $receivablesMoneyNum = Db::name('CrmReceivables')
+            ->where('check_status',2)
             ->where($map)
             ->sum('money');
         unset($map['owner_user_id']);
@@ -308,17 +310,22 @@ class LogLogic extends Common
         switch ($type) {
             case '1':
                 if ($search) $map['customer.name'] = array('like', '%' . $search . '%');
-                $map['customer.update_time'] = array('between', $between_time);
+                $map['customer.create_time'] = array('between', $between_time);
+                $logMap['obtain_time'] = array('between', $between_time);
                 $activityData = Db::name('CrmCustomer')
                     ->alias('customer')
                     ->join('__ADMIN_USER__ user', 'user.id = customer.owner_user_id', 'LEFT')
                     ->where($map)
                     ->where($map1)
                     ->where($customerMap)
+                    ->whereOr($logMap)
                     ->order('customer.customer_id desc')
-                    ->field('customer.customer_id,customer.name,customer.deal_status,customer.create_time,user.realname as owner_user_name,customer.last_time')
+                    ->field('customer.customer_id,customer.level,customer.name,customer.deal_status,customer.create_time,user.realname as owner_user_name,customer.last_time,customer.next_time')
                     ->page($param['page'],$param['limit'])
                     ->select();
+                foreach ($activityData as $k => $v){
+                    $activityData[$k]['last_time']=!empty($v['last_time'])?date('Y-m-d H:i:s',$v['last_time']):!empty($v['next_time'])?date('Y-m-d H:i:s',$v['next_time']):null;
+                }
                 $dataCount = Db::name('CrmCustomer')
                     ->alias('customer')
                     ->join('__ADMIN_USER__ user', 'user.id = customer.owner_user_id', 'LEFT')
@@ -338,8 +345,24 @@ class LogLogic extends Common
                     ->where($map2)
                     ->order('business.business_id desc')
                     ->page($param['page'],$param['limit'])
-                    ->field('business.business_id,business.name,status.name as status_name,business.create_time,user.realname as owner_user_name,business.last_time')
+                    ->field('business.business_id,business.money,business.status_id,business.type_id,business.name,status.name as status_name,business.create_time,user.realname as owner_user_name,business.last_time,business.deal_date')
                     ->select();
+                $endStatus = ['1' => '赢单', '2' => '输单', '3' => '无效'];
+                foreach ($activityData as $k=>$v){
+                    $statusInfo = [];
+                    $status_count = 0;
+                    if (!$v['is_end']) {
+                        $statusInfo = db('crm_business_status')->where('status_id', $v['status_id'])->find();
+                        if ($statusInfo['order_id'] < 99) {
+                            $status_count = db('crm_business_status')->where('type_id', ['eq', $v['type_id']])->count();
+                        }
+                        //进度
+                        $activityData[$k]['status_progress'] = [$statusInfo['order_id'], $status_count + 1];
+                    } else {
+                        $statusInfo['name'] = $endStatus[$v['is_end']];
+                    }
+                    $activityData[$k]['status_id_info'] = $statusInfo['name'];//销售阶段
+                }
                 $dataCount = Db::name('CrmBusiness')
                     ->alias('business')
                     ->join('__CRM_BUSINESS_STATUS__ status', 'status.status_id=business.status_id')
@@ -351,15 +374,32 @@ class LogLogic extends Common
             case '3':
                 $map['contract.name'] = array('like', '%' . $search . '%');
                 $map['contract.create_time'] = array('between', $between_time);
+                $map['contract.check_status'] = 2;
                 $activityData = Db::name('CrmContract')
                     ->alias('contract')
                     ->join('__ADMIN_USER__ u', 'u.id = contract.owner_user_id', 'LEFT')
+                    ->join('CrmReceivables receivables','receivables.contract_id = contract.contract_id AND receivables.check_status = 2','LEFT')
                     ->where($map)
                     ->where($map3)
                     ->order('contract.contract_id desc')
                     ->page($param['page'],$param['limit'])
-                    ->field('contract.contract_id,contract.name,contract.create_time,contract.check_status,u.realname as order_user_name')
+                    ->field(['contract.contract_id',
+                        'contract.name',
+                        'contract.create_time',
+                        'contract.check_status',
+                        'contract.order_date',
+                        'contract.money',
+                        'u.realname as order_user_name',
+                        'ifnull(SUM(receivables.money), 0)' => 'done_money',
+                        '(contract.money - ifnull(SUM(receivables.money), 0))' => 'un_money'])
                     ->select();
+                foreach ($activityData as $k => $v){
+                    if(!empty($v['contract_id'])){
+                        $activityData[$k]['order_date'] = ($v['order_date']!='0000-00-00') ? $v['order_date'] : null;
+                    }else{
+                        $activityData=[];
+                    }
+                }
                 $dataCount = Db::name('CrmContract')
                     ->alias('contract')
                     ->join('__ADMIN_USER__ u', 'u.id = contract.owner_user_id', 'LEFT')
@@ -370,10 +410,11 @@ class LogLogic extends Common
             case '4':
                 $map['receivables.number'] = array('like', '%' . $search . '%');
                 $map['receivables.create_time'] = array('between', $between_time);
+                $map['receivables.check_status'] = 2;
                 $activityData = Db::name('CrmReceivables')
                     ->alias('receivables')
                     ->join('__ADMIN_USER__ user', 'user.id = receivables.owner_user_id', 'LEFT')
-                    ->field('receivables.receivables_id,receivables.number,receivables.return_time,user.realname as owner_user_name')
+                    ->field('receivables.receivables_id,receivables.number,receivables.return_time,receivables.money,user.realname as owner_user_name')
                     ->where($map)
                     ->where($map4)
                     ->page($param['page'],$param['limit'])
@@ -690,7 +731,7 @@ class LogLogic extends Common
     }
 
     /**
-     *
+     * 跟进记录列表
      * @param $param
      * @return array
      * @throws \think\Exception
@@ -966,6 +1007,10 @@ class LogLogic extends Common
         } else {
             $item['bulletin'] = 0;
         }
+        # 发送人信息
+        $sendUserList = !empty($item['send_user_ids']) ? db('admin_user')->field(['id', 'realname'])->whereIn('id', stringToArray($item['send_user_ids']))->select() : [];
+        $item['sendUserList'] = $sendUserList;
+
         $data = [];
         $data['list'] = $item;
         return $data;

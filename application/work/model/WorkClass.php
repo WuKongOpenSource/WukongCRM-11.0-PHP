@@ -7,6 +7,7 @@
 
 namespace app\work\model;
 
+use app\admin\controller\ApiCommon;
 use think\Db;
 use think\Model;
 use think\Request;
@@ -68,7 +69,10 @@ class WorkClass extends Model
 			$data['order_id'] = $max_order_id ? $max_order_id+1 : 0;
 			$this->insert($data);
 			$this->commit();
-			return true;
+            $user=new ApiCommon();
+            $userInfo=$user->userInfo;
+            RecordActionLog($userInfo['id'], 'work', 'save',$param['name'], '','','添加了任务分类：'.$param['name']);
+            return true;
 		} catch(\Exception $e) {
 			$this->rollback();
 			$this->error = '添加失败';
@@ -85,12 +89,17 @@ class WorkClass extends Model
 	public function rename($param)
 	{
 		$map['class_id'] = $param['class_id'];
+        $classInfo = db('work_task_class')->where(['class_id' => $param['class_id']])->find();
 		$flag = $this->where($map)->update(['name' => $param['name']]);
 		if (!$flag) {
 			$this->error = '重命名失败';
 			return false;
 		}
-		return true;
+        $user=new ApiCommon();
+        $userInfo=$user->userInfo;
+        RecordActionLog($userInfo['id'], 'work', 'save',$classInfo['name'], '','','编辑了任务分类：'.$classInfo['name']);
+        
+        return true;
 	}
 
 	/**

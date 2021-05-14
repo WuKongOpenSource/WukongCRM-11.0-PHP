@@ -45,10 +45,7 @@ class Printing extends ApiCommon
      */
     public function index(PrintingLogic $printingLogic)
     {
-        $page  = !empty($this->param['page'])  ? $this->param['page']  : 1;
-        $limit = !empty($this->param['limit']) ? $this->param['limit'] : 15;
-
-        $data = $printingLogic->index($page, $limit);
+        $data = $printingLogic->index($this->param);
 
         return resultArray(['data' => $data]);
     }
@@ -65,7 +62,6 @@ class Printing extends ApiCommon
 
         if (empty($param['name']))    return resultArray(['error' => '缺少模板名称！']);
         if (empty($param['type']))    return resultArray(['error' => '缺少模板类型！']);
-        if (empty($param['content'])) return resultArray(['error' => '缺少模板详情！']);
 
         if (!$printingLogic->create($param)) return resultArray(['error' => '添加失败！']);
 
@@ -103,8 +99,9 @@ class Printing extends ApiCommon
         $param = $this->param;
 
         if (empty($param['id'])) return resultArray(['error' => '缺少模板ID！']);
+        if (isset($param['name']) && empty($param['name'])) return resultArray(['error' => '名称不能为空！']);
 
-        if (!$printingLogic->update($param)) return resultArray(['error' => '更新失败！']);
+        if ($printingLogic->update($param) === false) return resultArray(['error' => '更新失败！']);
 
         return resultArray(['data' => '更新成功！']);
     }
@@ -159,7 +156,7 @@ class Printing extends ApiCommon
      */
     public function field(PrintingLogic $printingLogic)
     {
-        # 打印类型：1商机；2合同；3回款
+        # 打印类型：5商机；6合同；7回款
         $type = !empty($this->param['type']) ? $this->param['type'] : 5;
 
         $data = $printingLogic->getFields($type);

@@ -6,6 +6,7 @@
 // +----------------------------------------------------------------------
 namespace app\crm\model;
 
+use app\admin\controller\ApiCommon;
 use think\Db;
 use app\admin\model\Common;
 use think\Request;
@@ -79,13 +80,23 @@ class CustomerConfig extends Common
             $this->error = '有员工或部门包含在其他的规则里！';
             return false;
         }
-
 		$param['types']         = !empty($param['types'])         ? $param['types']                        : 1;  # 1拥有客户上限2锁定客户上限
 		$param['user_ids']      = !empty($param['user_ids'])      ? arrayToString($param['user_ids'])      : ''; # 处理user_id
 		$param['structure_ids'] = !empty($param['structure_ids']) ? arrayToString($param['structure_ids']) : ''; # 处理structure_id
         if ($this->allowField(true)->isUpdate(empty($id) ? false : true)->save($param, !empty($id) ? ['id' => $id] : [])) {
 			$data['id'] = $this->id;
-			return $data;
+            # 系统操作日志
+            if(!empty($param['id'])){
+                $content='编辑员工拥有、锁定客户限制';
+                $action='update';
+            }else{
+                $content='添加员工拥有、锁定客户限制';
+                $action='update';
+            }
+            $user=new ApiCommon();
+            $userInfo=$user->userInfo;
+            SystemActionLog($userInfo['id'], 'crm_customer','customer', $this->id,  $action,$content , '', '',$content);
+            return $data;
 		} else {
 			$this->error = '创建失败';
 			return false;
@@ -139,54 +150,108 @@ class CustomerConfig extends Common
    	}
 
     /**
-     * 验证相关信息
+     * 验证是否可以持有或锁定客户
      *
-     * @param $user_id
-     * @param $types
-     * @param string $is_update
-     * @return bool
-     * @throws \think\db\exception\DataNotFoundException
-     * @throws \think\db\exception\ModelNotFoundException
-     * @throws \think\exception\DbException
+     * @param int $userId 用户id
+     * @param int $types 类型：类型：1 拥有客户数，2 锁定客户数
+     * @param int $isUpdate 是否是更新
+     * @param int $addCount 多公海分配或领取使用的参数，代表要领取或分配的客户数量
+     * @return bool|int|mixed
      */
-   	public function checkData($user_id, $types, $is_update = '')
-   	{   
-   		$userModel = new \app\admin\model\User();
-   		$customerModel = new \app\crm\model\Customer();
-   		$userInfo = $userModel->getUserById($user_id);
-   		$dataInfo = $this->where(['types' => $types,'user_ids' => ['like','%,'.$user_id.',%']])->order('update_time desc')->find();
-		if (!$dataInfo) {
-			$dataInfo = $this->where(['types' => $types,'structure_ids' => ['like','%,'.$userInfo['structure_id'].',%']])->find();
-		}
-		switch ($types) {
-			case '1' : $types_title = '拥有的客户数量'; break;
-			case '2' : $types_title = '锁定的客户数量'; break;
-		}
-		if ($dataInfo) {
-			$is_deal = $dataInfo['is_deal'] ? : 0;
-			if (!$dataInfo['value']) {
-				$this->error = $types_title.'超出限制：'.$dataInfo['value'].'个';
-				return false;
-			}
-			//拥有数、锁定数
-			$count = $customerModel->getCountByHave($user_id,$is_deal,$types);
-			$error = false;
-			if ($count >= $dataInfo['value']) {
-				$error = true;			
-			}		
-			if ($is_update == 1 && $types == 1 && $dataInfo['is_deal'] == 1) {
-				//更改成交状态
-				if ($count = $dataInfo['value']) {
-					$error = false;			
-				}						
-			}			
-			if ($error == true) {
-				$this->error = $userInfo['realname'].','.$types_title.'超出限制：'.$dataInfo['value'].'个';
-				return false;	
-			}
-		}
-		return true;
-   	}
+    public function checkData($userId, $types, $isUpdate = 0, $addCount = 0)
+    {
+        # 用户信息
+        $userinfo = db('admin_user')->field(['realname', 'structure_id'])->where('id', $userId)->find();
+        $username = $userinfo['realname'];
+        $structureId = $userinfo['structure_id'];
+
+        # 查询客户配置（拥有，锁定），以用户配置优先
+        $customerConfig = db('crm_customer_config')->field(['value', 'is_deal'])->where(['types' => $types, 'user_ids' => ['like', '%,' . $userId . ',%']])->find();
+        if (!$customerConfig) $customerConfig = db('crm_customer_config')->field(['value', 'is_deal'])->where(['types' => $types, 'structure_ids' => ['like', '%,' . $structureId . ',%']])->find();
+
+        # 提示标题
+        $title = '';
+        if ($types == 1) $title = '拥有的客户数量';
+        if ($types == 2) $title = '锁定的客户数量';
+
+        if ($customerConfig) {
+            if (empty($customerConfig['value'])) {
+                $this->error = $title . '超出限制，最大：' . $customerConfig['value'] . ' 个';
+
+                return false;
+            }
+
+            # 成交用户是否暂用数量
+            $isDeal = !empty($customerConfig['is_deal']) ? 1 : 0;
+
+            # 获取目前拥有或锁定的客户数量
+            $customerModel = new Customer();
+            $count = $customerModel->getCountByHave($userId, $isDeal, $types);
+
+            $error = false;
+            if (empty($addCount)) {
+                # 多公海以外的地方调用
+                if ($count >= $customerConfig['value']) {
+                    $error = true;
+                }
+                if ($isUpdate == 1 && $types == 1 && $customerConfig['is_deal'] == 1) {
+                    //更改成交状态
+                    if ($count = $customerConfig['value']) {
+                        $error = false;
+                    }
+                }
+                if ($error == true) {
+                    $this->error = $username.','.$title.'超出限制：'.$customerConfig['value'].'个';
+                    return false;
+                }
+            } else {
+                # 多公海中的领取、分配调用，返回超出的个数
+                if ($count + $addCount > $customerConfig['value']) {
+                    return ($count + $addCount) - $customerConfig['value'];
+                }
+            }
+        }
+
+        return true;
+    }
+//   	public function checkData($user_id, $types, $is_update = '')
+//   	{
+//   		$userModel = new \app\admin\model\User();
+//   		$customerModel = new \app\crm\model\Customer();
+//   		$userInfo = $userModel->getUserById($user_id);
+//   		$dataInfo = $this->where(['types' => $types,'user_ids' => ['like','%,'.$user_id.',%']])->order('update_time desc')->find();
+//		if (!$dataInfo) {
+//			$dataInfo = $this->where(['types' => $types,'structure_ids' => ['like','%,'.$userInfo['structure_id'].',%']])->find();
+//		}
+//		switch ($types) {
+//			case '1' : $types_title = '拥有的客户数量'; break;
+//			case '2' : $types_title = '锁定的客户数量'; break;
+//		}
+//		if ($dataInfo) {
+//			$is_deal = $dataInfo['is_deal'] ? : 0;
+//			if (!$dataInfo['value']) {
+//				$this->error = $types_title.'超出限制：'.$dataInfo['value'].'个';
+//				return false;
+//			}
+//			//拥有数、锁定数
+//			$count = $customerModel->getCountByHave($user_id,$is_deal,$types);
+//			$error = false;
+//			if ($count >= $dataInfo['value']) {
+//				$error = true;
+//			}
+//			if ($is_update == 1 && $types == 1 && $dataInfo['is_deal'] == 1) {
+//				//更改成交状态
+//				if ($count = $dataInfo['value']) {
+//					$error = false;
+//				}
+//			}
+//			if ($error == true) {
+//				$this->error = $userInfo['realname'].','.$types_title.'超出限制：'.$dataInfo['value'].'个';
+//				return false;
+//			}
+//		}
+//		return true;
+//   	}
 
     /**
      * 验证拥有/锁定客户数中的员工或部门是否重复添加

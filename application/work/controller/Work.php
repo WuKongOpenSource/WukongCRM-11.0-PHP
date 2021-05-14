@@ -92,9 +92,11 @@ class work extends ApiCommon
         if (!in_array($userId, $ownerUserId)) $owner_user_id[] = $userId;
         $param['owner_user_id'] = $ownerUserId;
 
-        if (!$workModel->createData($param)) {
-            return resultArray(['error' => $workModel->getError()]);
-        }
+        $workId = $workModel->createData($param);
+        if (!$workId) return resultArray(['error' => $workModel->getError()]);
+
+        # 更新项目排序表
+        $workModel->updateWorkOrder($workId, $userId);
 
         return resultArray(['data' => '操作成功！']);
     }
@@ -155,7 +157,15 @@ class work extends ApiCommon
         $workInfo['ownerUser'] = db('admin_user')->field(['id', 'realname'])->whereIn('id', trim($workInfo['owner_user_id'], ','))->select();
 
         $workInfo['auth'] = $this->getRuleList($this->param['work_id'], $userId, $groupId);
-
+        $userInfo=$this->userInfo;
+        $rule=db('work_user')
+            ->where('user_id',$userInfo['id'])
+            ->value('group_id');
+        $list=db('admin_rule')->where('name','manageTaskOwnerUser')->value('id');
+        $groupList = db('admin_group')->where(['pid' => 5, 'types' => 7, 'type' => 0,'id'=>$rule])->order('system desc')->value('rules');
+        if(!in_array($list,stringToArray($groupList))){
+            $workInfo['is_open']=1;
+        }
         return resultArray(['data' => $workInfo]);
     }
 
@@ -172,7 +182,7 @@ class work extends ApiCommon
         $userInfo = $this->userInfo;
         $workModel = model('Work');
         if (empty($param['work_id'])) return resultArray(['error' => '请选择要删除的项目！']);
-
+        $dataInfo=db('work')->where('work_id',$param['work_id'])->find();
         # 权限判断
         if (!$this->checkWorkOperationAuth('setWork', $param['work_id'], $userInfo['id'])) {
             header('Content-Type:application/json; charset=utf-8');
@@ -185,8 +195,11 @@ class work extends ApiCommon
 		$param['create_user_id'] = $userInfo['id']; 
         $resWork = $workModel->delWorkById($param);
         if ($resWork) {
-            //删除项目下所有任务
-            $resTask = db('task')->where(['work_id' => $param['work_id']])->delete();
+            // 删除项目下所有任务
+            db('task')->where(['work_id' => $param['work_id']])->delete();
+            // 删除项目排序
+            db('work_order')->where('work_id', $param['work_id'])->delete();
+            RecordActionLog($userInfo['id'], 'work', 'delete',$dataInfo['name'], '','','删除了项目：'.$dataInfo['name']);
             return resultArray(['data'=>'删除成功']);
         } else {
             return resultArray(['error'=>$workModel->getError()]);
@@ -239,6 +252,7 @@ class work extends ApiCommon
         if (!$param['work_id'] || !$param['owner_user_id']) {
             return resultArray(['error'=>'参数错误']);
         }
+        $dataInfo=db('work')->where('work_id',$param['work_id'])->find();
         $workModel = model('Work');
         # 权限判断
         if (!$this->checkWorkOperationAuth('setWork', $param['work_id'], $userInfo['id'])) {
@@ -250,9 +264,14 @@ class work extends ApiCommon
 //            exit(json_encode(['code'=>102,'error'=>'无权操作']));
 //        }
         $res = $workModel->addOwner($param);
+        $user= new \app\admin\model\User();
         if ($res) { 
             $temp['work_id'] = $param['work_id'];
             $list = $workModel->ownerList($temp); //获取参与人列表
+            foreach ($param['owner_user_id'] as $value){
+                $user_info=$user->getUserById($value);
+                RecordActionLog($userInfo['id'], 'work', 'save',$dataInfo['name'], '','','增加了项目成员：'.$user_info['realname']);
+            }
             return resultArray(['data'=>$list]);
         } else {
             return resultArray(['error'=>'操作失败']);
@@ -282,7 +301,8 @@ class work extends ApiCommon
 //            exit(json_encode(['code'=>102,'error'=>'无权操作']));
 //        }
         $res = $workModel->delOwner($param);
-        if ($res) { 
+        if ($res) {
+            
             return resultArray(['data'=>'操作成功']);
         } else {
             return resultArray(['error'=>$workModel->getError()]);
@@ -609,9 +629,8 @@ class work extends ApiCommon
     public function groupList()
     {
         $list[]    = ['id' => 1,'title' => '管理', 'remark' => '系统默认权限，包含项目所有权限,不可修改/删除'];
-        $groupList = db('admin_group')->where(['pid' => 5, 'types' => 7, 'type' => 0])->order('system desc')->field('id, title, remark')->select();
+        $groupList = db('admin_group')->where(['pid' => 5, 'types' => 7, 'type' => 0])->order('system desc')->field('id, title, remark,rules')->select();
         $listArr   = array_merge($list, $groupList) ? : [];
-
         return resultArray(['data' => $listArr]);
     }
 

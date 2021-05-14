@@ -24,7 +24,7 @@ class Activity extends ApiCommon
     {
         $action = [
             'permission'=>[],
-            'allow'=>['index', 'save', 'read', 'update', 'delete', 'getphrase', 'setphrase', 'getrecordauth']
+            'allow'=>['index', 'save', 'read', 'update', 'delete', 'getphrase', 'setphrase', 'getrecordauth','excelimport','excelexport','exceldownload']
         ];
         Hook::listen('check_auth',$action);
         $request = Request::instance();
@@ -77,7 +77,6 @@ class Activity extends ApiCommon
         $param['user_id'] = $this->userInfo['id'];
 
         if (!$activityLogic->save($param)) return resultArray(['error' => '操作失败！']);
-
         return resultArray(['data' => '操作成功！']);
     }
 
@@ -144,7 +143,6 @@ class Activity extends ApiCommon
         if (empty($this->param['activity_id'])) return resultArray(['error' => '请选择跟进记录！']);
 
         if (!$activityLogic->delete($this->param['activity_id'])) return resultArray(['error' => '操作失败！']);
-
         return resultArray(['data' => '操作成功！']);
     }
 
@@ -195,5 +193,240 @@ class Activity extends ApiCommon
         ];
 
         return resultArray(['data' => $data]);
+    }
+    /**
+     * 导入模板下载
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/4/10 0010 16:01
+     */
+    public function excelDownload($save_path = ''){
+        $param = $this->param;
+        $excelModel = new \app\admin\model\Excel();
+        $field_list=$this->importData($param);
+        $types='crm_activity';
+        $excelModel->importDown($field_list,$types,$save_path);
+    }
+    
+    /**
+     * 导入导出模板标题
+     * @param $param
+     *
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/4/13 0013 11:15
+     */
+    public function importData($param){
+        switch ($param['label']){
+            case 1 :
+                $field = [
+                    '2' => [
+                        'name' => '所属线索',
+                        'field' => 'activity_type_id',
+                        'types' => 'log',
+                        'form_type' => 'datetime',
+                        'is_null' => 1,
+                    ]
+                ];
+                break;
+            case 3:
+                $field = [
+                    '2' => [
+                        'name' => '所属联系人',
+                        'field' => 'activity_type_id',
+                        'types' => 'log',
+                        'form_type' => 'datetime',
+                        'is_null' => 1,
+                    ],
+                ];
+                break;
+            case 5:
+                $field = [
+                    '2' => [
+                        'name' => '所属商机',
+                        'field' => 'activity_type_id',
+                        'types' => 'log',
+                        'form_type' => 'text',
+                        'is_null' => 1,
+                    ]
+                ];
+                break;
+            case 6:
+                $field = [
+                    '2' => [
+                        'name' => '所属合同',
+                        'field' => 'activity_type_id',
+                        'types' => 'log',
+                        'form_type' => 'text',
+                        'is_null' => 1,
+                    ],
+                ];
+                break;
+            case 2:
+                $field_list = [
+                    '0' => [
+                        'name' => '跟进内容',
+                        'field' => 'content',
+                        'types' => 'log',
+                        'form_type' => 'text',
+                        'is_null' => 1,
+                    ],
+                    '1' => [
+                        'name' => '创建人',
+                        'field' => 'create_user_id',
+                        'types' => 'log',
+                        'form_type' => 'user',
+                        'is_null' => 1,
+                    ],
+                    '2' => [
+                        'name' => '所属客户',
+                        'field' => 'activity_type_id',
+                        'types' => 'log',
+                        'form_type' => 'text',
+                        'is_null' => 1,
+                    ],
+                    '3' => [
+                        'name' => '跟进时间-例:2020-2-1',
+                        'field' => 'next_time',
+                        'types' => 'log',
+                        'form_type' => 'datetime',
+                    ],
+                    '4' => [
+                        'name' => '跟进方式',
+                        'field' => 'category',
+                        'types' => 'log',
+                        'form_type' => 'text',
+                    ],
+                    '5' => [
+                        'name' => '相关联系人',
+                        'field' => 'contacts_ids',
+                        'types' => 'log',
+                        'form_type' => 'text',
+                    ],
+                    '6' => [
+                        'name' => '相关商机',
+                        'field' => 'business_ids',
+                        'types' => 'log',
+                        'form_type' => 'text',
+                    ]
+                ];
+                break;
+        }
+        $fields = [
+            '0' => [
+                'name' => '跟进内容',
+                'field' => 'content',
+                'types' => 'log',
+                'form_type' => 'text',
+                'is_null' => 1,
+            ],
+            '1' => [
+                'name' => '创建人',
+                'field' => 'create_user_id',
+                'types' => 'log',
+                'form_type' => 'user',
+                'is_null' => 1,
+            ],
+            '2' => [
+                'name' => '所属111',
+                'field' => 'activity_type_id',
+                'types' => 'log',
+                'form_type' => 'text',
+                'is_null' => 1,
+            ],
+            '3' => [
+                'name' => '跟进时间-例:2020-2-1',
+                'field' => 'next_time',
+                'types' => 'log',
+                'form_type' => 'datetime',
+            ],
+            '4' => [
+                'name' => '跟进方式',
+                'field' => 'category',
+                'types' => 'log',
+                'form_type' => 'text',
+            ],
+        ];
+        // 导入的字段列表
+        if(!empty($param['down'])){
+            $field_list = [
+                '0' => ['name' => '所属客户', 'field' => 'activity_type_name'],
+                '1' => ['name' => '跟进内容', 'field' => 'content'],
+                '2' => ['name' => '创建人', 'field' => 'create_user_name'],
+                '3' => ['name' => '跟进时间', 'field' => 'create_time'],
+                '4' => ['name' => '跟进方式','field' => 'category'],
+                '5' => ['name' => '下次联系时间', 'field' => 'next_time'],
+                '6' => ['name' => '相关联系人', 'field' => 'contacts_ids'],
+                '7' => ['name' => '相关商机', 'field' => 'business_ids'],
+               
+            ];
+        }else{
+            if(empty($field_list)){
+                $field_list=array_merge($fields,$field);
+            }
+        }
+        return $field_list;
+    }
+    /**
+     * 导入数据
+     *
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/4/10 0010 16:27
+     */
+    public function excelImport(){
+        $param = $this->param;
+        $field_list=$this->importData($param['label']);
+        $excelModel = new \app\admin\model\Excel();
+        $file = request()->file('file');
+        switch ($param['label']){
+            case 1 :
+                $param['types']='crm_leads';
+                $param['activity_type']=1;
+                break;
+            case 3:
+                $param['types']='crm_contacts';
+                $param['activity_type']=3;
+                break;
+            case 5:
+                $param['types']='crm_business';
+                $param['activity_type']=5;
+                break;
+            case 6:
+                $param['types']='crm_contract';
+                $param['activity_type']=6;
+                break;
+            case 2:
+                $param['types']='crm_customer';
+                $param['activity_type']=2;
+                break;
+        }
+        $res = $excelModel->ActivityImport($file,$field_list, $param,$this);
+        if (!$res) {
+            return resultArray(['error' => $excelModel->getError()]);
+        }
+        return resultArray(['data' => $excelModel->getError()]);
+    }
+    
+    /**
+     * 导出跟进记录
+     * action 列表分辨是否导出
+     * label 导出类型 合同 客户 联系人
+     *
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/4/13 0013 11:32
+     */
+    public function excelExport(){
+       
+        $activityLogic=new ActivityLogic();
+        $indexLogic=new \app\crm\logic\IndexLogic();
+        $param = $this->param;
+        $param['action']='crm_activity';
+        $list=$indexLogic->activityList($param);
+//        $param['down']=1;
+        $field_list=$this->importData($param);
+        $data=$activityLogic->excelExport($field_list,$list);
+        return $data;
     }
 }

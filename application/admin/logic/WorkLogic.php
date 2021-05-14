@@ -8,6 +8,7 @@
 
 namespace app\admin\logic;
 
+use app\admin\controller\ApiCommon;
 use think\Db;
 
 class WorkLogic
@@ -58,8 +59,8 @@ class WorkLogic
         $param['type']   = 0;
         $param['types']  = 7;
         $param['system'] = 0;
-
-        return Db::name('admin_group')->insert($param);
+        $data=Db::name('admin_group')->insertGetId($param);
+        return $data;
     }
 
     /**
@@ -90,7 +91,18 @@ class WorkLogic
      */
     public function updateRole($param)
     {
-        return Db::name('admin_group')->update($param);
+        $res=Db::name('admin_group')->where('id',$param['id'])->find();
+        if(!$res){
+            return false;
+        }else{
+            $data=Db::name('admin_group')->update($param);
+            # 添加系统操作日志
+            $user=new ApiCommon();
+            $userInfo=$user->userInfo;
+            SystemActionLog($userInfo['id'], 'admin_group','project', $param['id'], 'update',$res['title'] , '', '','编辑了项目管理权限：'.$res['title']);
+            return $data;
+        }
+       
     }
 
     /**
@@ -103,9 +115,9 @@ class WorkLogic
      */
     public function deleteRole($id)
     {
-        $system = Db::name('admin_group')->where('id', $id)->value('system');
+        $system = Db::name('admin_group')->where('id', $id)->find();
 
-        if (!empty($system)) return ['status' => false, 'error' => '不允许删除系统默认角色！'];
+        if (!empty($system['system'])) return ['status' => false, 'error' => '不允许删除系统默认角色！'];
 
         if (!Db::name('admin_group')->where('id', $id)->delete()) return ['status' => false, 'error' => '操作失败！'];
 
@@ -115,7 +127,10 @@ class WorkLogic
             db('work')->where('group_id', $id)->update(['group_id' => $readOnlyId]);      # 处理公开项目的权限
             db('work_user')->where('group_id', $id)->update(['group_id' => $readOnlyId]); # 处理私有项目的权限
         }
-
+        # 添加系统操作日志
+        $user=new ApiCommon();
+        $userInfo=$user->userInfo;
+        SystemActionLog($userInfo['id'], 'admin_group','project', $id, 'update',$system['title'] , '', '','删除了项目管理权限：'.$system['title']);
         return ['status' => true];
     }
 }

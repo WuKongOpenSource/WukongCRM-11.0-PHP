@@ -108,7 +108,7 @@ class Field extends ApiCommon
         if ($this->param['types'] == 'oa_examine' && $this->param['types_id'] < 7) {
             return resultArray(['error' => '系统审批类型暂不支持编辑']);
         }
-
+        $userInfo=$this->userInfo;
         $fieldModel = model('Field');
 
         $param      = $this->param;
@@ -160,25 +160,37 @@ class Field extends ApiCommon
         foreach ($deleteIds AS $key => $value) {
             if (!in_array($value, $delParam)) $delParam[] = $value;
         }
-
+        $recordModules = [
+            'crm_leads'       => '线索',
+            'crm_customer'    => '客户',
+            'crm_pool'        => '客户公海',
+            'crm_contacts'    => '联系人',
+            'crm_product'     => '产品',
+            'crm_business'    => '商机',
+            'crm_contract'    => '合同',
+            'crm_receivables' => '回款',
+            'crm_visit'       => '回访',
+            'crm_invoice'     => '回款',
+            'oa_log'          => '办公日志',
+            'oa_examine'      => '办公审批',
+        ];
         # 新增
         if (!empty($saveParam)) {
             if (!$data = $fieldModel->createData($types, $saveParam)) {
                 $errorMessage[] = $fieldModel->getError();
             }            
         }
-
         # 编辑
         if (!empty($updateParam)) {
-            if (!$data = $fieldModel->updateDataById($updateParam)) {
+            if (!$data = $fieldModel->updateDataById($updateParam, $types)) {
                 $errorMessage[] = $fieldModel->getError();
             }
         }
 
         # 删除
         if (!empty($delParam)) {
-            if (!$data = $fieldModel->delDataById($delParam)) {
-                if (!empty($fieldModel->getError())) $errorMessage[] = $fieldModel->getError();
+            if (!$data = $fieldModel->delDataById($delParam, $types)) {
+                $errorMessage[] = $fieldModel->getError();
             }
         }
 
@@ -188,6 +200,27 @@ class Field extends ApiCommon
         if ($errorMessage) {
             return resultArray(['error' => $errorMessage]);
         } else {
+            # 系统操作记录
+            $recordModules = [
+                'crm_leads'       => '线索',
+                'crm_customer'    => '客户',
+                'crm_pool'        => '客户公海',
+                'crm_contacts'    => '联系人',
+                'crm_product'     => '产品',
+                'crm_business'    => '商机',
+                'crm_contract'    => '合同',
+                'crm_receivables' => '回款',
+                'crm_visit'       => '回访',
+                'crm_invoice'     => '回款',
+                'oa_log'          => '办公日志',
+                'oa_examine'      => '办公审批',
+            ];
+            if($types !== 'oa_examine'){
+                $systemModules='customer';
+            }else{
+                $systemModules='approval';
+            }
+            SystemActionLog($userInfo['id'], $types,$systemModules, 1,  'update', $recordModules[$types], '','','编辑了自定义字段：'.$recordModules[$types]);
             return resultArray(['data' => '修改成功']);
         }
     }
@@ -227,6 +260,11 @@ class Field extends ApiCommon
                     case 'crm_customer' : 
                         $customerModel = new \app\crm\model\Customer();
                         $dataInfo = $customerModel->getDataById(intval($param['action_id']));
+                        // 公海
+                        if (!empty($param['pool_id'])) {
+                            $data = $fieldModel->getPoolFieldData($param['pool_id'], $dataInfo);
+                            return resultArray(['data' => $data]);
+                        }
                         //判断权限
                         $auth_user_ids = $userModel->getUserByPer('crm', 'customer', $param['action']);
                         //读写权限
@@ -342,6 +380,15 @@ class Field extends ApiCommon
         $action_id = $param['action_id'] ? : '';
         $data = $fieldModel->field($param, $dataInfo) ? : [];
 
+        # 回访模块下，负责人名称变更为回访人
+        if ($param['types'] == 'crm_visit') {
+            foreach ($data AS $key => $value) {
+                if ($value['field'] == 'owner_user_id') {
+                    $data[$key]['name'] = '回访人';
+                    break;
+                }
+            }
+        }
         # 去掉客户模块下的成交信息
         if ($param['types'] == 'crm_customer' && $param['action'] == 'read') {
             foreach ($data AS $key => $value) {
@@ -351,28 +398,18 @@ class Field extends ApiCommon
                 }
             }
         }
-
-        if ($param['types'] == 'crm_customer' && $param['action'] == 'index') {
+        # 合同回款 基本信息审核状态
+        if(in_array($param['types'], ['crm_receivables', 'crm_contract']) && $param['action'] == 'read'){
+            $check=['0'=>'待审核','1'=>'审核中','2'=>'审核通过','3'=>'审核未通过','4'=>'撤销','5'=>'草稿(未提交)','6'=>'作废'];
             $data[] = [
-                'field'       => 'pool_day',
-                'name'        => '距进入公海天数',
+                'field'       => 'check_status',
+                'name'        => '审核状态',
                 'form_type'   => 'text',
                 'writeStatus' => 0,
-                'fieldName'   => 'pool_day'
+                'fieldName'   => 'check_status',
+                'value'     => $check[$dataInfo['check_status']],
             ];
         }
-
-        # 客户锁定状态
-        if ($param['types'] == 'crm_customer' && $param['action'] == 'index') {
-            $data[] = [
-                'field'     => "is_lock",
-                'fieldName' => "is_lock",
-                'form_type' => "text",
-                'name'      => "锁定状态",
-                'width'     => ""
-            ];
-        }
-
         # 合同自动编号设置
         if ($param['types'] == 'crm_contract') {
             foreach ($data AS $key => $value) {
@@ -436,7 +473,7 @@ class Field extends ApiCommon
                 case 'crm_leads' :
                     $leadsModel = new Leads();
                     $leadsData  = $leadsModel->getSystemInfo($action_id);
-                    $leadsArray = ['create_user_name' => '创建人', 'create_time' => '创建时间', 'update_time' => '更新时间', 'follow_time' => '最后跟进时间'];
+                    $leadsArray = ['create_user_id' => '创建人', 'create_time' => '创建时间', 'update_time' => '更新时间', 'last_time' => '最后跟进时间'];
 
                     foreach ($leadsData AS $key => $value) {
                         if (empty($leadsArray[$key])) continue;
@@ -453,7 +490,7 @@ class Field extends ApiCommon
                 case 'crm_customer' :
                     $customerModel = new Customer();
                     $customerData  = $customerModel->getSystemInfo($action_id);
-                    $customerArray = ['obtain_time' => '负责人获取客户时间', 'create_time' => '创建时间', 'update_time' => '更新时间', 'follow_time' => '最后跟进时间', 'follow_record' => '最后跟进记录', 'deal_status' => '成交状态'];
+                    $customerArray = ['obtain_time' => '负责人获取客户时间', 'create_time' => '创建时间', 'update_time' => '更新时间', 'last_time' => '最后跟进时间', 'last_record' => '最后跟进记录', 'deal_status' => '成交状态'];
 
                     foreach ($customerData AS $key => $value) {
                         if (empty($customerArray[$key])) continue;
@@ -470,7 +507,7 @@ class Field extends ApiCommon
                 case 'crm_contacts' :
                     $contactsModel = new Contacts();
                     $contactsData  = $contactsModel->getSystemInfo($action_id);
-                    $contactsArray = ['create_user_name' => '创建人', 'create_time' => '创建时间', 'update_time' => '更新时间', 'follow_time' => '最后跟进时间'];
+                    $contactsArray = ['create_user_id' => '创建人', 'create_time' => '创建时间', 'update_time' => '更新时间', 'last_time' => '最后跟进时间'];
 
                     foreach ($contactsData AS $key => $value) {
                         if (empty($contactsArray[$key])) continue;
@@ -487,7 +524,7 @@ class Field extends ApiCommon
                 case 'crm_business' :
                     $businessModel = new Business();
                     $businessData  = $businessModel->getSystemInfo($action_id);
-                    $businessArray = ['create_user_name' => '创建人', 'create_time' => '创建时间', 'update_time' => '更新时间', 'follow_time' => '最后跟进时间'];
+                    $businessArray = ['create_user_id' => '创建人', 'create_time' => '创建时间', 'update_time' => '更新时间', 'last_time' => '最后跟进时间'];
 
                     foreach ($businessData AS $key => $value) {
                         if (empty($businessArray[$key])) continue;
@@ -504,7 +541,7 @@ class Field extends ApiCommon
                 case 'crm_contract' :
                     $contractModel = new Contract();
                     $contractData  = $contractModel->getSystemInfo($action_id);
-                    $contractArray = ['create_user_name' => '创建人', 'create_time' => '创建时间', 'update_time' => '更新时间', 'follow_time' => '最后跟进时间', 'done_money' => '已收款金额', 'un_money' => '未收款金额'];
+                    $contractArray = ['create_user_id' => '创建人', 'create_time' => '创建时间', 'update_time' => '更新时间', 'last_time' => '最后跟进时间', 'done_money' => '已收款金额', 'un_money' => '未收款金额'];
 
                     foreach ($contractData AS $key => $value) {
                         if (empty($contractArray[$key])) continue;
@@ -521,7 +558,7 @@ class Field extends ApiCommon
                 case 'crm_receivables' :
                     $receivablesModel = new Receivables();
                     $receivablesData  = $receivablesModel->getSystemInfo($action_id);
-                    $receivablesArray = ['create_user_name' => '创建人', 'create_time' => '创建时间', 'update_time' => '更新时间'];
+                    $receivablesArray = ['create_user_id' => '创建人', 'create_time' => '创建时间', 'update_time' => '更新时间'];
 
                     foreach ($receivablesData AS $key => $value) {
                         if (empty($receivablesArray[$key])) continue;
@@ -538,7 +575,7 @@ class Field extends ApiCommon
                 case 'crm_product' :
                     $productModel = new Product();
                     $productData  = $productModel->getSystemInfo($action_id);
-                    $productArray = ['create_user_name' => '创建人', 'create_time' => '创建时间', 'update_time' => '更新时间'];
+                    $productArray = ['create_user_id' => '创建人', 'create_time' => '创建时间', 'update_time' => '更新时间'];
 
                     foreach ($productData AS $key => $value) {
                         if (empty($productArray[$key])) continue;
@@ -555,7 +592,7 @@ class Field extends ApiCommon
                 case 'crm_visit' :
                     $visitLogic = new VisitLogic();
                     $visitData  = $visitLogic->getSystemInfo($action_id);
-                    $visitArray = ['create_user_name' => '创建人', 'create_time' => '创建时间', 'update_time' => '更新时间'];
+                    $visitArray = ['create_user_id' => '创建人', 'create_time' => '创建时间', 'update_time' => '更新时间'];
 
                     foreach ($visitData AS $key => $value) {
                         if (empty($visitArray[$key])) continue;
@@ -572,7 +609,8 @@ class Field extends ApiCommon
             }
         }
 
-        $data = $fieldModel->resetField($param['types'], $data);
+        $data = $fieldModel->resetField($user_id, $param['types'], $param['action'], $data);
+
         return resultArray(['data' => array_values($data)]);
     }
 

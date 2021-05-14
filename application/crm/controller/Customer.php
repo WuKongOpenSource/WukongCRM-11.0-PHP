@@ -29,7 +29,7 @@ class Customer extends ApiCommon
     {
         $action = [
             'permission' => ['exceldownload', 'setfollow', 'delete'],
-            'allow' => ['read', 'system', 'count', 'poolauthority']
+            'allow' => ['read', 'system', 'count', 'poolauthority', 'level']
         ];
         Hook::listen('check_auth', $action);
         $request = Request::instance();
@@ -156,6 +156,8 @@ class Customer extends ApiCommon
     public function delete()
     {
         $param = $this->param;
+        $user=new ApiCommon();
+        $userInfo = $user->userInfo;
         // 是否客户池
         if ($param['isSeas'] == 1) {
             $permission = checkPerByAction('crm', 'customer', 'poolDelete');
@@ -227,6 +229,7 @@ class Customer extends ApiCommon
                 $delIds[] = $v;
             }
         }
+        $dataInfo = $customerModel->where('customer_id',['in',$delIds])->select();
         if ($delIds) {
             $delRes = $customerModel->delDatas($delIds);
             if (!$delRes) {
@@ -238,7 +241,9 @@ class Customer extends ApiCommon
             $fileModel->delRFileByModule('crm_customer', $delIds);
             //删除关联操作记录
             $actionRecordModel->delDataById(['types' => 'crm_customer', 'action_id' => $delIds]);
-            actionLog($delIds, '', '', '');
+            foreach ($dataInfo as $k => $v) {
+                RecordActionLog($userInfo['id'], 'crm_customer', 'delete', $v['name'], '', '', '删除了客户：' . $v['name']);
+            }
         }
         if ($errorMessage) {
             return resultArray(['error' => $errorMessage]);
@@ -374,6 +379,7 @@ class Customer extends ApiCommon
             }
             //修改记录
             updateActionLog($userInfo['id'], 'crm_customer', $customer_id, '', '', '将客户转移给：' . $ownerUserName);
+            RecordActionLog($userInfo['id'], 'crm_customer', 'transfer',$customerInfo['name'], '','','将客户：'.$customerInfo['name'].'转移给：' . $ownerUserName);
         }
         if (!$errorMessage) {
             return resultArray(['data' => '转移成功']);
@@ -390,48 +396,160 @@ class Customer extends ApiCommon
      */
     public function putInPool()
     {
-        $param = $this->param;
+        if (empty($this->param['customer_id'])) return resultArray(['error' => '请选择要放入公海的客户！']);
+        if (!is_array($this->param['customer_id'])) return resultArray(['error' => '客户ID格式不正确！']);
+        if (empty($this->param['pool_id'])) return resultArray(['error' => '请选择公海！']);
+
         $userInfo = $this->userInfo;
-        $customerModel = model('Customer');
-        $settingModel = new \app\crm\model\Setting();
-        if (!$param['customer_id'] || !is_array($param['customer_id'])) {
-            return resultArray(['error' => '请选择需要放入公海的客户']);
+        $userId = $userInfo['id'];
+        $customerIds = $this->param['customer_id'];
+        $poolId = $this->param['pool_id'];
+
+        # 消息数据
+        $message = [];
+
+        # 获取客户数据
+        $customerData = [];
+        $customerList = db('crm_customer')->field(['customer_id', 'owner_user_id', 'name'])->whereIn('customer_id', $customerIds)->select();
+        foreach ($customerList AS $key => $value) {
+            $customerData[$value['customer_id']] = $value;
         }
-        $data = [];
-        $data['owner_user_id'] = 0;
-        $data['is_lock'] = 0;
-        $data['update_time'] = time();
-        $errorMessage = [];
-        foreach ($param['customer_id'] as $customer_id) {
-            $customerInfo = [];
-            $customerInfo = db('crm_customer')->where(['customer_id' => $customer_id])->find();
-            if (!$customerInfo) {
-                $errorMessage[] = '名称:为《' . $customerInfo['name'] . '》的客户放入公海失败，错误原因：数据不存在；';
+
+        # 整理数据
+        $ip = request()->ip();
+        $poolRelationData = [];
+        $poolRecordData = [];
+        $fieldRecordData = [];
+        $operationLogData = [];
+        foreach ($customerIds AS $key => $value)
+        {
+            if (empty($customerData[$value])) {
+                $message[] = '将客户放入公海失败，错误原因：数据不存在！';
+                unset($customerIds[(int)$key]);
+
                 continue;
             }
-            //权限判断
-            if (!$customerModel->checkData($customer_id)) {
-                $errorMessage[] = '"' . $customerInfo['name'] . '"放入公海失败，错误原因：无权限';
+
+            if (isset($customerData[$value]['owner_user_id']) && empty($customerData[$value]['owner_user_id'])) {
+                $message[] = '将客户《' . $customerData[$value]['name'] . '》放入公海失败，错误原因：已经处于公海！';
+                unset($customerIds[(int)$key]);
+
                 continue;
             }
-            //将团队成员全部清除
-            $data['ro_user_id'] = '';
-            $data['rw_user_id'] = '';
-            $resCustomer = db('crm_customer')->where(['customer_id' => $customer_id])->update($data);
-            if (!$resCustomer) {
-                $errorMessage[] = '"' . $customerInfo['name'] . '"放入公海失败，错误原因：数据出错；';
-                continue;
-            }
-            //联系人负责人清除
-            db('crm_contacts')->where(['customer_id' => $customer_id])->update(['owner_user_id' => 0]);
-            //修改记录
-            updateActionLog($userInfo['id'], 'crm_customer', $customer_id, '', '', '将客户放入公海');
+
+            # 公海关联数据
+            $poolRelationData[] = [
+                'pool_id' => $poolId,
+                'customer_id' => $value
+            ];
+            # 公海操作记录数据
+            $poolRecordData[] = [
+                'customer_id' => $value,
+                'user_id' => $userId,
+                'pool_id' => $poolId,
+                'type' => 2,
+                'create_time' => time()
+            ];
+            # 字段操作记录数据
+            $fieldRecordData[] = [
+                'user_id'     => $userId,
+                'types'       => 'crm_customer',
+                'action_id'   => $value,
+                'content'     => '将客户放入公海',
+                'create_time' => time()
+            ];
+            # 数据操作日志数据
+            $operationLogData[] = [
+                'user_id'     => $userId,
+                'client_ip'   => $ip,
+                'module'      => 'crm_customer',
+                'action_id'   => $value,
+                'content'     => '将客户放入公海',
+                'create_time' => time(),
+                'action_name' => 'update',
+                'target_name' => !empty($customerData[$value]['name']) ? $customerData[$value]['name'] : ''
+            ];
         }
-        if (!$errorMessage) {
-            return resultArray(['data' => '操作成功']);
-        } else {
-            return resultArray(['error' => $errorMessage]);
+
+        if (empty($customerIds)) return resultArray(['error' => $message]);
+
+        Db::startTrans();
+        try {
+            # 修改客户数据
+            Db::name('crm_customer')->whereIn('customer_id', $customerIds)->exp('before_owner_user_id', 'owner_user_id')->update([
+                'ro_user_id' => '',
+                'rw_user_id' => '',
+                'owner_user_id' => 0,
+                'into_pool_time' => time()
+            ]);
+
+            # 删除联系人的负责人
+            Db::name('crm_contacts')->whereIn('customer_id', $customerIds)->update(['owner_user_id' => 0]);
+
+            # 将客户放入公海
+            Db::name('crm_customer_pool_relation')->insertAll($poolRelationData);
+
+            # 公海操作记录
+            Db::name('crm_customer_pool_record')->insertAll($poolRecordData);
+
+            # 字段操作记录
+            Db::name('admin_action_record')->insertAll($fieldRecordData);
+
+            # 数据操作日志
+            Db::name('admin_operation_log')->insertAll($operationLogData);
+
+            Db::commit();
+        } catch (\Exception $e) {
+            Db::rollback();
+
+            $message = ['操作失败！'];
         }
+
+        return resultArray(!empty($message) ? ['error' => $message] : ['data' => '操作成功！']);
+
+//        $param = $this->param;
+//        $userInfo = $this->userInfo;
+//        $customerModel = model('Customer');
+//        $settingModel = new \app\crm\model\Setting();
+//        if (!$param['customer_id'] || !is_array($param['customer_id'])) {
+//            return resultArray(['error' => '请选择需要放入公海的客户']);
+//        }
+//        $data = [];
+//        $data['owner_user_id'] = 0;
+//        $data['is_lock'] = 0;
+//        $data['update_time'] = time();
+//        $errorMessage = [];
+//        foreach ($param['customer_id'] as $customer_id) {
+//            $customerInfo = [];
+//            $customerInfo = db('crm_customer')->where(['customer_id' => $customer_id])->find();
+//            if (!$customerInfo) {
+//                $errorMessage[] = '名称:为《' . $customerInfo['name'] . '》的客户放入公海失败，错误原因：数据不存在；';
+//                continue;
+//            }
+//            //权限判断
+//            if (!$customerModel->checkData($customer_id)) {
+//                $errorMessage[] = '"' . $customerInfo['name'] . '"放入公海失败，错误原因：无权限';
+//                continue;
+//            }
+//            //将团队成员全部清除
+//            $data['ro_user_id'] = '';
+//            $data['rw_user_id'] = '';
+//            $resCustomer = db('crm_customer')->where(['customer_id' => $customer_id])->update($data);
+//            if (!$resCustomer) {
+//                $errorMessage[] = '"' . $customerInfo['name'] . '"放入公海失败，错误原因：数据出错；';
+//                continue;
+//            }
+//            //联系人负责人清除
+//            db('crm_contacts')->where(['customer_id' => $customer_id])->update(['owner_user_id' => 0]);
+//            //修改记录
+//            updateActionLog($userInfo['id'], 'crm_customer', $customer_id, '', '', '将客户放入公海');
+//            RecordActionLog($userInfo['id'],'crm_pool','pool',$customerInfo['name'],'','','将客户'.$customerInfo['name'].'放入公海');
+//        }
+//        if (!$errorMessage) {
+//            return resultArray(['data' => '操作成功']);
+//        } else {
+//            return resultArray(['error' => $errorMessage]);
+//        }
     }
     
     /**
@@ -483,6 +601,11 @@ class Customer extends ApiCommon
             }
             //修改记录
             updateActionLog($userInfo['id'], 'crm_customer', $customer_id, '', '', '将客户' . $lock_name);
+            if($is_lock == 2){
+                RecordActionLog($userInfo['id'], 'crm_customer', 'islock',$customerInfo['name'], '','','将客户'.$customerInfo['name'].$lock_name );
+            }else{
+                RecordActionLog($userInfo['id'], 'crm_customer', 'lock',$customerInfo['name'], '','','将客户'.$customerInfo['name'].$lock_name );
+            }
         }
         if (!$errorMessage) {
             return resultArray(['data' => '操作成功']);
@@ -542,6 +665,7 @@ class Customer extends ApiCommon
             db('crm_contacts')->where(['customer_id' => $v])->update(['owner_user_id' => $userInfo['id']]);
             //修改记录
             updateActionLog($userInfo['id'], 'crm_customer', $v, '', '', '领取了客户');
+            RecordActionLog($userInfo['id'], 'crm_customer', 'update',$dataName, '','','领取了客户：'.$dataName);
         }
         if (!$errorMessage) {
             return resultArray(['data' => '领取成功']);
@@ -599,6 +723,8 @@ class Customer extends ApiCommon
             $data['rw_user_id'] = '';
             # 处理分配标识，待办事项专用
             $data['is_allocation'] = 1;
+            # 获取客户的时间
+            $data['obtain_time'] = time();
             $resCustomer = db('crm_customer')->where(['customer_id' => $v])->update($data);
             if (!$resCustomer) {
                 $errorMessage[] = '客户《' . $dataName . '》分配失败，错误原因：数据出错；';
@@ -606,6 +732,7 @@ class Customer extends ApiCommon
             db('crm_contacts')->where(['customer_id' => $v])->update(['owner_user_id' => $owner_user_id]);
             //修改记录
             updateActionLog($userInfo['id'], 'crm_customer', $v, '', '', '将客户分配给：' . $ownerUserName);
+            RecordActionLog($userInfo['id'], 'crm_customer', 'distribute',$dataName, '','','将客户'.$dataName.'分配给：' . $ownerUserName);
             //站内信
             $send_user_id[] = $owner_user_id;
             $sendContent = $userInfo['realname'] . '将客户《' . $dataName . '》,分配给您';
@@ -631,8 +758,10 @@ class Customer extends ApiCommon
         $param = $this->param;
         $userInfo = $this->userInfo;
         $param['user_id'] = $userInfo['id'];
+        $action_name='导出全部';
         if ($param['customer_id']) {
             $param['customer_id'] = ['condition' => 'in', 'value' => $param['customer_id'], 'form_type' => 'text', 'name' => ''];
+            $action_name='导出选中';
         }
         $param['is_excel'] = 1;
         $excelModel = new \app\admin\model\Excel();
@@ -648,6 +777,7 @@ class Customer extends ApiCommon
         $page = $param['page'] ?: 1;
         unset($param['page']);
         unset($param['export_queue_index']);
+        RecordActionLog($userInfo['id'],'crm_customer','excelexport',$action_name,'','','导出客户');
         return $excelModel->batchExportCsv($file_name, $temp_file, $field_list, $page, function ($page, $limit) use ($model, $param, $field_list) {
             $param['page'] = $page;
             $param['limit'] = $limit;
@@ -655,6 +785,7 @@ class Customer extends ApiCommon
             $data['list'] = $model->exportHandle($data['list'], $field_list, 'customer');
             return $data;
         });
+       
     }
     
     /**
@@ -668,13 +799,40 @@ class Customer extends ApiCommon
         $param = $this->param;
         $userInfo = $this->userInfo;
         $excelModel = new \app\admin\model\Excel();
-        
+    
         // 导入的字段列表
         $fieldModel = new \app\admin\model\Field();
         $fieldParam['types'] = 'crm_customer';
         $fieldParam['action'] = 'excel';
         $field_list = $fieldModel->field($fieldParam);
         $excelModel->excelImportDownload($field_list, 'crm_customer', $save_path);
+        # 下次升级
+//        $param = $this->param;
+//        $userInfo = $this->userInfo;
+//        $excelModel = new \app\admin\model\Excel();
+//
+//        // 导入的字段列表
+//        $fieldModel = new \app\admin\model\Field();
+//        $fieldParam['types'] = 'crm_customer';
+//        $fieldParam['action'] = 'excel';
+//        $field_list = $fieldModel->field($fieldParam);
+//        $field=[1=>[
+//           'field'=>'owner_user_id',
+//           'types'=>'crm_customer',
+//           'name'=>'负责人',
+//           'form_type'=>'user',
+//           'default_value'=>'',
+//           'is_unique' => 1,
+//           'is_null' => 1,
+//           'input_tips' =>'',
+//           'setting' => Array(),
+//            'is_hidden'=>0,
+//            'writeStatus' => 1,
+//            'value' => '']
+//        ];
+//        $first_array = array_splice($field_list, 2,0, $field);
+//        $array = array_merge($first_array, $field, $field_list);
+//        $excelModel->excelImportDownload($field_list, 'crm_customer', $save_path);
     }
     
     
@@ -697,6 +855,7 @@ class Customer extends ApiCommon
         $file = request()->file('file');
         // $res = $excelModel->importExcel($file, $param, $this);
         $res = $excelModel->batchImportData($file, $param, $this);
+        RecordActionLog($userInfo['id'],'crm_customer','excel','导入客户','','','导入客户');
         return resultArray(['data' => $excelModel->getError()]);
     }
     
@@ -762,6 +921,7 @@ class Customer extends ApiCommon
         $param['user_id'] = $userInfo['id'];
         if ($param['customer_id']) {
             $param['customer_id'] = ['condition' => 'in', 'value' => $param['customer_id'], 'form_type' => 'text', 'name' => ''];
+            $action_name='导出选中';
         }
         $param['is_excel'] = 1;
         $excelModel = new \app\admin\model\Excel();
@@ -781,6 +941,7 @@ class Customer extends ApiCommon
         $page = $param['page'] ?: 1;
         unset($param['page']);
         unset($param['export_queue_index']);
+        RecordActionLog($userInfo['id'],'crm_customer','excelexport',$action_name,'','','导出客户');
         return $excelModel->batchExportCsv($file_name, $temp_file, $field_list, $page, function ($page, $limit) use ($model, $param) {
             $param['page'] = $page;
             $param['limit'] = $limit;
@@ -847,6 +1008,11 @@ class Customer extends ApiCommon
             }
             //修改记录
             updateActionLog($userInfo['id'], 'crm_customer', $customer_id, ['deal_status' => $dataInfo['deal_status']], ['deal_status' => $data['deal_status']]);
+            if($param['status']==1){
+                RecordActionLog($userInfo['id'], 'crm_customer', 'status',$dataInfo['name'], '','','修改客户:'.$dataInfo['name'].'成交状态:'.$statusArr[$param['status']]);
+            }else{
+                RecordActionLog($userInfo['id'], 'crm_customer', 'status',$dataInfo['name'], '','','修改客户:'.$dataInfo['name'].'成交状态:'.$statusArr[$param['status']]);
+            }
         }
         if (!$errorMessage) {
             return resultArray(['data' => '操作成功']);
@@ -1030,5 +1196,21 @@ class Customer extends ApiCommon
         $authority['receive'] = $userId == 1 || in_array(1, $groupIds) || in_array($receiveId, $rules) ? true : false;
         
         return resultArray(['data' => $authority]);
+    }
+
+    /**
+     * 客户级别列表
+     *
+     * @author fanqi
+     * @since 2021-03-29
+     * @return \think\response\Json
+     */
+    public function level()
+    {
+        $data = db('admin_field')->where(['types' => 'crm_customer', 'field' => 'level'])->value('setting');
+
+        $data = explode(chr(10), $data);
+
+        return resultArray(['data' => $data]);
     }
 }

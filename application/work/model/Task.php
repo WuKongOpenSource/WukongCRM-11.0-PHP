@@ -7,6 +7,7 @@
 
 namespace app\work\model;
 
+use app\admin\controller\ApiCommon;
 use think\Db;
 use app\admin\model\Common;
 use app\admin\model\Message;
@@ -330,7 +331,7 @@ class Task extends Common
         $complete = 0;
         foreach ($subTaskList as $key => $value) {
             $subTaskList[$key]['thumb_img'] = $value['thumb_img'] ? getFullPath($value['thumb_img']) : '';
-            $subTaskList[$key]['stop_time'] = !empty($value['stop_time']) ? date('Y-m-d H:i:s', $value['stop_time']) : null;
+            $subTaskList[$key]['stop_time'] = !empty($value['stop_time']) ? date('Y-m-d', $value['stop_time']) : null;
             if ($value['status'] == 5) ++$complete;
         }
         # 子任务
@@ -442,7 +443,7 @@ class Task extends Common
                 $datalog['work_id'] = $param['work_id'] ?: '';
                 $ret = $taskLog->newTaskLog($datalog);
                 //操作日志
-                actionLog($task_id, '', '', '新建了任务');
+//                actionLog($task_id, '', '', '新建了任务');
                 //抄送站内信
                 (new Message())->send(
                     Message::TASK_ALLOCATION,
@@ -479,7 +480,8 @@ class Task extends Common
                 }
                 db('work_task_file')->insertAll($fileData);
             }
-
+            $user=new ApiCommon();
+            $userInfo=$user->userInfo;
             # 添加子任务
             if (!empty($subtask)) {
                 $subtaskData = [];
@@ -500,8 +502,16 @@ class Task extends Common
                     ];
                 }
                 Db::name('task')->insertAll($subtaskData);
+                foreach ($subtaskData as $v){
+                    RecordActionLog($userInfo['id'],'work_task','save',$param['name'],'','','新增了子任务'.$v['name']);
+                }
             }
-
+            if(!empty($param['pid'])){
+                $dataInfo=Db::name('task')->where('task_id',$param['pid'])->find();
+                RecordActionLog($userInfo['id'],'work_task','save',$dataInfo['name'],'','','新增了子任务'.$param['name']);
+            }else{
+                RecordActionLog($userInfo['id'],'work_task','save',$param['name'],'','','新增任务'.$param['name']);
+            }
             return $task_id;
         } else {
             $this->error = '添加失败';
@@ -556,10 +566,12 @@ class Task extends Common
         $taskInfo = json_decode(json_encode($taskInfo), true);
         $data['type'] = $param['type'];
         $data['before'] = $taskInfo[$param['type']] ? $taskInfo[$param['type']] : '空';
-
+        $target_name=$taskInfo['name'];
         switch ($type) {
             case 'name' :
                 $data['after'] = $param['name'];
+                $name='任务名称';
+                $count_name=$param['name'];
                 break;
             case 'stop_time' :
                 if ($param['stop_time']) {
@@ -567,6 +579,8 @@ class Task extends Common
                 } else {
                     $data['after'] = '无';
                 }
+                $name='结束时间';
+                $count_name=$data['after'];
                 break;
             case 'start_time' :
                 if (!empty($param['start_time'])) {
@@ -574,22 +588,29 @@ class Task extends Common
                 } else {
                     $data['after'] = '无';
                 }
+                $count_name=$data['after'];
+                $name='开始时间';
                 break;
             case 'class_id'    :
                 //类型修改
                 $classModel = model('WorkClass');
                 $taskInfo = $classModel->getDataById($param['class_id']);
                 $data['after'] = $taskInfo['name'];
+                $name='类型';
                 break;
             case 'lable_id_add' :
                 //标签添加
+                $oldLabel = !empty($taskInfo['lable_id']) ? $lableModel->getNameByIds(stringToArray($taskInfo['lable_id'])) : [];
                 $lable = $lableModel->getNameByIds($param['lable_id_add']);
                 if ($taskInfo['lable_id'] && $param['lable_id_add']) {
                     $param['lable_id_add'] = array_unique(array_merge(stringToArray($taskInfo['lable_id']), $param['lable_id_add']));
                 }
                 $param['lable_id'] = arrayToString($param['lable_id_add']);
-                $data['after'] = $lable ? implode(',', $lable) : '';
+                $addLabel = !empty($lable) ? array_diff($lable, $oldLabel) : '';
+                $data['after'] = !empty($addLabel) ? implode(',', $addLabel) : '';
                 unset($param['lable_id_add']);
+                $count_name=$data['after'];
+                $name='标签';
                 break;
             case 'lable_id_del' :
                 //标签删除
@@ -602,6 +623,8 @@ class Task extends Common
                 }
                 $data['after'] = $lable ? implode(',', $lable) : '';
                 unset($param['lable_id_del']);
+                $count_name=$data['after'];
+                $name='删除标签';
                 break;
             case 'structure_id_del' :
                 //删除参与部门
@@ -609,6 +632,8 @@ class Task extends Common
                 $param['structure_ids'] = str_replace(',' . $param['structure_id_del'] . ',', ',', $taskInfo['structure_ids']); //删除
                 $data['after'] = $structuredet['name'];
                 unset($param['structure_id_del']);
+                $count_name=$data['after'];
+                $name='删除参与部门';
                 break;
             case 'structure_id_add' :
                 //添加参与部门
@@ -620,6 +645,8 @@ class Task extends Common
                 }
                 $data['after'] = $structuredet['name'];
                 unset($param['structure_id_add']);
+                $count_name=$data['after'];
+                $name='参与部门';
                 break;
             case 'owner_userid_del' :
                 //删除参与成员
@@ -627,6 +654,8 @@ class Task extends Common
                 $param['owner_user_id'] = str_replace(',' . $param['owner_userid_del'] . ',', ',', $taskInfo['owner_user_id']); //删除
                 $data['after'] = $userdet['realname'];
                 unset($param['owner_userid_del']);
+                $count_name=$data['after'];
+                $name='删除参与成员';
                 break;
             case 'owner_userid_add' :
                 //添加参与成员
@@ -638,6 +667,8 @@ class Task extends Common
                 }
                 $data['after'] = $userdet['realname'];
                 unset($param['owner_userid_add']);
+                $count_name=$data['after'];
+                $name='参与成员';
                 break;
             case 'main_user_id' :
                 //设置负责人
@@ -651,6 +682,8 @@ class Task extends Common
                     ],
                    $param['main_user_id']
                 );
+                $count_name=$userdet['realname'];
+                $name='负责人';
                 break;
         }
 
@@ -661,7 +694,6 @@ class Task extends Common
         unset($param['type']);
         unset($param['create_user_id']);
         $flag = $this->where(['task_id' => $param['task_id']])->update($param);
-
         if ($flag || count($rdata)) {
             if ($param['owner_user_id']) {
                 $this->where(['task_id' => $param['task_id']])->setField('owner_user_id', $param['owner_user_id']);
@@ -669,7 +701,16 @@ class Task extends Common
             if (!$param['pid']) {
                 $LogModel = new LogModel();
                 $taskInfo = $LogModel->taskLogAdd($data);
-                actionLog($param['task_id'], $param['owner_user_id'], $param['structure_ids'], '修改了任务');
+//                actionLog($param['task_id'], $param['owner_user_id'], $param['structure_ids'], '修改了任务');
+                $user=new ApiCommon();
+                $userInfo=$user->userInfo;
+                if(empty($name)){
+                    if(!empty($param['description'])){
+                        $name='描述';
+                    }
+                }
+                $count_name=empty($count_name)?$target_name:$count_name;
+                RecordActionLog($userInfo['id'], 'work_task', 'update',$target_name, '','','修改任务'.$name.'：'.$count_name);
                 $resRelation = Db::name('TaskRelation')->where(['task_id' => $param['task_id']])->find();
                 if ($resRelation) {
                     Db::name('TaskRelation')->where(['task_id' => $param['task_id']])->update($rdata); //更新关联关系
@@ -783,9 +824,6 @@ class Task extends Common
         $temp['hidden_time'] = time();
         $flag = $this->where($map)->update($temp);
         if ($flag) {
-            if (!$taskInfo['pid']) {
-                actionLog($taskInfo['task_id'], $taskInfo['owner_user_id'], $taskInfo['structure_ids'], '删除了任务');
-            }
             # 删除任务的活动记录
             db('crm_activity')->where(['type' => 2, 'activity_type' => 11, 'activity_type_id' => $param['task_id']])->delete();
             return true;
@@ -805,10 +843,15 @@ class Task extends Common
     {
         $data['is_archive'] = 1;
         $data['archive_time'] = time();
+        $dataInfo=$this->get($param['task_id']);
+        $dataInfo = json_decode(json_encode($dataInfo), true);
         $flag = $this->where(['task_id' => $param['task_id']])->update($data);
         if ($flag) {
             //添加归档日志
-            actionLog($param['task_id'], '', '', '归档了任务');
+//            actionLog($param['task_id'], '', '', '归档了任务');
+            $user=new ApiCommon();
+            $userInfo=$user->userInfo;
+            RecordActionLog($userInfo['id'], 'work_task', 'archiveData',$dataInfo['name'], '','','归档了任务：'.$dataInfo['name']);
             return true;
         } else {
             $this->error = '归档失败';
@@ -824,10 +867,14 @@ class Task extends Common
      */
     public function recover($param)
     {
+        $dataInfo=$this->get($param['task_id']);
+        $dataInfo = json_decode(json_encode($dataInfo), true);
         $flag = $this->where(['task_id' => $param['task_id']])->setField('is_archive', 0);
         if ($flag) {
             //添加日志
-            actionLog($param['task_id'], '', '', '恢复归档任务');
+            $user=new ApiCommon();
+            $userInfo=$user->userInfo;
+            RecordActionLog($userInfo['id'], 'work_task', 'recover',$dataInfo['name'], '','','归档了任务：'.$dataInfo['name']);
             return true;
         } else {
             $this->error = '操作失败';
@@ -845,6 +892,7 @@ class Task extends Common
     {
         $userModel = new \app\admin\model\User();
         $taskInfo = $this->get($task_id);
+        
         if (!$taskInfo) {
             $this->error = '该任务不存在或已删除';
             return false;

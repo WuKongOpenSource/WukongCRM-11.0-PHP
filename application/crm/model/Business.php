@@ -45,7 +45,7 @@ class Business extends Common
         $order_type = $request['order_type'];
         $is_excel = $request['is_excel']; //导出
         $getCount = $request['getCount'];
-        $businessTypeId = $request['typeId']; // 针对mobile
+        $businessTypeId = $request['typesId']; // 针对mobile
         $businessStatusId = $request['statusId']; // 针对mobile
         unset($request['scene_id']);
         unset($request['search']);
@@ -55,7 +55,7 @@ class Business extends Common
         unset($request['order_type']);
         unset($request['is_excel']);
         unset($request['getCount']);
-        unset($request['typeId']);
+        unset($request['typesId']);
         unset($request['statusId']);
 
         $request = $this->fmtRequest($request);
@@ -78,11 +78,21 @@ class Business extends Common
         }
         if (isset($requestMap['type_id'])) {
             $requestMap['type_id']['value'] = $requestMap['type_id']['type_id'];
-            if ($requestMap['type_id']['status_id']) $requestMap['status_id']['value'] = $requestMap['type_id']['status_id'];
+            if(in_array($requestMap['type_id']['status_id'],[1,2,3])){
+                $requestMap['is_end']=$requestMap['type_id']['status_id'];
+            }else{
+                if ($requestMap['type_id']['status_id']) $requestMap['status_id']['value'] = $requestMap['type_id']['status_id'];
+                $requestMap['is_end']=0;
+            }
         }
         if ($sceneMap['type_id']) {
             $requestMap['type_id']['value'] = $sceneMap['type_id']['type_id'];
-            if ($sceneMap['type_id']['status_id']) $requestMap['status_id']['value'] = $sceneMap['type_id']['status_id'];
+            if(in_array($sceneMap['type_id']['status_id'],[1,2,3])){
+                $sceneMap['is_end']=$sceneMap['type_id']['status_id'];
+            }else{
+                if ($sceneMap['type_id']['status_id']) $requestMap['status_id']['value'] = $sceneMap['type_id']['status_id'];
+                $sceneMap['is_end']=0;
+            }
             unset($sceneMap['type_id']);
         }
         $partMap = [];
@@ -157,10 +167,17 @@ class Business extends Common
         } else {
             $order = 'business.update_time desc';
         }
+    
         # 商机组和商机状态搜索
         if (!empty($businessTypeId))   $map['business.type_id']   = ['eq', $businessTypeId];
-        if (!empty($businessStatusId)) $map['business.status_id'] = ['eq', $businessStatusId];
-
+        if (!empty($businessStatusId)) {
+            if(preg_match("/^[1-9][0-9]*$/" ,$businessStatusId)){
+                $map['is_end']=0;
+                $map['business.status_id'] = ['eq', $businessStatusId];
+            }else{
+                $map['is_end']=abs($businessStatusId);
+            }
+        }
         $readAuthIds = $userModel->getUserByPer('crm', 'business', 'read');
         $updateAuthIds = $userModel->getUserByPer('crm', 'business', 'update');
         $deleteAuthIds = $userModel->getUserByPer('crm', 'business', 'delete');
@@ -279,10 +296,17 @@ class Business extends Common
             return false;
         }
 
-        //处理部门、员工、附件、多选类型字段
+        // 处理部门、员工、附件、多选类型字段
         $arrFieldAtt = $fieldModel->getArrayField('crm_business');
         foreach ($arrFieldAtt as $k => $v) {
             $param[$v] = arrayToString($param[$v]);
+        }
+        // 处理日期（date）类型
+        $dateField = $fieldModel->getFieldByFormType('crm_business', 'date');
+        if (!empty($dateField)) {
+            foreach ($param AS $key => $value) {
+                if (in_array($key, $dateField) && empty($value)) $param[$key] = null;
+            }
         }
 
         # 设置今日需联系商机
@@ -292,6 +316,7 @@ class Business extends Common
         $param['discount_rate'] = $param['discount_rate'] ?: '0.00';
         if ($this->data($param)->allowField(true)->save()) {
             updateActionLog($param['create_user_id'], 'crm_business', $this->business_id, '', '', '创建了商机');
+            RecordActionLog($param['create_user_id'],'crm_business','save',$param['name'],'','','新增了商机'.$param['name']);
             $business_id = $this->business_id;
             if ($param['product']) {
                 //产品数据处理
@@ -356,7 +381,8 @@ class Business extends Common
 
         $fieldModel = new \app\admin\model\Field();
         // 自动验证
-        $validateArr = $fieldModel->validateField($this->name); //获取自定义字段验证规则
+//        $validateArr = $fieldModel->validateField($this->name); //获取自定义字段验证规则
+        $validateArr = $fieldModel->validateField($this->name, 0, 'update'); //获取自定义字段验证规则
         $validate = new Validate($validateArr['rule'], $validateArr['message']);
 
         $result = $validate->check($param);
@@ -370,10 +396,17 @@ class Business extends Common
             $param['money'] .= '.00';
         }
 
-        //处理部门、员工、附件、多选类型字段
+        // 处理部门、员工、附件、多选类型字段
         $arrFieldAtt = $fieldModel->getArrayField('crm_business');
         foreach ($arrFieldAtt as $k => $v) {
-            $param[$v] = arrayToString($param[$v]);
+            if (isset($param[$v])) $param[$v] = arrayToString($param[$v]);
+        }
+        // 处理日期（date）类型
+        $dateField = $fieldModel->getFieldByFormType('crm_business', 'date');
+        if (!empty($dateField)) {
+            foreach ($param AS $key => $value) {
+                if (in_array($key, $dateField) && empty($value)) $param[$key] = null;
+            }
         }
 
         # 设置今日需联系商机
@@ -393,6 +426,7 @@ class Business extends Common
             $resProduct = $productModel->createObject('crm_business', $param, $business_id);
             //修改记录
             updateActionLog($param['user_id'], 'crm_business', $business_id, $dataInfo, $param);
+            RecordActionLog($param['user_id'], 'crm_business', 'update',$dataInfo['name'], $dataInfo, $param);
             $data = [];
             $data['business_id'] = $business_id;
             return $data;
@@ -441,10 +475,26 @@ class Business extends Common
         foreach ($datetimeField as $key => $val) {
             $dataInfo[$val] = !empty($dataInfo[$val]) ? date('Y-m-d H:i:s', $dataInfo[$val]) : null;
         }
+        if($dataInfo['is_end']!=1){
+            $dataInfo['statusRemark']=db('crm_business_log')->where(['business_id'=>$id,'is_end'=>$dataInfo['is_end']])->value('remark');
+        }
         $dataInfo['next_time'] = !empty($dataInfo['next_time']) ? date('Y-m-d H:i:s', $dataInfo['next_time']) : null;
         $dataInfo['create_time'] = !empty($dataInfo['create_time']) ? date('Y-m-d H:i:s', $dataInfo['create_time']) : null;
         $dataInfo['update_time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
         $dataInfo['last_time'] = !empty($dataInfo['last_time']) ? date('Y-m-d H:i:s', $dataInfo['last_time']) : null;
+        // 字段授权
+        if (!empty($userId)) {
+            $grantData = getFieldGrantData($userId);
+            $userLevel = isSuperAdministrators($userId);
+            foreach ($dataInfo AS $key => $value) {
+                if (!$userLevel && !empty($grantData['crm_business'])) {
+                    $status = getFieldGrantStatus($key, $grantData['crm_business']);
+
+                    # 查看权限
+                    if ($status['read'] == 0) unset($dataInfo[$key]);
+                }
+            }
+        }
         return $dataInfo;
     }
 
@@ -666,17 +716,15 @@ class Business extends Common
     public function getSystemInfo($id)
     {
         # 商机
-        $business = Db::name('crm_business')->field(['create_user_id', 'create_time', 'update_time'])->where('business_id', $id)->find();
+        $business = Db::name('crm_business')->field(['create_user_id', 'create_time', 'update_time', 'last_time'])->where('business_id', $id)->find();
         # 创建人
         $realname = Db::name('admin_user')->where('id', $business['create_user_id'])->value('realname');
-        # 跟进时间
-        $followTime = Db::name('crm_activity')->where(['type' => 1, 'activity_type' => 5, 'activity_type_id' => $id])->order('activity_id', 'desc')->value('update_time');
 
         return [
-            'create_user_name' => $realname,
+            'create_user_id' => $realname,
             'create_time' => date('Y-m-d H:i:s', $business['create_time']),
             'update_time' => date('Y-m-d H:i:s', $business['update_time']),
-            'follow_time' => !empty($followTime) ? date('Y-m-d H:i:s', $followTime) : ''
+            'last_time' => !empty($business['last_time']) ? date('Y-m-d H:i:s', $business['last_time']) : ''
         ];
     }
 

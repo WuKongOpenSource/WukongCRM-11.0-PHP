@@ -20,13 +20,13 @@ class Properties
         $officeProperty = $xml->children($namespacesMeta['office']);
         foreach ($officeProperty as $officePropertyData) {
             /** @var \SimpleXMLElement $officePropertyData */
-            $officePropertiesDC = (object) [];
+            $officePropertiesDC = [];
             if (isset($namespacesMeta['dc'])) {
                 $officePropertiesDC = $officePropertyData->children($namespacesMeta['dc']);
             }
             $this->setCoreProperties($docProps, $officePropertiesDC);
 
-            $officePropertyMeta = (object) [];
+            $officePropertyMeta = [];
             if (isset($namespacesMeta['dc'])) {
                 $officePropertyMeta = $officePropertyData->children($namespacesMeta['meta']);
             }

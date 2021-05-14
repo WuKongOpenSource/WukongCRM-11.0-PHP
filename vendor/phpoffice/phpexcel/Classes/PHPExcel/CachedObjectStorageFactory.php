@@ -1,9 +1,9 @@
 <?php
 
 /**
- * PHPExcel_CachedObjectStorageFactory
+ * PHPExcel
  *
- * Copyright (c) 2006 - 2015 PHPExcel
+ * Copyright (c) 2006 - 2014 PHPExcel
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,9 +21,18 @@
  *
  * @category   PHPExcel
  * @package    PHPExcel_CachedObjectStorage
- * @copyright  Copyright (c) 2006 - 2015 PHPExcel (http://www.codeplex.com/PHPExcel)
+ * @copyright  Copyright (c) 2006 - 2014 PHPExcel (http://www.codeplex.com/PHPExcel)
  * @license    http://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt    LGPL
  * @version    ##VERSION##, ##DATE##
+ */
+
+
+/**
+ * PHPExcel_CachedObjectStorageFactory
+ *
+ * @category    PHPExcel
+ * @package        PHPExcel_CachedObjectStorage
+ * @copyright    Copyright (c) 2006 - 2014 PHPExcel (http://www.codeplex.com/PHPExcel)
  */
 class PHPExcel_CachedObjectStorageFactory
 {
@@ -39,26 +48,28 @@ class PHPExcel_CachedObjectStorageFactory
     const cache_to_sqlite               = 'SQLite';
     const cache_to_sqlite3              = 'SQLite3';
 
+
     /**
      * Name of the method used for cell cacheing
      *
      * @var string
      */
-    private static $cacheStorageMethod = null;
+    private static $_cacheStorageMethod = NULL;
 
     /**
      * Name of the class used for cell cacheing
      *
      * @var string
      */
-    private static $cacheStorageClass = null;
+    private static $_cacheStorageClass = NULL;
+
 
     /**
      * List of all possible cache storage methods
      *
      * @var string[]
      */
-    private static $storageMethods = array(
+    private static $_storageMethods = array(
         self::cache_in_memory,
         self::cache_in_memory_gzip,
         self::cache_in_memory_serialized,
@@ -72,12 +83,13 @@ class PHPExcel_CachedObjectStorageFactory
         self::cache_to_sqlite3,
     );
 
+
     /**
      * Default arguments for each cache storage method
      *
      * @var array of mixed array
      */
-    private static $storageMethodDefaultParameters = array(
+    private static $_storageMethodDefaultParameters = array(
         self::cache_in_memory               => array(
                                                     ),
         self::cache_in_memory_gzip          => array(
@@ -88,7 +100,7 @@ class PHPExcel_CachedObjectStorageFactory
                                                     ),
         self::cache_to_phpTemp              => array( 'memoryCacheSize' => '1MB'
                                                     ),
-        self::cache_to_discISAM             => array( 'dir'             => null
+        self::cache_to_discISAM             => array( 'dir'             => NULL
                                                     ),
         self::cache_to_apc                  => array( 'cacheTime'       => 600
                                                     ),
@@ -104,32 +116,36 @@ class PHPExcel_CachedObjectStorageFactory
                                                     ),
     );
 
+
     /**
      * Arguments for the active cache storage method
      *
      * @var array of mixed array
      */
-    private static $storageMethodParameters = array();
+    private static $_storageMethodParameters = array();
+
 
     /**
      * Return the current cache storage method
      *
-     * @return string|null
+     * @return string|NULL
      **/
     public static function getCacheStorageMethod()
     {
-        return self::$cacheStorageMethod;
-    }
+        return self::$_cacheStorageMethod;
+    }   //    function getCacheStorageMethod()
+
 
     /**
      * Return the current cache storage class
      *
-     * @return PHPExcel_CachedObjectStorage_ICache|null
+     * @return PHPExcel_CachedObjectStorage_ICache|NULL
      **/
     public static function getCacheStorageClass()
     {
-        return self::$cacheStorageClass;
-    }
+        return self::$_cacheStorageClass;
+    }   //    function getCacheStorageClass()
+
 
     /**
      * Return the list of all possible cache storage methods
@@ -138,8 +154,9 @@ class PHPExcel_CachedObjectStorageFactory
      **/
     public static function getAllCacheStorageMethods()
     {
-        return self::$storageMethods;
-    }
+        return self::$_storageMethods;
+    }   //    function getCacheStorageMethods()
+
 
     /**
      * Return the list of all available cache storage methods
@@ -149,14 +166,15 @@ class PHPExcel_CachedObjectStorageFactory
     public static function getCacheStorageMethods()
     {
         $activeMethods = array();
-        foreach (self::$storageMethods as $storageMethod) {
+        foreach(self::$_storageMethods as $storageMethod) {
             $cacheStorageClass = 'PHPExcel_CachedObjectStorage_' . $storageMethod;
             if (call_user_func(array($cacheStorageClass, 'cacheMethodIsAvailable'))) {
                 $activeMethods[] = $storageMethod;
             }
         }
         return $activeMethods;
-    }
+    }   //    function getCacheStorageMethods()
+
 
     /**
      * Identify the cache storage method to use
@@ -168,29 +186,30 @@ class PHPExcel_CachedObjectStorageFactory
      **/
     public static function initialize($method = self::cache_in_memory, $arguments = array())
     {
-        if (!in_array($method, self::$storageMethods)) {
-            return false;
+        if (!in_array($method,self::$_storageMethods)) {
+            return FALSE;
         }
 
         $cacheStorageClass = 'PHPExcel_CachedObjectStorage_'.$method;
         if (!call_user_func(array( $cacheStorageClass,
                                    'cacheMethodIsAvailable'))) {
-            return false;
+            return FALSE;
         }
 
-        self::$storageMethodParameters[$method] = self::$storageMethodDefaultParameters[$method];
-        foreach ($arguments as $k => $v) {
-            if (array_key_exists($k, self::$storageMethodParameters[$method])) {
-                self::$storageMethodParameters[$method][$k] = $v;
+        self::$_storageMethodParameters[$method] = self::$_storageMethodDefaultParameters[$method];
+        foreach($arguments as $k => $v) {
+            if (array_key_exists($k, self::$_storageMethodParameters[$method])) {
+                self::$_storageMethodParameters[$method][$k] = $v;
             }
         }
 
-        if (self::$cacheStorageMethod === null) {
-            self::$cacheStorageClass = 'PHPExcel_CachedObjectStorage_' . $method;
-            self::$cacheStorageMethod = $method;
+        if (self::$_cacheStorageMethod === NULL) {
+            self::$_cacheStorageClass = 'PHPExcel_CachedObjectStorage_' . $method;
+            self::$_cacheStorageMethod = $method;
         }
-        return true;
-    }
+        return TRUE;
+    }   //    function initialize()
+
 
     /**
      * Initialise the cache storage
@@ -200,32 +219,33 @@ class PHPExcel_CachedObjectStorageFactory
      **/
     public static function getInstance(PHPExcel_Worksheet $parent)
     {
-        $cacheMethodIsAvailable = true;
-        if (self::$cacheStorageMethod === null) {
+        $cacheMethodIsAvailable = TRUE;
+        if (self::$_cacheStorageMethod === NULL) {
             $cacheMethodIsAvailable = self::initialize();
         }
 
         if ($cacheMethodIsAvailable) {
-            $instance = new self::$cacheStorageClass(
-                $parent,
-                self::$storageMethodParameters[self::$cacheStorageMethod]
-            );
-            if ($instance !== null) {
+            $instance = new self::$_cacheStorageClass( $parent,
+                                                       self::$_storageMethodParameters[self::$_cacheStorageMethod]
+                                                     );
+            if ($instance !== NULL) {
                 return $instance;
             }
         }
 
-        return false;
-    }
+        return FALSE;
+    }   //    function getInstance()
+
 
     /**
      * Clear the cache storage
      *
      **/
-    public static function finalize()
-    {
-        self::$cacheStorageMethod = null;
-        self::$cacheStorageClass = null;
-        self::$storageMethodParameters = array();
-    }
+	public static function finalize()
+	{
+		self::$_cacheStorageMethod = NULL;
+		self::$_cacheStorageClass = NULL;
+		self::$_storageMethodParameters = array();
+	}
+
 }

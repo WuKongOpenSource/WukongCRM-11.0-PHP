@@ -45,13 +45,15 @@ class Field extends Model
                 'field' => 'last_record',
                 'name' => '最后跟进记录',
                 'form_type' => 'text',
-                'width' => ''
+                'width' => '',
+                'is_hidden' => 0,
             ],
             [
                 'field' => 'last_time',
                 'name' => '最后跟进时间',
                 'form_type' => 'datetime',
-                'width' => ''
+                'width' => '',
+                'is_hidden' => 0,
             ],
         ],
         'crm_customer' => [
@@ -59,25 +61,29 @@ class Field extends Model
                 'field' => 'last_record',
                 'name' => '跟进记录',
                 'form_type' => 'text',
-                'width' => ''
+                'width' => '',
+                'is_hidden' => 0,
             ],
             [
                 'field' => 'last_time',
                 'name' => '最后跟进时间',
                 'form_type' => 'datetime',
-                'width' => ''
+                'width' => '',
+                'is_hidden' => 0,
             ],
             [
                 'field' => 'address',
                 'name' => '省、市、区/县',
                 'form_type' => 'customer_address',
-                'width' => ''
+                'width' => '',
+                'is_hidden' => 0,
             ],
             [
                 'field' => 'detail_address',
                 'name' => '详细地址',
                 'form_type' => 'text',
-                'width' => ''
+                'width' => '',
+                'is_hidden' => 0,
             ]
         ],
         'crm_contacts' => [
@@ -85,13 +91,15 @@ class Field extends Model
                 'field' => 'last_record',
                 'name' => '跟进记录',
                 'form_type' => 'text',
-                'width' => ''
+                'width' => '',
+                'is_hidden' => 0,
             ],
             [
                 'field' => 'last_time',
                 'name' => '最后跟进时间',
                 'form_type' => 'datetime',
-                'width' => ''
+                'width' => '',
+                'is_hidden' => 0,
             ],
         ],
         'crm_business' => [
@@ -99,13 +107,15 @@ class Field extends Model
                 'field' => 'last_record',
                 'name' => '跟进记录',
                 'form_type' => 'text',
-                'width' => ''
+                'width' => '',
+                'is_hidden' => 0,
             ],
             [
                 'field' => 'last_time',
                 'name' => '最后跟进时间',
                 'form_type' => 'datetime',
-                'width' => ''
+                'width' => '',
+                'is_hidden' => 0,
             ],
         ],
         'crm_contract' => [
@@ -113,31 +123,36 @@ class Field extends Model
                 'field' => 'check_status',
                 'name' => '审核状态',
                 'form_type' => 'text',
-                'width' => ''
+                'width' => '',
+                'is_hidden' => 0,
             ],
             [
                 'field' => 'last_record',
                 'name' => '跟进记录',
                 'form_type' => 'text',
-                'width' => ''
+                'width' => '',
+                'is_hidden' => 0,
             ],
             [
                 'field' => 'last_time',
                 'name' => '最后跟进时间',
                 'form_type' => 'datetime',
-                'width' => ''
+                'width' => '',
+                'is_hidden' => 0,
             ],
             [
                 'field' => 'done_money',
                 'name' => '已回款',
                 'form_type' => 'floatnumber',
-                'width' => ''
+                'width' => '',
+                'is_hidden' => 0,
             ],
             [
                 'field' => 'un_money',
                 'name' => '未回款',
                 'form_type' => 'floatnumber',
-                'width' => ''
+                'width' => '',
+                'is_hidden' => 0,
             ]
         ],
         'crm_receivables' => [
@@ -145,13 +160,15 @@ class Field extends Model
                 'field' => 'check_status',
                 'name' => '审核状态',
                 'form_type' => 'text',
-                'width' => ''
+                'width' => '',
+                'is_hidden' => 0,
             ],
             [
                 'field' => 'contract_money',
                 'name' => '合同金额',
                 'form_type' => 'floatnumber',
-                'width' => ''
+                'width' => '',
+                'is_hidden' => 0,
             ]
         ]
 
@@ -210,6 +227,16 @@ class Field extends Model
             $this->error = '参数错误';
             return false;
         }
+
+        # 公海数据
+        $poolList = [];
+        $poolData = [];
+        if ($types == 'crm_customer') {
+            $poolList = db('crm_customer_pool')->column('pool_id');
+        }
+
+        # 用户自定义字段
+        $userFields = db('admin_user_field')->field(['id', 'datas'])->where('types', $types)->select();
 
         $error_message = [];
         $i = 0;
@@ -270,9 +297,21 @@ class Field extends Model
                 } else {
                     $resField = $this->data($data)->allowField(true)->save();
                 }
+                # 处理公海字段数据
+                if ($types == 'crm_customer') {
+                    foreach ($poolList AS $k1 => $poolId) {
+                        $poolData[] = [
+                            'pool_id' => $poolId,
+                            'name' => $data['name'],
+                            'field_name' => $data['field'],
+                            'form_type' => $data['form_type'],
+                            'is_hidden' => 1
+                        ];
+                    }
+                }
+
                 if ($types !== 'oa_examine') {
                     if ($resField) {
-                        actionLog($this->field_id, '', '', ''); //操作日志
                         $this->tableName = $types;
                         $maxlength = '255';
                         $defaultvalue = $data['default_value'] ? "DEFAULT '" . $data['default_value'] . "'" : "DEFAULT NULL";
@@ -324,11 +363,29 @@ class Field extends Model
                             $this->where(['field_id' => $this->field_id])->delete();
                             $error_message[] = $data['name'] . ',添加失败';
                         }
+                        # 处理用户自定义字段数据
+                        if ($resData !== false && !empty($userFields)) {
+                            foreach ($userFields AS $key => $value) {
+                                $userFields[$key]['datas'] = json_decode($value['datas'], true);
+                                $userFields[$key]['datas'][$data['field']] = ['width' => '', 'is_hide' => 0];
+                                $userFields[$key]['datas'] = json_encode($userFields[$key]['datas']);
+                            }
+                        }
                     } else {
                         $error_message[] = $data['name'] . ',添加失败';
                     }
                 }
             }
+        }
+        # 更新用户自定义字段
+        if (!empty($userFields)) {
+            foreach ($userFields AS $key => $value) {
+                db('admin_user_field')->where('id', $value['id'])->update(['datas' => $value['datas']]);
+            }
+        }
+        # 更新公海字段
+        if (!empty($poolData)) {
+            db('crm_customer_pool_field_setting')->insertAll($poolData);
         }
         if ($error_message) {
             $this->error = implode(';', $error_message);
@@ -374,12 +431,20 @@ class Field extends Model
      * @return    [array]
      * @author Michael_xu
      */
-    public function updateDataById($param)
+    public function updateDataById($param, $types = '')
     {
         $error_message = [];
         if (!is_array($param)) {
             $this->error = '参数错误';
             return false;
+        }
+        # 查询老数据
+        $oldData = [];
+        if (!empty($types) && $types == 'crm_customer') {
+            $oldList = db('admin_field')->field(['field', 'name'])->where('types', $types)->select();
+            foreach ($oldList AS $key => $value) {
+                $oldData[$value['field']] = $value['name'];
+            }
         }
         $i = 0;
         foreach ($param as $data) {
@@ -419,7 +484,11 @@ class Field extends Model
                 $resField = db('admin_field')->where(['field_id' => $field_id])->update($data);
                 if ($dataInfo['types'] !== 'oa_examine') {
                     if ($resField) {
-                        actionLog($field_id); //操作日志
+                        # 更新公海字段
+                        if (!empty($oldData[$data['field']]) && $data['name'] != $oldData[$data['field']]['name']) {
+                            db('crm_customer_pool_field_setting')->where('field_name', $data['field'])->update(['name' => $data['name']]);
+                        }
+                        //actionLog($field_id); //操作日志
                         $this->tableName = $dataInfo['types'];
                         $maxlength = '255';
                         $defaultvalue = $data['default_value'] ? "DEFAULT '" . $data['default_value'] . "'" : "DEFAULT NULL";
@@ -486,11 +555,13 @@ class Field extends Model
      * @param $types 分类
      * @author Michael_xu
      */
-    public function delDataById($ids)
+    public function delDataById($ids, $types = '')
     {
         if (!is_array($ids)) {
             $ids[] = $ids;
         }
+        # 删除公海字段的条件
+        $poolWhere = [];
         $delMessage = [];
         foreach ($ids as $id) {
             $dataInfo = [];
@@ -545,12 +616,19 @@ class Field extends Model
                                 $resScene = $sceneModel->updateData($data, $val['scene_id']);
                             }
                         }
+                        # 处理删除公海字段的条件
+                        if (!empty($types) && $types == 'crm_customer' && !empty($dataInfo['field'])) $poolWhere[] = $dataInfo['field'];
                     } else {
                         $delMessage[] = $dataInfo['name'] . ',删除失败';
                     }
                 }
             }
         }
+        # 删除公海字段
+        if (!empty($poolWhere)) {
+            db('crm_customer_pool_field_setting')->whereIn('field_name', $poolWhere)->delete();
+        }
+
         return $delMessage ? implode(';', $delMessage) : '';
     }
 
@@ -623,7 +701,7 @@ class Field extends Model
             $types = 'crm_customer_pool';
         }
         if ($param['action'] == 'excel') {
-            $map['form_type'] = array('not in', ['file', 'form', 'user', 'structure']);
+            $map['form_type'] = array('not in', ['file', 'form','deal_status']);//删除了过滤structure  user字段类型数据 添加deal_status
         } elseif ($param['action'] == 'index') {
             $map['form_type'] = array('not in', ['file', 'form']);
         }
@@ -631,9 +709,7 @@ class Field extends Model
         $order = 'order_id asc, field_id asc';
         if ($param['action'] == 'index' || $param['action'] == 'pool') {
             $field_list = $this->getIndexFieldConfig($types, $param['user_id']);
-            // $order = new \think\db\Expression('field(field_id,'..')');
             foreach ($field_list as $k => $v) {
-
                 # 处理字段授权
                 $field_list[$k]['writeStatus'] = 1;
                 if (!$userLevel && $param['module'] == 'crm' && !empty($grantData[$param['types']])) {
@@ -650,8 +726,63 @@ class Field extends Model
                 }
             }
 
+            # 客户模块增加锁定状态、距进入公海天数字段
+            if (!$userLevel && $param['types'] == 'crm_customer' && !empty($grantData[$param['types']])) {
+                $poolDayStatus = getFieldGrantStatus('pool_day', $grantData[$param['types']]);
+                if (!empty($poolDayStatus['read'])) {
+                    $field_list[] = [
+                        'field'       => 'pool_day',
+                        'name'        => '距进入公海天数',
+                        'form_type'   => 'text',
+                        'writeStatus' => 0,
+                        'fieldName'   => 'pool_day'
+                    ];
+                }
+
+                $isLockStatus = getFieldGrantStatus('is_lock', $grantData[$param['types']]);
+                if (!empty($isLockStatus['read'])) {
+                    $field_list[] = [
+                        'field'       => "is_lock",
+                        'fieldName'   => "is_lock",
+                        'form_type'   => "text",
+                        'name'        => "锁定状态",
+                        'writeStatus' => 0
+                    ];
+                }
+            }
+
+            if ($userLevel) {
+                $field_list[] = [
+                    'field'       => 'pool_day',
+                    'name'        => '距进入公海天数',
+                    'form_type'   => 'text',
+                    'writeStatus' => 0,
+                    'fieldName'   => 'pool_day'
+                ];
+                $field_list[] = [
+                    'field'       => "is_lock",
+                    'fieldName'   => "is_lock",
+                    'form_type'   => "text",
+                    'name'        => "锁定状态",
+                    'writeStatus' => 0
+                ];
+            }
+
+
         } else {
-            $field_list = $this->where($map)->where( 'is_hidden',0)->field('field,types,name,form_type,default_value,is_unique,is_null,input_tips,setting,is_hidden')->order($order)->select();
+            $field_list = db('admin_field')->where($map)->where( 'is_hidden',0)->field('field,types,name,form_type,default_value,is_unique,is_null,input_tips,setting,is_hidden')->order($order)->select();
+
+            # 详情页面增加负责人字段
+            if ($param['action'] == 'read' && !in_array($param['types'], ['crm_visit', 'crm_product','oa_examine'])) {
+                $field_list[] = [
+                    'field'       => 'owner_user_id',
+                    'name'        => '负责人',
+                    'form_type'   => 'user',
+                    'writeStatus' => 0,
+                    'fieldName'   => 'owner_user_name',
+                    'value'       => $dataInfo['owner_user_name'],
+                ];
+            }
 
             //客户
             if (in_array($param['types'], ['crm_customer'])) {
@@ -693,17 +824,17 @@ class Field extends Model
                     $status = getFieldGrantStatus($v['field'], $grantData[$param['types']]);
 
                     # 查看权限
-                    if ($status['read'] == 0) {
+                    if (empty($status['read'])) {
                         unset($field_list[(int)$k]);
                         continue;
                     }
 
                     # 编辑权限
-                    $field_list[$k]['writeStatus'] = $status['write'];
+                    if ($param['action'] != 'save') $field_list[$k]['writeStatus'] = $status['write'];
                 }
 
                 # （联系人，商机，合同，回款，回访）关联其他模块的字段在详情页面不允许修改；创建人、负责人不允许修改
-                if ($param['action'] == 'read' && in_array($v['field'], ['customer_id', 'business_id', 'contacts_id', 'contract_id', 'create_user_id', 'owner_user_id'])) {
+                if ($param['action'] == 'read' && in_array($v['field'], ['customer_id', 'business_id', 'contacts_id', 'contract_id', 'create_user_id', 'owner_user_id', 'plan_id'])) {
                     $field_list[$k]['writeStatus'] = 0;
                 }
 
@@ -978,18 +1109,32 @@ class Field extends Model
     }
 
     /**
-     * [validateField 自定义字段验证规则]
-     * @param
-     * @author Michael_xu
+     * 自定义字段验证规则
+     * @param string $types 类型：crm_customer crm_business ...
+     * @param int $types_id 自定义表types_id
+     * @param string $action 操作：save update
+     * @return array
      */
-    public function validateField($types, $types_id = 0)
+    public function validateField($types, $types_id = 0, $action = 'save')
     {
+        $apiCommon = new ApiCommon();
+        $userId = $apiCommon->userInfo['id'];
+        $grantData = getFieldGrantData($userId);
+        $userLevel = isSuperAdministrators($userId);
         $unField = ['update_time', 'create_time', 'create_user_id', 'owner_user_id'];
         $fieldList = $this->where(['types' => ['in', ['', $types]], 'types_id' => $types_id, 'field' => ['not in', $unField], 'form_type' => ['not in', ['checkbox', 'user', 'structure', 'file']]])->field('field,name,form_type,is_unique,is_null,max_length')->select();
         $validateArr = [];
         $rule = [];
         $message = [];
         foreach ($fieldList as $field) {
+            # 字段授权
+            if (!$userLevel && !empty($grantData[$types])) {
+                $status = getFieldGrantStatus($field['field'], $grantData[$types]);
+
+                # 没有字段查看权限或者编辑时没有字段修改权限就跳过验证
+                if (empty($status['read']) || ($action != 'save' && empty($status['write']))) continue;
+            }
+
             $rule_value = '';
             $scene_value = '';
 
@@ -1532,25 +1677,33 @@ class Field extends Model
     }
 
     /**
-     * 获取发票高级搜索字段
+     * 处理字段别名、权限
      *
-     * @return array[]
+     * @param int $userId 用户ID
+     * @param string $types 模块类型
+     * @param string $action 行为
+     * @param array $data 字段数据
+     * @author fanqi
+     * @since 2021-04-06
+     * @return array
      */
-    private function getInvoiceSearch()
+    public function resetField($userId, $types, $action, $data)
     {
-        return [
-            ['field' => 'invoice_number', 'form_type' => 'text', 'setting' => [], 'name' => '发票号码'],
-            ['field' => 'real_invoice_date', 'form_type' => 'datetime', 'setting' => [], 'name' => '实际开票日期'],
-            ['field' => 'logistics_number', 'form_type' => 'text', 'setting' => [], 'name' => '物流单号'],
-            ['field' => 'invoice_status', 'form_type' => 'select', 'setting' => ['未开票', '已开票'], 'name' => '开票状态'],
-            ['field' => 'check_status', 'form_type' => 'select', 'setting' => ['待审核', '审核中', '审核通过', '审核未通过', '撤回'], 'name' => '审核状态'],
-            ['field' => 'owner_user_id', 'form_type' => 'user', 'setting' => [], 'name' => '负责人']
-        ];
-    }
+        $grantData = getFieldGrantData($userId);
+        $userLevel = isSuperAdministrators($userId);
 
-    public function resetField($types, $data)
-    {
         foreach ($data AS $key => $value) {
+            # 处理字段授权
+            if (!$userLevel && !empty($grantData[$types])) {
+                $status = getFieldGrantStatus($value['field'], $grantData[$types]);
+
+                # 查看权限
+                if ($status['read'] == 0) {
+                    unset($data[(int)$key]);
+                    continue;
+                }
+            }
+
             switch ($value['field']) {
                 case 'create_user_id' :
                     $data[$key]['fieldName'] = 'create_user_name';
@@ -1592,183 +1745,74 @@ class Field extends Model
             if (in_array($value['form_type'], ['user', 'structure']) && !in_array($value['field'], ['create_user_id', 'owner_user_id'])) {
                 $data[$key]['fieldName'] = $value['field'] . '_name';
             }
+
+            # 详情中不显示产品类别、回款期数
+            if ($action == 'read' && in_array($value['field'], ['category_id'])) {
+                unset($data[(int)$key]);
+            }
         }
 
-        # 线索
-//        if ($types == 'crm_leads') {
-//            foreach ($data as $key => $value) {
-//                switch ($value['field']) {
-//                    case 'create_user_id' :
-//                        $data[$key]['fieldName'] = 'create_user_name';
-//                        break;
-//                    case 'owner_user_id' :
-//                        $data[$key]['fieldName'] = 'owner_user_name';
-//                        break;
-//                    default :
-//                        $data[$key]['fieldName'] = $value['field'];
-//                }
-//            }
-//        }
-
-        # 客户
-//        if ($types == 'crm_customer') {
-//            foreach ($data as $key => $value) {
-//                switch ($value['field']) {
-//                    case 'create_user_id' :
-//                        $data[$key]['fieldName'] = 'create_user_name';
-//                        break;
-//                    case 'owner_user_id' :
-//                        $data[$key]['fieldName'] = 'owner_user_name';
-//                        break;
-//                    default :
-//                        $data[$key]['fieldName'] = $value['field'];
-//                }
-//            }
-//        }
-
-        # 联系人
-//        if ($types == 'crm_contacts') {
-//            foreach ($data as $key => $value) {
-//                switch ($value['field']) {
-//                    case 'customer_id' :
-//                        $data[$key]['fieldName'] = 'customer_name';
-//                        break;
-//                    case 'create_user_id' :
-//                        $data[$key]['fieldName'] = 'create_user_name';
-//                        break;
-//                    case 'owner_user_id' :
-//                        $data[$key]['fieldName'] = 'owner_user_name';
-//                        break;
-//                    default :
-//                        $data[$key]['fieldName'] = $value['field'];
-//                }
-//            }
-//        }
-
-        # 商机
-//        if ($types == 'crm_business') {
-//            foreach ($data as $key => $value) {
-//                switch ($value['field']) {
-//                    case 'customer_id' :
-//                        $data[$key]['fieldName'] = 'customer_name';
-//                        break;
-//                    case 'type_id' :
-//                        $data[$key]['fieldName'] = 'type_id_info';
-//                        break;
-//                    case 'status_id' :
-//                        $data[$key]['fieldName'] = 'status_id_info';
-//                        break;
-//                    case 'create_user_id' :
-//                        $data[$key]['fieldName'] = 'create_user_name';
-//                        break;
-//                    case 'owner_user_id' :
-//                        $data[$key]['fieldName'] = 'owner_user_name';
-//                        break;
-//                    default :
-//                        $data[$key]['fieldName'] = $value['field'];
-//                }
-//            }
-//        }
-
-        # 合同
-//        if ($types == 'crm_contract') {
-//            foreach ($data as $key => $value) {
-//                switch ($value['field']) {
-//                    case 'customer_id' :
-//                        $data[$key]['fieldName'] = 'customer_name';
-//                        break;
-//                    case 'business_id' :
-//                        $data[$key]['fieldName'] = 'business_name';
-//                        break;
-//                    case 'contacts_id' :
-//                        $data[$key]['fieldName'] = 'contacts_name';
-//                        break;
-//                    case 'order_user_id' :
-//                        $data[$key]['fieldName'] = 'order_user_name';
-//                        break;
-//                    case 'create_user_id' :
-//                        $data[$key]['fieldName'] = 'create_user_name';
-//                        break;
-//                    case 'owner_user_id' :
-//                        $data[$key]['fieldName'] = 'owner_user_name';
-//                        break;
-//                    default :
-//                        $data[$key]['fieldName'] = $value['field'];
-//                }
-//            }
-//        }
-
-        # 回款
-//        if ($types == 'crm_receivables') {
-//            foreach ($data as $key => $value) {
-//                switch ($value['field']) {
-//                    case 'customer_id' :
-//                        $data[$key]['fieldName'] = 'customer_name';
-//                        break;
-//                    case 'contract_id' :
-//                        $data[$key]['fieldName'] = 'contract_num';
-//                        break;
-//                    case 'create_user_id' :
-//                        $data[$key]['fieldName'] = 'create_user_name';
-//                        break;
-//                    case 'owner_user_id' :
-//                        $data[$key]['fieldName'] = 'owner_user_name';
-//                        break;
-//                    case 'plan_id' :
-//                        $data[$key]['fieldName'] = 'plan_id_info';
-//                        break;
-//                    default :
-//                        $data[$key]['fieldName'] = $value['field'];
-//                }
-//            }
-//        }
-
-        # 回访
-//        if ($types == 'crm_visit') {
-//            foreach ($data as $key => $value) {
-//                switch ($value['field']) {
-//                    case 'customer_id' :
-//                        $data[$key]['fieldName'] = 'customer_name';
-//                        break;
-//                    case 'owner_user_id' :
-//                        $data[$key]['fieldName'] = 'owner_user_name';
-//                        $data[$key]['name'] = '回访人';
-//                        break;
-//                    case 'contacts_id' :
-//                        $data[$key]['fieldName'] = 'contacts_name';
-//                        break;
-//                    case 'contract_id' :
-//                        $data[$key]['fieldName'] = 'contract_number';
-//                        break;
-//                    case 'create_user_id' :
-//                        $data[$key]['fieldName'] = 'create_user_name';
-//                        break;
-//                    default :
-//                        $data[$key]['fieldName'] = $value['field'];
-//                }
-//            }
-//        }
-
-        # 产品
-//        if ($types == 'crm_product') {
-//            foreach ($data as $key => $value) {
-//                switch ($value['field']) {
-//                    case 'category_id' :
-//                        $data[$key]['fieldName'] = 'category_name';
-//                        break;
-//                    case 'create_user_id' :
-//                        $data[$key]['fieldName'] = 'create_user_name';
-//                        break;
-//                    case 'owner_user_id' :
-//                        $data[$key]['fieldName'] = 'owner_user_name';
-//                        break;
-//                    default :
-//                        $data[$key]['fieldName'] = $value['field'];
-//                }
-//            }
-//        }
-
         return $data;
+    }
+
+    /**
+     * 获取公海自定义字段数据
+     *
+     * @param $poolId
+     * @param $dataInfo
+     * @return bool|\PDOStatement|string|\think\Collection
+     */
+    public function getPoolFieldData($poolId, $dataInfo)
+    {
+        $poolFields = db('crm_customer_pool_field_setting')->field(['field_name AS field', 'form_type', 'name'])->where(['pool_id' => $poolId, 'is_hidden' => 0])->select();
+
+        foreach ($poolFields AS $key => $value) {
+            # 字段值
+            $poolFields[$key]['value'] = !empty($dataInfo[$value['field']]) ? $dataInfo[$value['field']] : '';
+
+            # 处理别名
+            switch ($value['field']) {
+                case 'create_user_id' :
+                    $poolFields[$key]['fieldName'] = 'create_user_name';
+                    $poolFields[$key]['value'] = !empty($dataInfo['create_user_id_info']) ? [$dataInfo['create_user_id_info']] : '';
+                    break;
+                case 'before_owner_user_id' :
+                    $poolFields[$key]['fieldName'] = 'before_owner_user_name';
+                    $poolFields[$key]['value'] = !empty($dataInfo['before_owner_user_id_info']) ? [$dataInfo['before_owner_user_id_info']] : '';
+                    break;
+                default :
+                    $poolFields[$key]['fieldName'] = $value['field'];
+            }
+            if (in_array($value['form_type'], ['user', 'structure']) && !in_array($value['field'], ['create_user_id', 'owner_user_id', 'before_owner_user_id'])) {
+                $poolFields[$key]['fieldName'] = $value['field_name'] . '_name';
+            }
+
+            # 系统字段
+            if (in_array($value['field'], ['last_record', 'create_user_id', 'create_time', 'update_time', 'last_time', 'before_owner_user_id'])) {
+                $poolFields[$key]['system'] = 1;
+            } else {
+                $poolFields[$key]['system'] = 0;
+            }
+        }
+
+        return $poolFields;
+    }
+
+    /**
+     * 获取发票高级搜索字段
+     *
+     * @return array[]
+     */
+    private function getInvoiceSearch()
+    {
+        return [
+            ['field' => 'invoice_number', 'form_type' => 'text', 'setting' => [], 'name' => '发票号码'],
+            ['field' => 'real_invoice_date', 'form_type' => 'datetime', 'setting' => [], 'name' => '实际开票日期'],
+            ['field' => 'logistics_number', 'form_type' => 'text', 'setting' => [], 'name' => '物流单号'],
+            ['field' => 'invoice_status', 'form_type' => 'select', 'setting' => ['未开票', '已开票'], 'name' => '开票状态'],
+            ['field' => 'check_status', 'form_type' => 'select', 'setting' => ['待审核', '审核中', '审核通过', '审核未通过', '撤回'], 'name' => '审核状态'],
+            ['field' => 'owner_user_id', 'form_type' => 'user', 'setting' => [], 'name' => '负责人']
+        ];
     }
 
     /**

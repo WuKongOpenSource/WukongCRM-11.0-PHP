@@ -204,3 +204,28 @@ function formatPubKey($pubKey) {
     $fKey .= "-----END PUBLIC KEY-----";
     return $fKey;
 }
+
+/**
+ * foreach循环内查询数据
+ * @param string $types
+ * @param $data
+ *
+ * @author      alvin guogaobo
+ * @version     1.0 版本号
+ * @since       2021/4/15 0015 14:39
+ */
+function foreachData($types='',$data)
+{
+    switch ($types) {
+        case 'admin_structure' :
+            $res=Db::name('AdminUser')->where('id',$data)->value('realname');
+            break;
+        case '' :
+            $res=Db::name('AdminUser')->where('id',$data['id'])->update(['structure_id'=>$data['structure_id']]);
+            break;
+        case 'market':
+            $res=Db::name('MarketData')->whereIn('id',$data)->select();
+            break;
+    }
+    return $res;
+}

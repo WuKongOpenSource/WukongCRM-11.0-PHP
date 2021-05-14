@@ -2,6 +2,7 @@
 
 namespace app\crm\logic;
 
+use app\admin\controller\ApiCommon;
 use app\admin\model\Common;
 use app\crm\model\Visit;
 use think\Db;
@@ -185,7 +186,7 @@ class VisitLogic extends Common
     /**
      * 回访详情
      */
-    public function getDataById($id = '')
+    public function getDataById($id = '', $userId = 0)
     {
         $dataInfo = db('crm_visit')->where('visit_id', $id)->find();
         if (!$dataInfo) {
@@ -210,6 +211,19 @@ class VisitLogic extends Common
         }
         $dataInfo['create_time'] = !empty($dataInfo['create_time']) ? date('Y-m-d H:i:s', $dataInfo['create_time']) : null;
         $dataInfo['update_time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
+        // 字段授权
+        if (!empty($userId)) {
+            $grantData = getFieldGrantData($userId);
+            $userLevel = isSuperAdministrators($userId);
+            foreach ($dataInfo AS $key => $value) {
+                if (!$userLevel && !empty($grantData['crm_visit'])) {
+                    $status = getFieldGrantStatus($key, $grantData['crm_visit']);
+
+                    # 查看权限
+                    if ($status['read'] == 0) unset($dataInfo[$key]);
+                }
+            }
+        }
         return $dataInfo;
     }
 
@@ -236,16 +250,25 @@ class VisitLogic extends Common
         if ($param['contract_id']) {
             Db::name('crm_contract')->where('contract_id', $param['contract_id'])->update(['is_visit' => 1]);
         }
-        //处理部门、员工、附件、多选类型字段
+        // 处理部门、员工、附件、多选类型字段
         $arrFieldAtt = $fieldModel->getArrayField('crm_visit');
         foreach ($arrFieldAtt as $k => $v) {
             if ($v == 'visit_user_id') continue;
             $param[$v] = arrayToString($param[$v]);
         }
+        // 处理日期（date）类型
+        $dateField = $fieldModel->getFieldByFormType('crm_visit', 'date');
+        if (!empty($dateField)) {
+            foreach ($param AS $key => $value) {
+                if (in_array($key, $dateField) && empty($value)) $param[$key] = null;
+            }
+        }
+
         $visitModel = new Visit();
         if ($visitModel->data($param)->allowField(true)->save()) {
             $visit_id = $visitModel->visit_id;
             updateActionLog($param['create_user_id'], 'crm_visit', $visitModel->visit_id, '', '', '创建了客户回访');
+            RecordActionLog($param['create_user_id'],'crm_visit','save',$param['number'],'','','新增了客户回访'.$param['number']);
             $data = [];
             $data['visit_id'] = $visit_id;
             return $data;
@@ -276,23 +299,32 @@ class VisitLogic extends Common
 
         $fieldModel = new \app\admin\model\Field();
         // 自动验证
-        $validateArr = $fieldModel->validateField($this->name); //获取自定义字段验证规则
+//        $validateArr = $fieldModel->validateField($this->name); //获取自定义字段验证规则
+        $validateArr = $fieldModel->validateField($this->name, 0, 'update'); //获取自定义字段验证规则
         $validate = new Validate($validateArr['rule'], $validateArr['message']);
         $result = $validate->check($param);
         if (!$result) {
             $this->error = $validate->getError();
             return false;
         }
-        //处理部门、员工、附件、多选类型字段
+        // 处理部门、员工、附件、多选类型字段
         $arrFieldAtt = $fieldModel->getArrayField('crm_visit');
         foreach ($arrFieldAtt as $k => $v) {
             if ($v == 'visit_user_id') continue;
-            $param[$v] = arrayToString($param[$v]);
+            if (isset($param[$v])) $param[$v] = arrayToString($param[$v]);
+        }
+        // 处理日期（date）类型
+        $dateField = $fieldModel->getFieldByFormType('crm_visit', 'date');
+        if (!empty($dateField)) {
+            foreach ($param AS $key => $value) {
+                if (in_array($key, $dateField) && empty($value)) $param[$key] = null;
+            }
         }
 
         if ($Visit->update($param, ['visit_id' => $visit_id], true)) {
             //修改记录           
             updateActionLog($param['user_id'], 'crm_visit', $visit_id, $dataInfo, $param);
+            RecordActionLog($param['user_id'], 'crm_visit', 'update',$dataInfo['number'], $dataInfo, $param);
             $data = [];
             $data['visit_id'] = $visit_id;
             return $data;
@@ -333,6 +365,7 @@ class VisitLogic extends Common
                 $delIds[] = $v;
             }
         }
+        $dataInfo = $Visit->where('visit_id',['in',$delIds])->select();
         if ($delIds) {
             $data = $Visit->delDatas($delIds);
             if (!$data) {
@@ -342,7 +375,11 @@ class VisitLogic extends Common
             $fileModel->delRFileByModule('crm_visit', $delIds);
             //删除关联操作记录
             $actionRecordModel->delDataById(['types' => 'crm_visit', 'visit_id' => $delIds]);
-            actionLog($delIds, '', '', '');
+            $user=new ApiCommon();
+            $userInfo = $user->userInfo;
+            foreach ($dataInfo as $k => $v) {
+                RecordActionLog($userInfo['id'], 'crm_contacts', 'delete', $v['name'], '', '', '删除了客户回访：' . $v['name']);
+            }
         }
         return $errorMessage;
     }
@@ -363,7 +400,7 @@ class VisitLogic extends Common
         # 创建人
         $realname = Db::name('admin_user')->where('id', $visit['create_user_id'])->value('realname');
         return [
-            'create_user_name' => $realname,
+            'create_user_id' => $realname,
             'create_time' => date('Y-m-d H:i:s', $visit['create_time']),
             'update_time' => date('Y-m-d H:i:s', $visit['update_time'])
         ];

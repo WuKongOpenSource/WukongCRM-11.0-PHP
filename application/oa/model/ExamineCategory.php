@@ -6,6 +6,7 @@
 // +----------------------------------------------------------------------
 namespace app\oa\model;
 
+use app\admin\controller\ApiCommon;
 use think\Db;
 use app\admin\model\Common;
 use think\Request;
@@ -48,6 +49,7 @@ class ExamineCategory extends Common
         $list = $this
             ->where($map)
             ->page($request['page'], $request['limit'])
+            ->order('status desc , update_time asc')
             ->select();
         foreach ($list as $k => $v) {
             $flowInfo = [];
@@ -57,7 +59,7 @@ class ExamineCategory extends Common
             $stepList = $examineStepModel->getDataList($v['flow_id']);
             $list[$k]['stepList'] = $stepList ?: [];
             $list[$k]['user_ids_info'] = $userModel->getListByStr($v['user_ids']);
-            $list[$k]['structure_ids_info'] = $structureModel->getListByStr($v['structure_ids']);
+            $list[$k]['update_time'] = date('Y-m-d H:i:s',$v['update_time']);
         }
         $dataCount = $this->where($map)->count('category_id');
         $data = [];
@@ -133,6 +135,7 @@ class ExamineCategory extends Common
                 $examineFlow['update_user_id'] = $param['create_user_id'];
                 $examineFlow['status'] = 1;
                 $res = $examineFlowModel->createData($examineFlow);
+                
                 if ($res) {
                     if ((int)$config == 1) {
                         $resUpdate = db('oa_examine_category')->where(['category_id' => $this->category_id])->update(['flow_id' => $res['flow_id']]);
@@ -148,7 +151,7 @@ class ExamineCategory extends Common
                     } else {
                         return $data;
                     }
-                } else {
+                   } else {
                     $this->error = $examineFlowModel->getError();
                     return false;
                 }
@@ -189,8 +192,14 @@ class ExamineCategory extends Common
 
         $examineStep = $param['step']; //审批步骤
         $config = $param['config'] ? 1 : 0; //审批流程类型 1固定审批0授权审批
-
-        if ($this->allowField(true)->save($param, ['category_id' => $category_id])) {
+        unset($param['update_time']);
+        unset($param['step']);
+        unset($param['config']);
+        unset($param['name']);
+        unset($param['types']);
+        unset($param['types_id']);
+        unset($param['update_user_id']);
+        if (db('oa_examine_category')->where(['category_id' => $category_id])->update($param)) {
             $data = [];
             $data['category_id'] = $category_id;
             return $data;
@@ -239,6 +248,10 @@ class ExamineCategory extends Common
             $data['delete_time'] = time();
             $data['delete_user_id'] = $user_id;
             $this->allowField(true)->save($data, ['category_id' => $id]);
+            # 系统操作记录
+            $user=new ApiCommon();
+            $userInfo=$user->userInfo;
+            SystemActionLog($userInfo['id'],'oa_examine', 'approval', $id, 'delete',$info['title'] , '', '','删除了：'.$info['title']);
             $this->commit();
             return true;
         } catch (\Exception $e) {

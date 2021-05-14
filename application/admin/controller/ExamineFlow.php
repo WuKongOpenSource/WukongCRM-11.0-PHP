@@ -82,6 +82,7 @@ class ExamineFlow extends ApiCommon
         $param['structure_ids'] = arrayToString($param['structure_ids']);
         $res = $examineFlowModel->createData($param);
         $param['config'] = $param['config'] ? 1 : 0;
+        SystemActionLog($userInfo['id'], 'admin_examine','approval', $res['flow_id'], 'save', $param['name'], '', '','添加了审批流：'.$param['name']);
         if ($res) {
             $config = $param['config'];
             if ((int)$config == 1) {
@@ -94,6 +95,7 @@ class ExamineFlow extends ApiCommon
                     return resultArray(['error' => $examineStepModel->getError()]);
                 }               
             }
+           
             return resultArray(['data' => '添加成功']);
         } else {
         	return resultArray(['error' => $examineFlowModel->getError()]);
@@ -144,7 +146,8 @@ class ExamineFlow extends ApiCommon
             $upData['delete_user_id'] = $userInfo['id'];
             $upData['status'] = 0;
             db('admin_examine_flow')->where(['flow_id' => $flowId])->update($upData);
-
+            # 添加系统操作日志
+            SystemActionLog($userInfo['id'], 'admin_examine','approval', $flowId,  'update', $param['name'], '', '','编辑了审批流：'.$param['name']);
             $config = $param['config'];
             if ((int)$config == 1) {
                 //固定审批流
@@ -220,11 +223,15 @@ class ExamineFlow extends ApiCommon
     public function delete()
     {
         $examineFlowModel = model('ExamineFlow');
-        $param = $this->param;       
+        $param = $this->param;
+        $userInfo = $this->userInfo;
         $data = $examineFlowModel->signDelById($param['flow_id']);
         if (!$data) {
             return resultArray(['error' => $examineFlowModel->getError()]);
         }
+        # 系统操作日志
+        $newData = db('admin_examine_flow')->where(['flow_id' => $param['flow_id']])->find();
+        SystemActionLog($userInfo['id'], 'admin_examine','approval', $param['flow_id'], 'update', $newData['name'], '', '','删除了审批流：'.$newData['name']);
         return resultArray(['data' => '删除成功']);
     }
 
@@ -238,12 +245,22 @@ class ExamineFlow extends ApiCommon
     public function enables()
     {
         $examineFlowModel = model('ExamineFlow');
-        $param = $this->param;        
+        $param = $this->param;
+        $userInfo=$this->userInfo;
         $id = [$param['flow_id']];
-        $data = $examineFlowModel->enableDatas($id, $param['status']);  
+        $data = $examineFlowModel->enableDatas($id, $param['status']);
+        # 系统操作日志
         if (!$data) {
             return resultArray(['error' => $examineFlowModel->getError()]);
-        } 
+        }
+        if($param['status']==0){
+            $content='禁用了：';
+        }else{
+            $content='启用了：';
+        }
+        $dataInfo=db('admin_examine_flow')->where('flow_id',$param['flow_id'])->find();
+//        p(3333);
+        SystemActionLog($userInfo['id'], 'admin_examine','approval', $param['flow_id'], 'update', $dataInfo['name'], '', '',$content.$dataInfo['name']);
         return resultArray(['data' => '操作成功']);         
     }
 

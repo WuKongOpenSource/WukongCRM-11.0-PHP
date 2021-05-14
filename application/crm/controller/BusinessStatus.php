@@ -126,11 +126,20 @@ class BusinessStatus extends ApiCommon
     {
         $businessStatusModel = model('BusinessStatus');
         $param = $this->param;
+        $userInfo=$this->userInfo;
         if ($param['id'] == 1) {
            return resultArray(['error' => '系统数据，不能操作']); 
         }
         $status = $param['status'] ? : '0';
         if (db('crm_business_type')->where(['type_id' => $param['id']])->setField('status', $status)) {
+            $data=db('crm_business_type')->where(['type_id' => $param['id']])->find();
+            if($status==0){
+                $status='停用了商机组：'.$data['name'];
+            }else{
+                $status='启用了商机组：'.$data['name'];
+            }
+            # 系统操作日志
+            SystemActionLog($userInfo['id'], 'crm_business_type','customer', $param['id'],  'update',$data['name'] , '', '',$status);
             return resultArray(['data' => '操作成功']);
         } else {
             return resultArray(['error' => $businessStatusModel->getError()]);

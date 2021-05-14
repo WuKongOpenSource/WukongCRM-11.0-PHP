@@ -320,11 +320,11 @@ class ExamineStep extends Common
         //创建人或负责人或管理员有撤销权限
         //if ($dataInfo['create_user_id'] == $check_user_id || $dataInfo['owner_user_id'] == $check_user_id || in_array($check_user_id, $admin_user_ids)) {
         if ($dataInfo['create_user_id'] == $check_user_id || $dataInfo['owner_user_id'] == $check_user_id) {
-            if (!in_array($dataInfo['check_status'],['2','3','4'])) {
+            if (!in_array($dataInfo['check_status'],['2','3','4','6'])) {
                 $is_recheck = 1;
             }
         }
-        if (in_array($check_user_id, stringToArray($dataInfo['check_user_id'])) && !in_array($dataInfo['check_status'],['2','3','4'])) {
+        if (in_array($check_user_id, stringToArray($dataInfo['check_user_id'])) && !in_array($dataInfo['check_status'],['2','3','4','6'])) {
             $is_check = 1;
         }
 
@@ -468,21 +468,22 @@ class ExamineStep extends Common
         $where['types_id'] = $types_id;
         $where['is_end'] = 0;
         $recordList = $examineRecordModel->getDataList($where);
-    
         $typeInfo = $this->getDataByTypes($types, $types_id);
         $dataInfo = $typeInfo['dataInfo'];
-        $createUserInfo = $userModel->getUserById($dataInfo['create_user_id']);
-        $userList[0]['userInfo'] = $createUserInfo;
-        $userList[0]['type'] = 3; //创建
-        $userList[0]['time'] = $dataInfo['update_time'] ? : '';
- 
         //type 0失败，1通过，2撤销，3创建，4待审核，5未提交
-        $i = 1;
-        foreach ($recordList as $k=>$v) {
-            $userList[$i]['userInfo'] = $userModel->getUserById($v['check_user_id']);
-            $userList[$i]['type'] = $v['status'];
-            $userList[$i]['time'] = $v['check_time'];
-            $i++;
+        $i = 0;
+        if(empty($recordList)){
+            $createUserInfo = $userModel->getUserById($dataInfo['create_user_id']);
+            $userList[0]['userInfo'] = $createUserInfo;
+            $userList[0]['type'] = 3; //创建
+            $userList[0]['time'] = $dataInfo['update_time'] ? : '';
+        }else{
+            foreach ($recordList as $k=>$v) {
+                $userList[$i]['userInfo'] = $userModel->getUserById($v['check_user_id']);
+                $userList[$i]['type'] = $v['status'];
+                $userList[$i]['time'] = $v['check_time'];
+                $i++;
+            }
         }
         if ($dataInfo['check_status'] <= 1 && $dataInfo['check_user_id']) {
             $check_user_id_arr = stringToArray($dataInfo['check_user_id']);
@@ -502,11 +503,11 @@ class ExamineStep extends Common
         //创建人或负责人或管理员有撤销权限
 //        if ($dataInfo['create_user_id'] == $check_user_id || $dataInfo['owner_user_id'] == $check_user_id || in_array($check_user_id, $admin_user_ids)) {
         if ($dataInfo['create_user_id'] == $check_user_id || $dataInfo['owner_user_id'] == $check_user_id) {
-            if (!in_array($dataInfo['check_status'],['2','3','4','5'])) {
+            if (!in_array($dataInfo['check_status'],['2','3','4','5','6'])) {
                 $is_recheck = 1;
             }
         }
-        if (in_array($check_user_id, stringToArray($dataInfo['check_user_id'])) && !in_array($dataInfo['check_status'],['2','3','4','5'])) {
+        if (in_array($check_user_id, stringToArray($dataInfo['check_user_id'])) && !in_array($dataInfo['check_status'],['2','3','4','5','6'])) {
             $is_check = 1;
         }
 

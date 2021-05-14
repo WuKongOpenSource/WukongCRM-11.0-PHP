@@ -37,7 +37,17 @@ class Config extends Common
 	{
 		$data = [];
 		$data['status'] = $param['status'] ? : '0';
+        $dataInfo=db('admin_config')->where('id',$param['id'])->find();
+        $user_id=$param['user_id'];
+        unset($param['user_id']);
 		if ($this->where(['id' => $id])->update($data)) {
+            # 修改记录
+            if($param['status']==0){
+                $data='停用了'.$dataInfo['name'];
+            }else{
+                $data='启用了'.$dataInfo['name'];
+            }
+            SystemActionLog($user_id,'admin_config','application',$id,'update','应用管理','','',$data);
 			return true;
 		}
 		$this->error = '操作失败';

@@ -7,6 +7,7 @@
 
 namespace app\admin\controller;
 
+use app\crm\logic\CustomerPoolLogic;
 use think\Hook;
 use think\Request;
 
@@ -42,6 +43,13 @@ class Index extends ApiCommon
     public function fields()
     {
         $param = $this->param;
+
+        # 多公海高级筛选参数列表
+        if (!empty($param['types']) && $param['types'] == 'crm_customer_pool') {
+            $customerPoolLogic = new CustomerPoolLogic();
+            return resultArray(['data' => $customerPoolLogic->getAdvancedFilterFieldList()]);
+        }
+
         $userInfo = $this->userInfo;
         $param['user_id'] = $userInfo['id'];
         $fieldModel = model('Field');

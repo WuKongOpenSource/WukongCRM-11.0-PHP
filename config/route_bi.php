@@ -96,7 +96,9 @@ return [
     'bi/customer/customerSatisfaction' => ['bi/customer/customerSatisfaction', ['method' => 'POST']],
     // 【商业智能】产品满意度分析
     'bi/customer/productSatisfaction' => ['bi/customer/productSatisfaction', ['method' => 'POST']],
-
+    // 【商业智能】产品销售分析合同列表
+    'bi/product/listProduct' => ['bi/product/listProduct', ['method' => 'POST']],
+    
     // 【商业智能】员工客户分析导出
     'bi/customer/excelExport' => ['bi/customer/excelExport', ['method' => 'POST']],
     // 【商业智能】员工业绩分析导出

@@ -182,12 +182,9 @@ class ExcelLogic
         $field_list = [
             '0' => ['name' => '产品分类', 'field' => 'category_id_info'],
             '1' => ['name' => '产品名称', 'field' => 'product_name'],
-            '2' => ['name' => '合同编号', 'field' => 'contract_num'],
-            '3' => ['name' => '负责人', 'field' => 'realname'],
-            '4' => ['name' => '客户名称', 'field' => 'contract_name'],
-            '5' => ['name' => '销售单价', 'field' => 'price'],
-            '6' => ['name' => '数量', 'field' => 'num'],
-            '7' => ['name' => '订单产品小计', 'field' => 'subtotal'],
+            '2' => ['name' => '合同数', 'field' => 'contract_product_sum'],
+            '3' => ['name' => '数量合计', 'field' => 'product_sum'],
+            '4' => ['name' => '订单产品小计', 'field' => 'contract_money'],
         ];
         $type = '产品销售情况统计';
         $excelModel = new \app\admin\model\Excel();

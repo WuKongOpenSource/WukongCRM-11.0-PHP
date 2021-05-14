@@ -10,7 +10,7 @@ namespace app\admin\controller;
 use think\Hook;
 use think\Request;
 use think\Db;
-
+use app\admin\model\Structure;
 class Structures extends ApiCommon
 {
     /**
@@ -130,17 +130,25 @@ class Structures extends ApiCommon
         if (!checkPerByAction('admin', 'users', 'structures_save')) {
             header('Content-Type:application/json; charset=utf-8');
             exit(json_encode(['code'=>102,'error'=>'无权操作']));
-        }        
+        }
+        $userInfo=$this->userInfo;
         $structureModel = model('Structure');
         $param = $this->param;
 		if(!$param['pid']){
 			resultArray(['error' => '请选择上级部门']);
 		}
-        $data = $structureModel->createData($param);
-        if (!$data) {
+		if(!$param['owner_user_id']){
+			resultArray(['error' => '请选择部门负责人']);
+		}
+        if ($structureModel->data($param)->allowField(true)->save()) {
+            $id = $structureModel->id;
+            # 添加记录
+            $content = '添加了部门：' . $param['name'];
+            SystemActionLog($userInfo['id'], 'admin_structure','structures', $id, 'save', $param['name'], '', '', $content);
+            return resultArray(['data' => '添加成功']);
+        }else{
             return resultArray(['error' => $structureModel->getError()]);
-        } 
-        return resultArray(['data' => '添加成功']);
+        }
     }
 
     /**
@@ -155,7 +163,8 @@ class Structures extends ApiCommon
         if (!checkPerByAction('admin', 'users', 'structures_update')) {
             header('Content-Type:application/json; charset=utf-8');
             exit(json_encode(['code'=>102,'error'=>'无权操作']));
-        }        
+        }
+        $userInfo=$this->userInfo;
         $structureModel = model('Structure');
         $param = $this->param;
         $dataInfo = $structureModel->getDataByID($param['id']);
@@ -165,7 +174,9 @@ class Structures extends ApiCommon
         $data = $structureModel->updateDataById($param, $param['id']);
         if (!$data) {
             return resultArray(['error' => $structureModel->getError()]);
-        } 
+        }
+        # 系统操作日志
+        SystemActionLog($userInfo['id'], 'admin_structure','structures', $param['id'], 'update', $param['name'], '', '','编辑了部门名称：'.$param['name']);
         return resultArray(['data' => '编辑成功']);
     }
 

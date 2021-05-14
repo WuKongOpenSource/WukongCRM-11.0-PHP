@@ -24,7 +24,7 @@ class DailyRule extends ApiCommon
     {
         $action = [
             'permission'=>[''],
-            'allow'=>['welcome', 'setwelcome', 'worklogrule', 'setworklogrule','scheduleList','addschedule','setschedule','delschedule']
+            'allow'=>['welcome', 'setwelcome', 'worklogrule', 'setworklogrule','schedulelist','addschedule','setschedule','delschedule']
         ];
         Hook::listen('check_auth',$action);
         $request = Request::instance();
@@ -58,11 +58,12 @@ class DailyRule extends ApiCommon
     public function setWelcome(DailyRuleLogic $dailyRuleLogic)
     {
         $mark = $this->param['welcome'];
-
+        $userInfo=$this->userInfo;
         if (empty($mark)) return resultArray(['error' => '缺少日志欢迎语！']);
 
         if (!$dailyRuleLogic->setWelcome($mark)) return resultArray(['error' => '添加失败！']);
-
+        # 系统操作日志
+        SystemActionLog($userInfo['id'], 'admin_oalog_rule','work_task','1','update','日志欢迎语' , '', '','设置了日志欢迎语');
         return resultArray(['data' => '添加成功！']);
     }
 
@@ -93,9 +94,10 @@ class DailyRule extends ApiCommon
     public function setWorkLogRule(DailyRuleLogic $dailyRuleLogic)
     {
         if (empty($this->param['rule'])) return resultArray(['error' => '缺少规则参数！']);
-
+        $userInfo=$this->userInfo;
         $dailyRuleLogic->setWorkLogRule($this->param['rule']);
-
+        # 系统操作日志
+        SystemActionLog($userInfo['id'], 'admin_oalog_rule','work_task', 1, 'update','日志规则' , '', '','设置了日志规则');
         return resultArray(['data' => '设置成功！']);
     }
 
@@ -120,8 +122,11 @@ class DailyRule extends ApiCommon
      * @throws \think\exception\PDOException
      */
     public function  setSchedule(DailyRuleLogic $dailyRuleLogic){
+        $userInfo=$this->userInfo;
         if(empty($this->param['id'])) return resultArray(['error'=>'缺少参数']);
           $dailyRuleLogic->setSchedule($this->param);
+        # 系统操作日志
+        SystemActionLog($userInfo['id'], 'admin_oalog_rule','work_task', 1, 'update','日程类型' , '', '','设置了日程类型');
         return resultArray(['data' => '设置成功！']);
 
     }
@@ -132,8 +137,11 @@ class DailyRule extends ApiCommon
      * @return \think\response\Json
      */
     public function addSchedule(DailyRuleLogic $dailyRuleLogic){
+        $userInfo=$this->userInfo;
         if(empty($this->param['name'])) return resultArray(['error'=>'缺少参数']);
         $dailyRuleLogic->addSchedule($this->param);
+        # 系统操作日志
+        SystemActionLog($userInfo['id'], 'admin_oalog_rule','work_task', 1, 'save','日程类型' , '', '','新增了日程类型');
         return resultArray(['data' => '添加成功！']);
 
     }
@@ -144,8 +152,11 @@ class DailyRule extends ApiCommon
      * @return \think\response\Json
      */
     public function delSchedule(DailyRuleLogic $dailyRuleLogic){
+        $userInfo=$this->userInfo;
         if(empty($this->param['id'])) return resultArray(['error'=>'缺少参数']);
         $dailyRuleLogic->delSchedule($this->param['id']);
+        # 系统操作日志
+        SystemActionLog($userInfo['id'], 'admin_oalog_rule','work_task', 1, 'update','日程类型' , '', '','删除了日程类型');
         return resultArray(['data' => '删除成功！']);
     }
 

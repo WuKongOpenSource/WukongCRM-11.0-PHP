@@ -24,7 +24,7 @@ CREATE TABLE `5kcrm_work_order`  (
 UPDATE `5kcrm_admin_field` SET `form_type`='email' WHERE `types` = 'crm_customer' AND `field` = 'email';
 
 ALTER TABLE `5kcrm_crm_leads` ADD COLUMN `is_allocation` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否是分配给我的线索：1是；0不是';
-ALTER TABLE `5kcrm_crm_customer` ADD COLUMN `is_allocation` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否是分配给我的线索：1是；0不是';
+ALTER TABLE `5kcrm_crm_customer` ADD COLUMN `is_allocation` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否是分配给我的客户：1是；0不是';
 
 ALTER TABLE `5kcrm_admin_user` ADD COLUMN `is_read_notice` tinyint(1) NOT NULL DEFAULT 0 COMMENT '用户是否已读升级公告：1已读；0未读';
 

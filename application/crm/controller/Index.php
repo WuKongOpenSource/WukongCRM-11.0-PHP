@@ -595,6 +595,9 @@ class Index extends ApiCommon
 
         if ($c != 'activity') {
             $where['owner_user_id']['value'] = $userIds;
+            if($types=='crm_contract' || $types=='crm_receivables'){
+                $where['check_status']=2;
+            }
             $data = $model->getDataList($where);
         } else {
             $typesList = ['1', '2', '3', '5', '6'];

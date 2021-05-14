@@ -104,6 +104,7 @@ class Task extends ApiCommon
         }
         $TaskLogic = new TasksLogic();
         $data = $TaskLogic->excelExport($param);
+        RecordActionLog($userInfo['id'],'work_task','excelexport','导出全部','','','导出任务');
         return $data;
     }
     
@@ -255,6 +256,7 @@ class Task extends ApiCommon
         if (!$res) {
             return resultArray(['error' => $excelModel->getError()]);
         }
+        RecordActionLog($userInfo['id'],'work_task','excel','导入客户','','','导入客户');
         return resultArray(['data' => $excelModel->getError()]);
     }
     
@@ -510,15 +512,16 @@ class Task extends ApiCommon
         if (!isset($param['priority_id']) || !$param['task_id']) {
             return resultArray(['error' => '参数错误']);
         }
-        
+        $dataInfo=Db::name('Task')->where(['task_id' => $param['task_id']])->find();
         # 权限判断
         if (!empty($param['work_id']) && !$this->checkWorkOperationAuth('setTaskPriority', $param['work_id'], $this->userInfo['id'])) {
             header('Content-Type:application/json; charset=utf-8');
             exit(json_encode(['code' => 102, 'error' => '无权操作！']));
         }
-        
+        $priority=[0=>'无',1=>'低',2=>'中',3=>'高'];
         $flag = Db::name('Task')->where(['task_id' => $param['task_id']])->setField('priority', $param['priority_id']);
         if ($flag) {
+            RecordActionLog($userInfo['id'], 'work_task', 'update',$dataInfo['name'], '','','修改任务优先级为：'.$priority[$param['priority_id']]);
             return resultArray(['data' => '操作成功']);
         } else {
             return resultArray(['error' => '操作失败']);
@@ -767,7 +770,8 @@ class Task extends ApiCommon
                 $temp['create_time'] = time();
                 $temp['task_id'] = $param['task_id'];
                 Db::name('WorkTaskLog')->insert($temp);
-                actionLog($taskInfo['task_id'], $taskInfo['owner_user_id'], $taskInfo['structure_ids'], '任务标记结束');
+//                actionLog($taskInfo['task_id'], $taskInfo['owner_user_id'], $taskInfo['structure_ids'], '任务标记结束');
+                RecordActionLog($userInfo['id'], 'work_task', 'update',$taskInfo['name'], '','','将状态修改为：完成');
                 //抄送站内信
                 $sendUserArr = [];
                 $sendUserArr[] = $taskInfo['create_user_id'];
@@ -796,7 +800,8 @@ class Task extends ApiCommon
                 $temp['create_time'] = time();
                 $temp['task_id'] = $param['task_id'];
                 Db::name('WorkTaskLog')->insert($temp);
-                actionLog($taskInfo['task_id'], $taskInfo['owner_user_id'], $taskInfo['structure_ids'], '任务标记开始');
+//                actionLog($taskInfo['task_id'], $taskInfo['owner_user_id'], $taskInfo['structure_ids'], '任务标记开始');
+                RecordActionLog($userInfo['id'], 'work_task', 'update',$taskInfo['name'], '','','将状态修改为：未完成');
             }
         }
         if ($flag) {
@@ -922,11 +927,12 @@ class Task extends ApiCommon
             header('Content-Type:application/json; charset=utf-8');
             exit(json_encode(['code' => 102, 'error' => '无权操作！']));
         }
-        
+        $dataInfo=db('task')->where('task_id',$param['task_id'])->find();
         $userInfo = $this->userInfo;
         $param['create_user_id'] = $userInfo['id'];
         $flag = $taskModel->delTaskById($param);
         if ($flag) {
+            RecordActionLog($userInfo['id'], 'work_task', 'delete', $dataInfo['name'], '', '', '删除了任务：' . $dataInfo['name']);
             return resultArray(['data' => '删除成功']);
         } else {
             return resultArray(['error' => $taskModel->getError()]);

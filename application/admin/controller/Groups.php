@@ -78,6 +78,7 @@ class Groups extends ApiCommon
      */    
     public function save(FieldGrantLogic $fieldGrantLogic)
     {
+        $userInfo=$this->userInfo;
         $groupModel = model('Group');
         $param = $this->param;
 		$param['rules'] = arrayToString($param['rules']);
@@ -85,7 +86,9 @@ class Groups extends ApiCommon
         if (!$lastInsId) {
             return resultArray(['error' => $groupModel->getError()]);
         }
-
+        # 添加记录
+        SystemActionLog($userInfo['id'], 'admin_group','role', $lastInsId, 'save', $param['title'], '', '', '添加了角色：' . $param['title']);
+    
         # 新增客户管理角色的字段授权数据
         if (isset($param['pid']) && $param['pid'] == 2) {
             $fieldGrantLogic->createCrmFieldGrant($lastInsId);
@@ -179,6 +182,7 @@ class Groups extends ApiCommon
     {        
         $groupModel = model('Group');
         $param = $this->param;
+        $userInfo = $this->userInfo;
         $dataInfo = $groupModel->getDataById($param['id']);
         if (!$dataInfo) {
             return resultArray(['error' => '参数错误']);
@@ -191,7 +195,9 @@ class Groups extends ApiCommon
         if (!$data) {
             return resultArray(['error' => $groupModel->getError()]);
         }
-
+        # 添加记录
+        SystemActionLog($userInfo['id'], 'admin_group','role', $data, 'copy', $dataInfo['title'], '', '', '添加了角色：' . $dataInfo['title']);
+    
         # 复制客户管理角色的字段授权数据
         if (!empty($dataInfo['pid']) && $dataInfo['pid'] == 2) {
             $fieldGrantLogic->copyCrmFieldGrant($param['id'], $data);

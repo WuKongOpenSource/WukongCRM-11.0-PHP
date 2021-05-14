@@ -44,8 +44,6 @@ return [
     'crm/customer/distribute' => ['crm/customer/distribute', ['method' => 'POST']],
     // 【客户】公海
     'crm/customer/pool' => ['crm/customer/pool', ['method' => 'POST']],
-    // 【客户】公海领取
-//    'crm/customer/receive' => ['crm/customer/receive', ['method' => 'POST']],
     // 【客户】设置关注
     'crm/customer/star' => ['crm/customer/star', ['method' => 'POST']],
     // 【客户】附近
@@ -56,6 +54,39 @@ return [
     'crm/customer/count' => ['crm/customer/count', ['method' => 'POST']],
     // 【客户】公海权限
     'crm/customer/poolAuthority' => ['crm/customer/poolAuthority', ['method' => 'POST']],
+    // 【客户】级别列表
+    'crm/customer/level' => ['crm/customer/level', ['method' => 'POST']],
+
+    // 【客户】公海列表
+    'crm/customerPool/index' => ['crm/customerPool/index', ['method' => 'POST']],
+    // 【客户】公海详情
+    'crm/customerPool/read' => ['crm/customerPool/read', ['method' => 'POST']],
+    // 【客户】公海池列表
+    'crm/customerPool/pondList' => ['crm/customerPool/pondList', ['method' => 'POST']],
+    // 【客户】公海字段
+    'crm/customerPool/field' => ['crm/customerPool/field', ['method' => 'POST']],
+    // 【客户】公海高级筛选字段列表
+    'crm/customerPool/advanced' => ['crm/customerPool/advanced', ['method' => 'POST']],
+    // 【客户】公海权限
+    'crm/customerPool/authority' => ['crm/customerPool/authority', ['method' => 'POST']],
+    // 【客户】领取公海客户
+    'crm/customerPool/receive' => ['crm/customerPool/receive', ['method' => 'POST']],
+    // 【客户】分配公海客户
+    'crm/customerPool/distribute' => ['crm/customerPool/distribute', ['method' => 'POST']],
+    // 【客户】删除公海客户
+    'crm/customerPool/delete' => ['crm/customerPool/delete', ['method' => 'POST']],
+    // 【客户】公海客户导入模板下载
+    'crm/customerPool/excelDownload' => ['crm/customerPool/excelDownload', ['method' => 'POST']],
+    // 【客户】公海导入
+    'crm/customerPool/import' => ['crm/customerPool/import', ['method' => 'POST']],
+    // 【客户】公海导出
+    'crm/customerPool/export' => ['crm/customerPool/export', ['method' => 'POST']],
+    // 【客户】公海字段配置列表
+    'crm/customerPool/fieldConfig' => ['crm/customerPool/fieldConfig', ['method' => 'POST']],
+    // 【客户】设置公海字段列宽
+    'crm/customerPool/setFieldWidth' => ['crm/customerPool/setFieldWidth', ['method' => 'POST']],
+    // 【客户】设置公海字段配置
+    'crm/customerPool/setFieldConfig' => ['crm/customerPool/setFieldConfig', ['method' => 'POST']],
 
     // 【客户】回访
     'crm/visit/index' => ['crm/visit/index', ['method' => 'POST']],
@@ -430,16 +461,42 @@ return [
     // 【活动】获取跟进记录列表
     'crm/index/activityList' => ['crm/index/activityList', ['method' => 'POST']],
 
-    // 【打印】获取打印数据
+    //【打印】获取打印数据
     'crm/printing/printingData' => ['crm/printing/printingData', ['method' => 'POST']],
-    // 【打印】获取打印模板
+    //【打印】获取打印模板
     'crm/printing/template' => ['crm/printing/template', ['method' => 'POST']],
-    // 【打印】创建打印记录
+    //【打印】创建打印记录
     'crm/printing/setRecord' => ['crm/printing/setRecord', ['method' => 'POST']],
-    // 【打印】获取打印记录
+    //【打印】获取打印记录
     'crm/printing/getRecord' => ['crm/printing/getRecord', ['method' => 'POST']],
-
-    // 【通用】快捷编辑
+    //【打印】创建打印预览数据
+    'crm/printing/preview' => ['crm/printing/preview', ['method' => 'POST']],
+    //【打印】显示打印预览
+    'crm/preview/previewPdf' => ['crm/preview/previewPdf', ['method' => 'POST']],
+    //【打印】下载打印文件
+    'crm/printing/down' => ['crm/printing/down', ['method' => 'POST']],
+    
+    //跟进记录导入模板
+    'crm/activity/excelDownload' => ['crm/activity/excelDownload', ['method' => 'GET']],
+    //跟进记录导入
+    'crm/activity/excelImport' => ['crm/activity/excelImport', ['method' => 'POST']],
+    //跟进记录导出
+    'crm/activity/excelExport' => ['crm/activity/excelExport', ['method' => 'POST']],
+    
+    //市场活动列表
+    'crm/market/index' => ['crm/market/index', ['method' => 'POST']],
+    //市场活动添加
+    'crm/market/save' => ['crm/market/save', ['method' => 'POST']],
+    //市场活动修改
+    'crm/market/update' => ['crm/market/update', ['method' => 'POST']],
+    //市场活动详情
+    'crm/market/read' => ['crm/market/read', ['method' => 'POST']],
+    //市场活动状态修改
+    'crm/market/enables' => ['crm/market/enables', ['method' => 'POST']],
+    //市场活动状态删除
+    'crm/market/delete' => ['crm/market/delete', ['method' => 'POST']],
+    
+    //【通用】快捷编辑
     'crm/common/quickEdit' => ['crm/common/quickEdit', ['method' => 'POST']],
 
     // MISS路由

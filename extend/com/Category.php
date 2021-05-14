@@ -74,6 +74,7 @@ class Category {
             $pad = '';
             $childs[$i]['level'] = $level;
             $childs[$i]['label'] = $childs[$i]['name'];
+            $childs[$i]['structure_id'] = $childs[$i]['id'];
             $this->formatList[] = $childs[$i];
             $this->_searchList($childs[$i][$this->fields['cid']], $space . $pad . "  ",$level+1,$childs[$i]['else']);//递归下一级分类
             $m++;

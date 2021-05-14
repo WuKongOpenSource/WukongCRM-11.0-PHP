@@ -6,6 +6,7 @@
 // +----------------------------------------------------------------------
 namespace app\oa\model;
 
+use app\admin\controller\ApiCommon;
 use think\Db;
 use app\admin\model\Common;
 use app\admin\model\Message;
@@ -44,8 +45,8 @@ class Event extends Common
         $user_id = $param['user_id'];
         
         //默认本账户or 自定义用户id
-        if ($param['start_time'] && $param['end_time']) {
-            $start_time = $param['start_time'];
+        if ($param['star_time'] && $param['end_time']) {
+            $start_time = $param['star_time'];
             $end_time = $param['end_time'];
         } else {
             $start_time = mktime(0, 0, 0, date('m'), 1, date('Y'));
@@ -59,7 +60,8 @@ class Event extends Common
         foreach ($event_date as $k=>$v) {
             $event_date[$k]['create_user_info'] = $userModel->getUserById($v['create_user_id']);
             $event_date[$k]['ownerList'] = $userModel->getDataByStr($v['owner_user_ids']) ? : [];
-        
+            $list = db('admin_oa_schedule')->where('schedule_id',$v['schedule_id'])->find();
+            $event_date[$k]['color']= $list['color'] ;
             $relationArr= [];
             $relationArr = $recordModel->getListByRelationId('event', $v['event_id']);
             $event_date[$k]['businessList'] = $relationArr['businessList'];
@@ -472,7 +474,7 @@ class Event extends Common
                 Db::name('oa_event_relation')->insert($relation);
             }
             
-            actionLog($eventId, $param['owner_user_ids'], '', '创建了日程');
+//            actionLog($eventId, $param['owner_user_ids'], '', '创建了日程');
             
             $data['event_id'] = $eventId;
             // 站内信
@@ -497,7 +499,7 @@ class Event extends Common
                 );
                 
             }
-            
+            RecordActionLog($param['create_user_id'], 'oa_event', 'save',$param['title'], '','','添加了日程：'.$param['title']);
             return $data;
         } else {
             $this->error = '添加失败';
@@ -756,6 +758,7 @@ class Event extends Common
     public function updateDataById($param, $event_id = '')
     {
         $dataInfo = $this->getDataById($event_id, $param);
+        $user_id=$param['user_id'];
         if (!$dataInfo) {
             $this->error = '数据不存在或已删除';
             return false;
@@ -793,7 +796,7 @@ class Event extends Common
         
         if ($this->allowField(true)->save($param, ['event_id' => $event_id])) {
             $eventId = $this->event_id;
-            actionLog($event_id, $param['owner_user_ids'], '', '修改了日程');
+//            actionLog($event_id, $param['owner_user_ids'], '', '修改了日程');
             $list = db('oa_event_notice')->where('event_id', $eventId)->select();
             if ($list) {
                 foreach ($list as $k => $v) {
@@ -859,6 +862,7 @@ class Event extends Common
                     Db::name('OaEventRelation')->where(['event_id' => $event_id])->insert($relation);
                 }
             }
+            RecordActionLog($user_id, 'oa_event','update', $param['title'], '','','修改了日程：'.$param['title']);
             return $data;
         } else {
             $this->error = '编辑失败';
@@ -954,7 +958,6 @@ class Event extends Common
         if ($flag) {
             Db::name('OaEventNotice')->where(['event_id' => $param['event_id']])->delete();
             Db::name('OaEventRelation')->where(['event_id' => $param['event_id']])->delete();
-            actionLog($param['event_id'], $dataInfo['owner_user_ids'], '', '删除了日程');
             return true;
         } else {
             $this->error = '删除失败';

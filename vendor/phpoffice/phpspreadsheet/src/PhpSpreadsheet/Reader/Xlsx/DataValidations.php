@@ -19,7 +19,7 @@ class DataValidations
 
     public function load()
     {
-        foreach ($this->worksheetXml->dataValidations->dataValidation as $dataValidation) {
+        foreach ($this->worksheetXml->dataValidation as $dataValidation) {
             // Uppercase coordinate
             $range = strtoupper($dataValidation['sqref']);
             $rangeSet = explode(' ', $range);

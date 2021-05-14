@@ -175,6 +175,7 @@ class Leads extends ApiCommon
                 $delIds[] = $v;
             }            
         }
+        $dataInfo = $leadsModel->where('leads_id',['in',$delIds])->select();
         if ($delIds) {
             $data = $leadsModel->delDatas($delIds);
             if (!$data) {
@@ -186,7 +187,10 @@ class Leads extends ApiCommon
             $fileModel->delRFileByModule('crm_leads', $delIds);
             //删除关联操作记录
             $actionRecordModel->delDataById(['types' => 'crm_leads', 'action_id' => $delIds]);
-            actionLog($delIds, '', '', '');
+            $userInfo = $this->userInfo;
+            foreach ($dataInfo as $k => $v) {
+                RecordActionLog($userInfo['id'], 'crm_leads', 'delete', $v['name'], '', '', '删除了线索：' . $v['name']);
+            }
         }
         if ($errorMessage) {
             return resultArray(['error' => $errorMessage]);
@@ -250,6 +254,7 @@ class Leads extends ApiCommon
             db('crm_leads')->where(['leads_id' => $leads_id])->update($leadsData);
             //修改记录
             updateActionLog($userInfo['id'], 'crm_customer', $resCustomer['customer_id'], '', '', '将线索"' . $leadsInfo['name'] . '转化为客户');
+            RecordActionLog($userInfo['id'],'crm_leads','save',$leadsInfo['name'],'','','将线索'.$leadsInfo['name'].'转化为客户');
             # 将线索下的跟进记录同步至客户下
             $record = db('crm_activity')->field('activity_id', true)->where(['type' => 1, 'activity_type' => 1, 'activity_type_id' => $leads_id])->select();
             foreach ($record as $key1 => $value1) {
@@ -323,6 +328,8 @@ class Leads extends ApiCommon
             }
             //修改记录
             updateActionLog($userInfo['id'], 'crm_leads', $leads_id, '', '', '将线索转移给：' . $ownerUserName);
+            RecordActionLog($userInfo['id'], 'crm_leads', 'transfer',$leadsInfo['name'], '','','将线索：'.$leadsInfo['name'].'转移给：' . $ownerUserName);
+    
         }
         if (!$errorMessage) {
             return resultArray(['data' => '转移成功']);
@@ -339,7 +346,7 @@ class Leads extends ApiCommon
      */
     public function excelDownload($save_path = '')
     {
-
+    
         $param = $this->param;
         $userInfo = $this->userInfo;
         $excelModel = new \app\admin\model\Excel();
@@ -350,6 +357,33 @@ class Leads extends ApiCommon
         $field_list = $fieldModel->field($fieldParam);
         // $field_list = $fieldModel->getIndexFieldList('crm_leads', $userInfo['id']);
         $data = $excelModel->excelImportDownload($field_list, 'crm_leads', $save_path);
+        
+        # 下次升级使用
+//        $param = $this->param;
+//        $userInfo = $this->userInfo;
+//        $excelModel = new \app\admin\model\Excel();
+//        // 导出的字段列表
+//        $fieldModel = new \app\admin\model\Field();
+//        $fieldParam['types'] = 'crm_leads';
+//        $fieldParam['action'] = 'excel';
+//        $field_list = $fieldModel->field($fieldParam);
+//        $field=[1=>[
+//            'field'=>'owner_user_id',
+//            'types'=>'crm_leads',
+//            'name'=>'负责人',
+//            'form_type'=>'user',
+//            'default_value'=>'',
+//            'is_unique' => 1,
+//            'is_null' => 1,
+//            'input_tips' =>'',
+//            'setting' => Array(),
+//            'is_hidden'=>0,
+//            'writeStatus' => 1,
+//            'value' => '']
+//        ];
+//        $first_array = array_splice($field_list, 0, 2);
+//        $array = array_merge($first_array, $field, $field_list);
+//        $data = $excelModel->excelImportDownload($array, 'crm_leads', $save_path);
 
         return resultArray(['data' => $data]);
     }
@@ -365,9 +399,11 @@ class Leads extends ApiCommon
         $param = $this->param;
         $userInfo = $this->userInfo;
         $param['user_id'] = $userInfo['id'];
+        $action_name='导出全部';
         if ($param['leads_id']) {
             $param['leads_id'] = ['condition' => 'in', 'value' => $param['leads_id'], 'form_type' => 'text', 'name' => ''];
             $param['is_excel'] = 1;
+            $action_name='导出选中';
         }
 
         $excelModel = new \app\admin\model\Excel();
@@ -383,6 +419,7 @@ class Leads extends ApiCommon
         $page = $param['page'] ?: 1;
         unset($param['page']);
         unset($param['export_queue_index']);
+        RecordActionLog($userInfo['id'],'crm_leads','excelexport',$action_name,'','','导出线索');
         return $excelModel->batchExportCsv($file_name, $temp_file, $field_list, $page, function ($page, $limit) use ($model, $field_list, $param) {
             $param['page'] = $page;
             $param['limit'] = $limit;
@@ -405,13 +442,14 @@ class Leads extends ApiCommon
         $excelModel = new \app\admin\model\Excel();
         $param['types'] = 'crm_leads';
         $param['create_user_id'] = $userInfo['id'];
-        $param['owner_user_id'] = $param['owner_user_id'] ?: $userInfo['id'];
         $file = request()->file('file');
         // $res = $excelModel->importExcel($file, $param);
         $res = $excelModel->batchImportData($file, $param, $this);
         if (!$res) {
             return resultArray(['error' => $excelModel->getError()]);
         }
+        RecordActionLog($userInfo['id'],'crm_leads','excel','导入线索','','','导入线索');
+    
         return resultArray(['data' => $excelModel->getError()]);
     }
 

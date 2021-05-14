@@ -1,9 +1,8 @@
 <?php
-
 /**
- * PHPExcel_Cell_Hyperlink
+ * PHPExcel
  *
- * Copyright (c) 2006 - 2015 PHPExcel
+ * Copyright (c) 2006 - 2014 PHPExcel
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,9 +20,18 @@
  *
  * @category   PHPExcel
  * @package    PHPExcel_Cell
- * @copyright  Copyright (c) 2006 - 2015 PHPExcel (http://www.codeplex.com/PHPExcel)
+ * @copyright  Copyright (c) 2006 - 2014 PHPExcel (http://www.codeplex.com/PHPExcel)
  * @license    http://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt    LGPL
  * @version    ##VERSION##, ##DATE##
+ */
+
+
+/**
+ * PHPExcel_Cell_Hyperlink
+ *
+ * @category   PHPExcel
+ * @package    PHPExcel_Cell
+ * @copyright  Copyright (c) 2006 - 2014 PHPExcel (http://www.codeplex.com/PHPExcel)
  */
 class PHPExcel_Cell_Hyperlink
 {
@@ -32,14 +40,14 @@ class PHPExcel_Cell_Hyperlink
      *
      * @var string
      */
-    private $url;
+    private $_url;
 
     /**
      * Tooltip to display on the hyperlink
      *
      * @var string
      */
-    private $tooltip;
+    private $_tooltip;
 
     /**
      * Create a new PHPExcel_Cell_Hyperlink
@@ -50,8 +58,8 @@ class PHPExcel_Cell_Hyperlink
     public function __construct($pUrl = '', $pTooltip = '')
     {
         // Initialise member variables
-        $this->url     = $pUrl;
-        $this->tooltip = $pTooltip;
+        $this->_url         = $pUrl;
+        $this->_tooltip     = $pTooltip;
     }
 
     /**
@@ -59,9 +67,8 @@ class PHPExcel_Cell_Hyperlink
      *
      * @return string
      */
-    public function getUrl()
-    {
-        return $this->url;
+    public function getUrl() {
+        return $this->_url;
     }
 
     /**
@@ -70,9 +77,8 @@ class PHPExcel_Cell_Hyperlink
      * @param  string    $value
      * @return PHPExcel_Cell_Hyperlink
      */
-    public function setUrl($value = '')
-    {
-        $this->url = $value;
+    public function setUrl($value = '') {
+        $this->_url = $value;
         return $this;
     }
 
@@ -81,9 +87,8 @@ class PHPExcel_Cell_Hyperlink
      *
      * @return string
      */
-    public function getTooltip()
-    {
-        return $this->tooltip;
+    public function getTooltip() {
+        return $this->_tooltip;
     }
 
     /**
@@ -92,9 +97,8 @@ class PHPExcel_Cell_Hyperlink
      * @param  string    $value
      * @return PHPExcel_Cell_Hyperlink
      */
-    public function setTooltip($value = '')
-    {
-        $this->tooltip = $value;
+    public function setTooltip($value = '') {
+        $this->_tooltip = $value;
         return $this;
     }
 
@@ -103,9 +107,8 @@ class PHPExcel_Cell_Hyperlink
      *
      * @return boolean
      */
-    public function isInternal()
-    {
-        return strpos($this->url, 'sheet://') !== false;
+    public function isInternal() {
+        return strpos($this->_url, 'sheet://') !== false;
     }
 
     /**
@@ -113,12 +116,11 @@ class PHPExcel_Cell_Hyperlink
      *
      * @return string    Hash code
      */
-    public function getHashCode()
-    {
+    public function getHashCode() {
         return md5(
-            $this->url .
-            $this->tooltip .
-            __CLASS__
+              $this->_url
+            . $this->_tooltip
+            . __CLASS__
         );
     }
 }

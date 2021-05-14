@@ -124,6 +124,7 @@ class taskclass extends ApiCommon
 //        }
         $res = $workClassModel->deleteById($param);
         if ($res) {
+            RecordActionLog($userInfo['id'], 'work', 'save',$classInfo['name'], '','','删除了任务分类：'.$classInfo['name']);
             return resultArray(['data'=>'删除成功']);
         } else {
             return resultArray(['error'=>$workClassModel->getError()]);

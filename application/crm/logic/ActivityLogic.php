@@ -8,6 +8,7 @@
 
 namespace app\crm\logic;
 
+use app\admin\controller\ApiCommon;
 use app\admin\model\Group;
 use app\crm\model\Activity;
 use think\Db;
@@ -77,27 +78,110 @@ class ActivityLogic
             $recordWhere['type'] = ['neq', 1];
         }
 
+        # 处理公共查询参数
+        if (!empty($param['interval_day'])) {
+            $commonWhere['update_time'] = ['egt', time() - 86400 * $param['interval_day']];
+            $commonWhere['update_time'] = ['elt', time()];
+        }
+        if (!empty($param['start_date']) && !empty($param['end_date'])) {
+            $commonWhere['update_time'] = ['egt', strtotime($param['start_date'].' 00:00:00')];
+            $commonWhere['update_time'] = ['elt', strtotime($param['end_date'].' 23:59:59')];
+        }
+        if (!empty($param['search'])) {
+            $commonWhere['content'] = ['like', '%' . $param['search'] . '%'];
+        }
+        if (!empty($param['activity_type'])) {
+            $commonWhere['activity_type'] = $param['activity_type'];
+        }
+
+        # 客户模块的额外查询条件
+        $contactsData    = [];
+        $businessData    = [];
+        $contractData    = [];
+        $receivablesData = [];
+
+        # 联系人ID串
+        $contacts = Db::name('crm_contacts')->field(['contacts_id'])->where('customer_id', $param['activity_type_id'])->select();
+        if (!empty($contacts)) {
+            $contactsData['activity_type']    = 3;
+            $contactsData['activity_type_id'] = array_reduce($contacts, function ($result, $value) {
+                return array_merge($result, array_values($value));
+            }, []);
+        }
+
+        # 商机ID串
+        $business = Db::name('crm_business')->field(['business_id'])->where('customer_id', $param['activity_type_id'])->select();
+        if (!empty($business)) {
+            $businessData['activity_type']    = 5;
+            $businessData['activity_type_id'] = array_reduce($business, function ($result, $value) {
+                return array_merge($result, array_values($value));
+            }, []);
+        }
+
+        # 合同ID串
+        $contract = Db::name('crm_contract')->field(['contract_id'])->where('customer_id', $param['activity_type_id'])->select();
+        if (!empty($contract)) {
+            $contractData['activity_type'] = 6;
+            $contractData['activity_type_id'] = array_reduce($contract, function ($result, $value) {
+                return array_merge($result, array_values($value));
+            }, []);
+        }
+
+        # 回款ID串
+        $receivables = Db::name('crm_receivables')->field(['receivables_id'])->where('customer_id', $param['activity_type_id'])->select();
+        if (!empty($receivables)) {
+            $receivablesData['activity_type'] = 7;
+            $receivablesData['activity_type_id'] = array_reduce($receivables, function ($result, $value) {
+                return array_merge($result, array_values($value));
+            }, []);
+        }
+
         # 设置时间分组查询条件，第一页就是当天的数据，第二页就是下一天的数据
         $datetime = Db::name('crm_activity')
             ->field('update_time')
             ->where($recordWhere)
             ->where('status', 1)
-            ->where(function ($query) use ($param) {
+            ->where(function ($query) use ($param, $contactsData, $businessData, $contractData, $receivablesData) {
                 $query->whereOr(function ($query) use ($param) {
                     $query->where('activity_type_id', $param['activity_type_id']);
                     $query->where('activity_type', $this->moduleToNumber[$param['module']]);
                 });
-                $query->whereOr('customer_ids', 'like', ',%'.$param['activity_type_id'].'%,');
-                $query->whereOr('contacts_ids', 'like', ',%'.$param['activity_type_id'].'%,');
-                $query->whereOr('contract_ids', 'like', ',%'.$param['activity_type_id'].'%,');
-                $query->whereOr('business_ids', 'like', ',%'.$param['activity_type_id'].'%,');
-                $query->whereOr('leads_ids', 'like', ',%'.$param['activity_type_id'].'%,');
+                $query->whereOr('customer_ids', 'like', '%,'.$param['activity_type_id'].',%');
+                $query->whereOr('contacts_ids', 'like', '%,'.$param['activity_type_id'].',%');
+                $query->whereOr('contract_ids', 'like', '%,'.$param['activity_type_id'].',%');
+                $query->whereOr('business_ids', 'like', '%,'.$param['activity_type_id'].',%');
+                $query->whereOr('leads_ids', 'like', '%,'.$param['activity_type_id'].',%');
+                if (!empty($contactsData)) {
+                    $query->whereOr(function ($query) use ($contactsData) {
+                        $query->where('activity_type', $contactsData['activity_type']);
+                        $query->whereIn('activity_type_id', $contactsData['activity_type_id']);
+                    });
+                }
+                if (!empty($businessData)) {
+                    $query->whereOr(function ($query) use ($businessData) {
+                        $query->where('activity_type', $businessData['activity_type']);
+                        $query->whereIn('activity_type_id', $businessData['activity_type_id']);
+                    });
+                }
+                if (!empty($contractData)) {
+                    $query->whereOr(function ($query) use ($contractData) {
+                        $query->where('activity_type', $contractData['activity_type']);
+                        $query->whereIn('activity_type_id', $contractData['activity_type_id']);
+                    });
+                }
+                if (!empty($receivablesData)) {
+                    $query->whereOr(function ($query) use ($receivablesData) {
+                        $query->where('activity_type', $receivablesData['activity_type']);
+                        $query->whereIn('activity_type_id', $receivablesData['activity_type_id']);
+                    });
+                }
             })
+            ->where($commonWhere)
             ->order('update_time', 'desc')
             ->group('update_time')
             ->select();
-        $dateGroup = [0 => '']; // 加一个占位，page是从1开始
-        $dateWhere = [0 => []]; // 加一个占位，page是从1开始
+        $dateGroup = [0 => '']; // 加一个占位，page从1开始
+        $dateWhere = [0 => []]; // 加一个占位，page从1开始
         foreach ($datetime AS $key => $value) {
             $date = date('Y-m-d', $value['update_time']);
             if (!in_array($date, $dateGroup)) {
@@ -118,22 +202,6 @@ class ActivityLogic
             return ['lastPage' => true, 'list' => [], 'time' => ''];
         }
 
-        # 处理公共查询参数
-        if (!empty($param['interval_day'])) {
-            $commonWhere['update_time'] = ['egt', time() - 86400 * $param['interval_day']];
-            $commonWhere['update_time'] = ['elt', time()];
-        }
-        if (!empty($param['start_date']) && !empty($param['end_date'])) {
-            $commonWhere['update_time'] = ['egt', strtotime($param['start_date'])];
-            $commonWhere['update_time'] = ['elt', strtotime($param['end_date'])];
-        }
-        if (!empty($param['search'])) {
-            $commonWhere['content'] = ['like', '%' . $param['search'] . '%'];
-        }
-        if (!empty($param['activity_type'])) {
-            $commonWhere['activity_type'] = $param['activity_type'];
-        }
-
         # 组织线索、客户、联系人、商机、合同下的查询条件
         switch ($param['module']) {
             case 'leads' :
@@ -143,47 +211,6 @@ class ActivityLogic
                 };
                 break;
             case 'customer' :
-                $contactsData    = [];
-                $businessData    = [];
-                $contractData    = [];
-                $receivablesData = [];
-
-                # 联系人ID串
-                $contacts = Db::name('crm_contacts')->field(['contacts_id'])->where('customer_id', $param['activity_type_id'])->select();
-                if (!empty($contacts)) {
-                    $contactsData['activity_type']    = 3;
-                    $contactsData['activity_type_id'] = array_reduce($contacts, function ($result, $value) {
-                        return array_merge($result, array_values($value));
-                    }, []);
-                }
-
-                # 商机ID串
-                $business = Db::name('crm_business')->field(['business_id'])->where('customer_id', $param['activity_type_id'])->select();
-                if (!empty($business)) {
-                    $businessData['activity_type']    = 5;
-                    $businessData['activity_type_id'] = array_reduce($business, function ($result, $value) {
-                        return array_merge($result, array_values($value));
-                    }, []);
-                }
-
-                # 合同ID串
-                $contract = Db::name('crm_contract')->field(['contract_id'])->where('customer_id', $param['activity_type_id'])->select();
-                if (!empty($contract)) {
-                    $contractData['activity_type'] = 6;
-                    $contractData['activity_type_id'] = array_reduce($contract, function ($result, $value) {
-                        return array_merge($result, array_values($value));
-                    }, []);
-                }
-
-                # 回款ID串
-                $receivables = Db::name('crm_receivables')->field(['receivables_id'])->where('customer_id', $param['activity_type_id'])->select();
-                if (!empty($receivables)) {
-                    $receivablesData['activity_type'] = 7;
-                    $receivablesData['activity_type_id'] = array_reduce($receivables, function ($result, $value) {
-                        return array_merge($result, array_values($value));
-                    }, []);
-                }
-
                 # 客户模块查询条件
                 $customerWhere = function ($query) use ($param, $contactsData, $businessData, $contractData, $receivablesData) {
                     $query->whereOr(function ($query) use ($param) {
@@ -292,7 +319,7 @@ class ActivityLogic
  
         $fileModel = new \app\admin\model\File();
         foreach ($dataArray AS $key => $value) {
-            # 用户信息 todo 有模型文件，时间问题，暂时将查询写在循环中
+            # 用户信息
             $realname = Db::name('admin_user')->where('id', $dataArray[$key]['create_user_id'])->find();
             $dataArray[$key]['create_user_name'] = $realname['realname'];
             $dataArray[$key]['thumb_img'] =  $realname['thumb_img'] ? getFullPath($realname['thumb_img']) : '';;
@@ -418,7 +445,6 @@ class ActivityLogic
         $param['create_time']    = time();
         $param['update_time']    = time();
         if (!empty($param['contacts_ids'])) $param['contacts_ids'] = ',' . $param['contacts_ids'] . ',';
-
         $activityJson = Activity::create($param);
         if (empty($activityJson)) return false;
 
@@ -454,7 +480,8 @@ class ActivityLogic
 
             $eventModel->createData($data);
         }
-
+        $activity=[1 =>'线索', 2=> '客户', 3 =>'联系人' ,4 =>'产品', 5 =>'商机', 6 =>'合同' ,7=>'回款' ,8=>'日志' ,9=>'审批' ,10=>'日程' ,11=>'任务' ,12 =>'发邮件'];
+        RecordActionLog($param['create_user_id'],'crm_activity','save',$activity[$param['activity_type']],'','','新增了跟进记录'.$param['content']);
         return true;
     }
 
@@ -472,12 +499,11 @@ class ActivityLogic
         $fileIds     = !empty($param['file_id'])  ? $param['file_id']      : [];
         unset($param['is_event']);
         unset($param['file_id']);
-
         $param['type']         = 1;
         $param['next_time']    = strtotime($param['next_time']);
         $param['business_ids'] = !empty($param['business_ids']) ? arrayToString($param['business_ids']) : '';
         $param['update_time']  = time();
-
+        $dataInfo=db('crm_activity')->where('activity_id',$param['activity_id'])->find();
         if (!Activity::update($param)) return false;
 
         # 设置最后跟进记录
@@ -514,7 +540,6 @@ class ActivityLogic
 
             $eventModel->createData($data);
         }
-
         return true;
     }
 
@@ -538,6 +563,9 @@ class ActivityLogic
             if ($activityInfo['activity_type'] == 3) db('crm_contacts_file')->whereIn('file_id', $fileIds)->delete();
             if ($activityInfo['activity_type'] == 5) db('crm_business_file')->whereIn('file_id', $fileIds)->delete();
             if ($activityInfo['activity_type'] == 6) db('crm_contract_file')->whereIn('file_id', $fileIds)->delete();
+            $user=new ApiCommon();
+            $userInfo=$user->userInfo;
+            RecordActionLog($userInfo['id'],'crm_activity','delete','删除跟进记录','','','删除了'.$recordModules[$types].$name);
             return true;
         } else {
             return false;
@@ -794,5 +822,21 @@ class ActivityLogic
         }
 
         $model->where($primaryKey, $typeId)->update(['last_time' => time(), 'last_record' => $content]);
+    }
+    
+    /**
+     * 跟进记录导出
+     * @param $field_list
+     * @param $data
+     *
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/4/21 0021 09:35
+     */
+    public function excelExport($field_list,$data){
+        $excelModel = new \app\admin\model\Excel();
+        $file_name='activity_record';
+        $title='跟进记录';
+        $excelModel->taskExportCsv($file_name, $field_list, $title, $data);
     }
 }

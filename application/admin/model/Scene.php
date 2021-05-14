@@ -58,6 +58,8 @@ class Scene extends Common
                     'name'      => $v['name'],
                     'type'      => $v['type']
                 ];
+                if (!empty($v['start'])) $sceneData[$k]['start'] = $v['start'];
+                if (!empty($v['end'])) $sceneData[$k]['end'] = $v['end'];
             }
         }
         if (!empty($sceneData)) $param['data'] = $sceneData;
@@ -122,8 +124,8 @@ class Scene extends Common
 				foreach ($data as $key=>$val) {
 					$setting = $newFieldList[$key]['setting'];
 	    			$data[$key]['setting'] = $setting;
-	    			if ($val['form_type'] == 'user' && $val['value']) {
-	    				$userInfo = $userModel->getUserById($val['value']);
+	    			if ($val['form_type'] == 'user' && !empty($val['value'][0])) {
+	    				$userInfo = $userModel->getUserById($val['value'][0]);
 	    				$data[$key]['setting']['realname'] = $userInfo['realname'];
 	    				$data[$key]['setting']['id'] = $userInfo['id'];
 	    			} 
@@ -192,7 +194,7 @@ class Scene extends Common
 			$this->error = '场景名称必填';
 			return false;
 		}
-		if ($this->where(['scene_id'=>['neq',$id],'types'=>$types,'user_id'=>$user_id,'name'=>$param['name']])->find()) {
+		if ($this->where(['scene_id' => ['neq', $id], 'types' => $param['types'], 'user_id' => $user_id,'name' => $param['name']])->find()) {
 			$this->error = '场景名称已存在';
 			return false;
 		}
@@ -207,6 +209,8 @@ class Scene extends Common
                     'name'      => $v['name'],
                     'type'      => $v['type']
                 ];
+                if (!empty($v['start'])) $sceneData[$k]['start'] = $v['start'];
+                if (!empty($v['end'])) $sceneData[$k]['end'] = $v['end'];
             }
         }
         if (!empty($sceneData)) $param['data'] = $sceneData;

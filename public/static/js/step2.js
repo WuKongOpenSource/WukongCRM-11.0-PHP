@@ -82,25 +82,19 @@ $('.next').click(function () {
           form: forms
         },
         async: true,
-        timeout: 20000,
+        timeout: 120000,
         success: function (result) {
           if (result.code == '200') {
             localStorage.clear();
             window.location = 'step5.html';
           } else if (result.code == '400') {
-            window.location.href = '/admin/install/step6';
-            // $('#cover').css('display', 'none');
-            // alert(result.error); //失败
-            // return false;
-            // window.location = 'step3.html'
+            window.location.href = 'step6.html';
           } else {
-            window.location.href = '/admin/install/step6';
-            // window.location = 'step3.html';
-            // alert('安装失败');
+            window.location.href = 'step6.html';
           }
         },
         error: function (xhr) {
-          window.location.href = '/admin/install/step6';
+          window.location.href = 'step6.html';
         }
       }); 
     })   

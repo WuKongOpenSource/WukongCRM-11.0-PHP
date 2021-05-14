@@ -139,6 +139,8 @@ class UserField extends Model
      */
     public function getDataList($types, $user_id)
     {
+        $grantData = getFieldGrantData($user_id);
+        $userLevel = isSuperAdministrators($user_id);
         $fieldArr = (new Field)->getFieldList($types);
         $fieldList = [];
         $field_list = [];
@@ -166,14 +168,14 @@ class UserField extends Model
 
                 if (empty($v['is_hide'])) {
                     $valueList[] = $k;
-                    $value_list[$a]['field'] = $k; 
-                    $value_list[$a]['width'] = $v['width']; 
-                    $value_list[$a]['name'] = $field_list[$k]['name']; 
+                    $value_list[$a]['field'] = $k;
+                    $value_list[$a]['width'] = $v['width'];
+                    $value_list[$a]['name'] = $field_list[$k]['name'];
                     $a++;
                 } else {
                     $hideList[] = $k;
                     $hide_list[$b]['field'] = $k;
-                    $hide_list[$b]['width'] = $v['width'];  
+                    $hide_list[$b]['width'] = $v['width'];
                     $hide_list[$b]['name'] = $field_list[$k]['name'];
                     $b++;
                 }
@@ -192,9 +194,31 @@ class UserField extends Model
             $hide_list = [];
         }
 
+        # 处理显示列的字段授权
+        foreach ($value_list AS $key => $value) {
+            if (!$userLevel && !empty($grantData[$types])) {
+                foreach ($grantData[$types] AS $k => $v) {
+                    $status = getFieldGrantStatus($value['field'], $grantData[$types]);
+
+                    if (empty($status['read'])) unset($value_list[(int)$key]);
+                }
+            }
+        }
+
+        # 处理隐藏列的字段授权
+        foreach ($hide_list AS $key => $value) {
+            if (!$userLevel && !empty($grantData[$types])) {
+                foreach ($grantData[$types] AS $k => $v) {
+                    $status = getFieldGrantStatus($value['field'], $grantData[$types]);
+
+                    if (empty($status['read'])) unset($hide_list[(int)$key]);
+                }
+            }
+        }
+
         $data = [];
-        $data['value_list'] = $value_list ? : []; //展示列
-        $data['hide_list'] = $hide_list ? : []; //隐藏列
+        $data['value_list'] = array_values($value_list) ? : []; //展示列
+        $data['hide_list'] = array_values($hide_list) ? : []; //隐藏列
 
         if ($types == 'crm_visit') {
             foreach ($data['value_list'] AS $key => $value) {

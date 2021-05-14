@@ -169,7 +169,7 @@ class InvoiceLogic
         $result['invoice_number']    = $dataArray['invoice_number'];    # 发票号码
         $result['real_invoice_date'] = $dataArray['real_invoice_date']; # 开票日期
         $result['flow_id']           = $dataArray['flow_id'];           # 审核ID
-
+        $check=['0'=>'待审核','1'=>'审核中','2'=>'审核通过','3'=>'审核未通过','4'=>'撤销','5'=>'草稿(未提交)','6'=>'作废'];
         # 基本信息
         $result['essential'] = [
             'invoice_apple_number' => $dataArray['invoice_apple_number'],
@@ -187,7 +187,7 @@ class InvoiceLogic
             'invoice_number'       => $dataArray['invoice_number'],
             'real_invoice_date'    => $dataArray['real_invoice_date'],
             'customer_id'          => $dataArray['customer_id'],
-            'contract_id'          => $dataArray['contract_id']
+            'check_status'          => $check[$dataArray['check_status']]
         ];
 
         # 发票信息

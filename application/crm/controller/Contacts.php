@@ -185,8 +185,12 @@ class Contacts extends ApiCommon
             //删除关联附件
             $fileModel->delRFileByModule('crm_contacts',$delIds);
             //删除关联操作记录
-            $actionRecordModel->delDataById(['types'=>'crm_contacts','action_id'=>$delIds]);            
-            actionLog($delIds,'','',''); 
+            $actionRecordModel->delDataById(['types'=>'crm_contacts','action_id'=>$delIds]);
+            $userInfo = $this->userInfo;
+            foreach ($contacts_id as $k => $v) {
+                $data = $contactsModel->getDataById($v);
+                RecordActionLog($userInfo['id'], 'crm_contacts', 'delete', $data['name'], '', '', '删除了联系人：' . $data['name']);
+            }
         }        
         if ($errorMessage) {
             return resultArray(['error' => $errorMessage]);
@@ -247,8 +251,10 @@ class Contacts extends ApiCommon
                 $errorMessage[] = $contactsInfo['name'].'"转移失败，错误原因：数据出错；';
                 continue;
             }
-			updateActionLog($userInfo['id'], 'crm_contacts', $contacts_id, '', '', '将联系人转移给：' . $owner_user_info['realname']);			
+			updateActionLog($userInfo['id'], 'crm_contacts', $contacts_id, '', '', '将联系人转移给：' . $owner_user_info['realname']);
+            RecordActionLog($userInfo['id'], 'crm_contacts', 'transfer',$contactsInfo['name'], '','','将联系人：'.$contactsInfo['name'].'转移给：' . $owner_user_info['realname']);
         }
+        
         if (!$errorMessage) {
             return resultArray(['data' => '转移成功']);
         } else {
@@ -267,13 +273,41 @@ class Contacts extends ApiCommon
         $param = $this->param;
         $userInfo = $this->userInfo;
         $excelModel = new \app\admin\model\Excel();
-
+    
         // 导出的字段列表
         $fieldModel = new \app\admin\model\Field();
-        $fieldParam['types'] = 'crm_contacts'; 
-        $fieldParam['action'] = 'excel'; 
+        $fieldParam['types'] = 'crm_contacts';
+        $fieldParam['action'] = 'excel';
         $field_list = $fieldModel->field($fieldParam);
         $res = $excelModel->excelImportDownload($field_list, 'crm_contacts', $save_path);
+        # 下次升级
+//        $param = $this->param;
+//        $userInfo = $this->userInfo;
+//        $excelModel = new \app\admin\model\Excel();
+//
+//        // 导出的字段列表
+//        $fieldModel = new \app\admin\model\Field();
+//        $fieldParam['types'] = 'crm_contacts';
+//        $fieldParam['action'] = 'excel';
+//        $field_list = $fieldModel->field($fieldParam);
+//        $array=[];
+//        $field=[1=>[
+//            'field'=>'owner_user_id',
+//            'types'=>'crm_contacts',
+//            'name'=>'负责人',
+//            'form_type'=>'user',
+//            'default_value'=>'',
+//            'is_unique' => 1,
+//            'is_null' => 1,
+//            'input_tips' =>'',
+//            'setting' => Array(),
+//            'is_hidden'=>0,
+//            'writeStatus' => 1,
+//            'value' => '']
+//        ];
+//        $first_array = array_splice($field_list, 0, 2);
+//        $array = array_merge($first_array, $field, $field_list);
+//        $res = $excelModel->excelImportDownload($array, 'crm_contacts', $save_path);
     }  
 
     /**
@@ -287,9 +321,11 @@ class Contacts extends ApiCommon
         $param = $this->param;
         $userInfo = $this->userInfo;
         $param['user_id'] = $userInfo['id'];
+        $action_name='导出全部';
         if ($param['contacts_id']) {
            $param['contacts_id'] = ['condition' => 'in','value' => $param['contacts_id'],'form_type' => 'text','name' => ''];
            $param['is_excel'] = 1;
+            $action_name='导出选中';
         }        
 
         $excelModel = new \app\admin\model\Excel();
@@ -305,6 +341,7 @@ class Contacts extends ApiCommon
         $page = $param['page'] ?: 1;
         unset($param['page']);
         unset($param['export_queue_index']);
+        RecordActionLog($userInfo['id'],'crm_contracts','excelexport',$action_name,'','','导出联系人');
         return $excelModel->batchExportCsv($file_name, $temp_file, $field_list, $page, function($page, $limit) use ($model, $param, $field_list) {
             $param['page'] = $page;
             $param['limit'] = $limit;
@@ -334,6 +371,7 @@ class Contacts extends ApiCommon
 //        if (!$res) {
 //            return resultArray(['error'=>$excelModel->getError()]);
 //        }
+        RecordActionLog($userInfo['id'],'crm_contacts','excel','导入联系人','','','导入联系人');
         return resultArray(['data' => $excelModel->getError()]);
     }  
 

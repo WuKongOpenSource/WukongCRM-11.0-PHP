@@ -6,6 +6,7 @@
 // +----------------------------------------------------------------------
 namespace app\crm\model;
 
+use app\admin\controller\ApiCommon;
 use think\Db;
 use app\admin\model\Common;
 use think\Request;
@@ -118,7 +119,9 @@ class BusinessStatus extends Common
 	    		}
 			}
 			db('crm_business_status')->insertAll($statusData);
-			return true;
+			# 系统操作日志
+            SystemActionLog($param['create_user_id'], 'crm_business','customer', $type_id, 'save',$param['name'] , '', '','添加了商机组：'.$param['name']);
+            return true;
 		} else {
 			$this->error = '添加失败';
 			return false;
@@ -194,8 +197,12 @@ class BusinessStatus extends Common
 			//新增
 			db('crm_business_status')->insertAll($statusData);
 			// 提交事务
-    		Db::commit();								
-			return true;
+    		Db::commit();
+    		# 系统操作日志
+    		$user=new ApiCommon();
+    		$userInfo=$user->userInfo;
+            SystemActionLog($userInfo['id'], 'crm_business','customer', $type_id, 'update',$dataInfo['name'] , '', '','编辑了商机组：'.$dataInfo['name']);
+            return true;
 		} catch (\Exception $e) {
 			$this->error = '编辑失败';
 			// 回滚事务
@@ -247,7 +254,13 @@ class BusinessStatus extends Common
 //			db('crm_business_status')->where(['type_id' => $id])->delete();
 			// 提交事务
     		Db::commit();
-			return true;					
+            # 系统操作日志
+    		$user=new ApiCommon();
+    		$userInfo=$user->userInfo;
+            $data=db('crm_business_type')->where(['type_id' => $id])->find();
+            SystemActionLog($userInfo['id'], 'crm_business','customer', $id,  'update',$data['name'] , '', '','删除了商机组：'.$data['name']);
+            
+            return true;
 		} catch(\Exception $e) {
 			$this->error = '删除失败';
 			// 回滚事务

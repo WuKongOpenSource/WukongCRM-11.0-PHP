@@ -125,7 +125,7 @@ class DailyRuleLogic
             'userIds' => $param['userIds'],
             'start_time' => $param['start_time'],
             'end_time' => $param['end_time'],
-            'status' => $param['status']
+            'status' => $param['status']?:''
         ];
 
         if (Db::name('admin_oalog_rule')->where('type', 2)->value('id')) {
@@ -150,7 +150,7 @@ class DailyRuleLogic
             'userIds' => $param['userIds'],
             'start_time' => $param['start_time'],
             'end_time' => $param['end_time'],
-            'status' => $param['status']
+            'status' => $param['status']?:''
         ];
 
         if (Db::name('admin_oalog_rule')->where('type', 3)->value('id')) {
@@ -178,8 +178,8 @@ class DailyRuleLogic
             'userIds' => $day['userIds'],
             'user' => $this->getUsers($day['userIds']),
             'effective_day' => $day['effective_day'],
-            'start_time' => $day['start_time'],
-            'end_time' => $day['end_time']
+            'start_time' => $day['start_time']?:null,
+            'end_time' => $day['end_time']?:null
         ];
     }
 
@@ -201,8 +201,8 @@ class DailyRuleLogic
             'userIds' => $week['userIds'],
             'user' => $this->getUsers($week['userIds']),
             'effective_day' => $week['effective_day'],
-            'start_time' => $week['start_time'],
-            'end_time' => $week['end_time']
+            'start_time' => $week['start_time']?:1,
+            'end_time' => $week['end_time']?:3
         ];
     }
 
@@ -224,8 +224,8 @@ class DailyRuleLogic
             'userIds' => $month['userIds'],
             'user' => $this->getUsers($month['userIds']),
             'effective_day' => $month['effective_day'],
-            'start_time' => $month['start_time'],
-            'end_time' => $month['end_time']
+            'start_time' => $month['start_time']?:1,
+            'end_time' => $month['end_time']?:3
         ];
     }
 

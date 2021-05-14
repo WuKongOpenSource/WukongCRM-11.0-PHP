@@ -11,4 +11,5 @@
 
 return [
     app\common\command\ImportFollowRecord::class,
+    app\common\command\PoolCommand::class,
 ];

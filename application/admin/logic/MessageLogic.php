@@ -127,7 +127,7 @@ class MessageLogic
             }
         }
         $data = [];
-        $data['page']['list'] = $list;
+        $data['page']['list'] = array_values($list);
         $data['page']['dataCount'] = $dataCount ?: 0;
         if ($param['page'] != 1 && ($param['page'] * $param['limit']) >= $dataCount) {
             $data['page']['firstPage'] = false;

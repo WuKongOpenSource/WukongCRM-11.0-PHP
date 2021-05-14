@@ -85,10 +85,13 @@ class Work extends ApiCommon
      */
     public function saveRole(WorkLogic $workLogic)
     {
+        $userInfo=$this->userInfo;
         if (empty($this->param['title'])) return resultArray(['error' => '请填写权限名称！']);
-
-        if (!$workLogic->saveRole($this->param)) return resultArray(['操作失败！']);
-
+        $data=$workLogic->saveRole($this->param);
+        if (!$data) return resultArray(['操作失败！']);
+        # 添加系统操作日志
+        SystemActionLog($userInfo['id'], 'admin_group','project', $data, 'save',$this->param['title'] , '', '','添加了项目管理权限：'.$this->param['title']);
+    
         return resultArray(['data' => '操作成功！']);
     }
 
@@ -122,8 +125,8 @@ class Work extends ApiCommon
     {
         if (empty($this->param['id']))    return resultArray(['error' => '请选择要编辑的权限角色！']);
         if (empty($this->param['title'])) return resultArray(['error' => '请填写权限名称！']);
-
-        if ($workLogic->updateRole($this->param) === false) return resultArray(['error' => '操作失败！']);
+        $data=$workLogic->updateRole($this->param);
+        if (empty($data)) return resultArray(['error' => '操作失败！']);
 
         return resultArray(['data' => '操作成功！']);
     }

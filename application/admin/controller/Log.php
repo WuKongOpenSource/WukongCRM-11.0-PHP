@@ -24,7 +24,7 @@ class Log extends ApiCommon
     {
         $action = [
             'permission' => [''],
-            'allow' => ['dataRecord', 'systemRecord', 'loginRecord']
+            'allow' => ['dataRecord', 'systemRecord', 'loginRecord','excelImport']
         ];
         Hook::listen('check_auth',$action);
         $request = Request::instance();
@@ -45,6 +45,61 @@ class Log extends ApiCommon
      */
     public function dataRecord(LogLogic $logLogic)
     {
+        $this->param['startTime']= !empty($this->param['startTime'])?$this->param['startTime'].' 00:00:00':'';
+        $this->param['endTime']= !empty($this->param['endTime'])?$this->param['endTime'].' 23:59:59':'';
+        if(!empty($this->param['subModelLabels'])){
+            $this->param['modules']=$this->param['subModelLabels'];
+        }else{
+            switch ($this->param['model']){
+                case 'crm': //客户管理
+                    $this->param['modules']=array(
+                        'crm_leads'  ,
+                        'crm_customer',
+                        'crm_pool'     ,
+                        'crm_contacts'  ,
+                        'crm_product'    ,
+                        'crm_business'    ,
+                        'crm_contract'     ,
+                        'crm_receivables'  ,
+                        'crm_visit'        ,
+                        'crm_invoice'      ,
+                        'crm_activity'
+                    );
+                    break;
+                case 'oa' : //办公管理
+                    $this->param['modules']=array(
+                        'oa_log'  ,
+                        'oa_event',
+                    );
+                    break;
+                case 'work' ://项目管理
+                    $this->param['modules']=array(
+                        'work_task'  ,
+                        'work',
+                    );
+                    break;
+                default :
+                    $this->param['modules']=array(
+                        'crm_leads'  ,
+                        'crm_customer',
+                        'crm_pool'     ,
+                        'crm_contacts'  ,
+                        'crm_product'    ,
+                        'crm_business'    ,
+                        'crm_contract'     ,
+                        'crm_receivables'  ,
+                        'crm_visit'        ,
+                        'crm_invoice'      ,
+                        'crm_activity',
+                        'oa_log'  ,
+                        'oa_event',
+                        'work_task'  ,
+                        'work',
+                    );
+                    break;
+            }
+        }
+        
         $data['list']    = $logLogic->getRecordLogs($this->param);
         $data['count']   = $logLogic->getRecordLogCount($this->param);
         $data['modules'] = $logLogic->recordModules;
@@ -63,6 +118,11 @@ class Log extends ApiCommon
      */
     public function systemRecord(LogLogic $logLogic)
     {
+        $this->param['startTime']= !empty($this->param['startTime'])?$this->param['startTime'].' 00:00:00':'';
+        $this->param['endTime']= !empty($this->param['endTime'])?$this->param['endTime'].' 23:59:59':'';
+        if(!empty($this->param['subModelLabels'])){
+            $this->param['modules']=$this->param['subModelLabels'];
+        }
         $data['list']    = $logLogic->getSystemLogs($this->param);
         $data['count']   = $logLogic->getSystemLogCount($this->param);
         $data['modules'] = $logLogic->systemModules;
@@ -79,8 +139,25 @@ class Log extends ApiCommon
      */
     public function loginRecord(LogLogic $logLogic)
     {
+        $this->param['startTime']= !empty($this->param['startTime'])?$this->param['startTime'].' 00:00:00':'';
+        $this->param['endTime']= !empty($this->param['endTime'])?$this->param['endTime'].' 23:59:59':'';
         $data = $logLogic->getLoginRecord($this->param);
 
         return resultArray(['data' => $data]);
+    }
+    
+    /**
+     * 日志导出
+     *
+     * @param LogLogic $logLogic
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/4/8 0008 16:36
+     */
+    public function excelImport()
+    {
+        $logLogic =new LogLogic;
+        $data = $logLogic->downExcel($this->param);
+        return $data;
     }
 }

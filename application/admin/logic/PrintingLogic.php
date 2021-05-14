@@ -16,20 +16,27 @@ class PrintingLogic
     /**
      * 打印模板列表
      *
-     * @param $page
-     * @param $limit
+     * @param array $param : int $page 页码; int $limit 每页记录条数; string $type 打印模板类型
+     * @author fanqi
+     * @date 2021-03-26
      * @return array
-     * @throws \think\db\exception\DataNotFoundException
-     * @throws \think\db\exception\ModelNotFoundException
-     * @throws \think\exception\DbException
      */
-    public function index($page, $limit)
+    public function index($param)
     {
+        $page  = !empty($param['page'])  ? $param['page']             : 1;
+        $limit = !empty($param['limit']) ? $param['limit']            : 500;
+        $where = !empty($param['type'])  ? ['type' => $param['type']] : [];
+
         $result = [];
-        $type   = [1 => '商机', 2 => '合同', 3 => '回款'];
+        $type   = [5 => '商机', 6 => '合同', 7 => '回款'];
         $field  = ['id', 'name', 'type', 'user_name', 'create_time', 'update_time'];
-        $count  = Db::name('admin_printing')->count();
-        $data   = Db::name('admin_printing')->field($field)->order('id', 'desc')->limit(($page - 1) * $limit, $limit)->select();
+        $count  = Db::name('admin_printing')->where($where)->count();
+        $data   = Db::name('admin_printing')
+            ->field($field)
+            ->where($where)
+            ->order('id', 'desc')
+            ->limit(($page - 1) * $limit, $limit)
+            ->select();
 
         foreach ($data AS $key => $value) {
             $result[] = [
@@ -63,7 +70,8 @@ class PrintingLogic
             'user_name'   => $userName,
             'name'        => $param['name'],
             'type'        => $param['type'],
-            'content'     => htmlspecialchars($param['content']),
+            'content'     => json_encode(['data' => $param['content']]),
+//            'content'     => htmlspecialchars($param['content']),
             'create_time' => time(),
             'update_time' => time()
         ];
@@ -81,7 +89,9 @@ class PrintingLogic
     {
         $content = Db::name('admin_printing')->where('id', $id)->value('content');
 
-        return ['id' => $id, 'content' => htmlspecialchars_decode($content)];
+        $contentArray = json_decode($content, true);
+
+        return ['id' => $id, 'content' => $contentArray['data']];
     }
 
     /**
@@ -94,7 +104,7 @@ class PrintingLogic
      */
     public function update($param)
     {
-        if (!empty($param['content'])) $param['content'] = htmlspecialchars($param['content']);
+        if (!empty($param['content'])) $param['content'] = json_encode(['data' => $param['content']]);
 
         return Db::name('admin_printing')->update($param);
     }
@@ -149,7 +159,7 @@ class PrintingLogic
     /**
      * 获取打印模板需要的字段
      *
-     * @param $type 1商机；2合同；3回款
+     * @param $type 5商机；6合同；7回款
      * @return array[]
      * @throws \think\db\exception\DataNotFoundException
      * @throws \think\db\exception\ModelNotFoundException
@@ -160,31 +170,26 @@ class PrintingLogic
         $result = [];
 
         switch ($type) {
-            case 1:
+            case 5:
                 $result['business'] = $this->getBusinessFields();
-                $result['customer'] = $this->getCustomerFields();
-                $result['product']  = $this->getProductFields();
+                $result['customer'] = $this->getCustomerFields(5);
+                $result['product']  = $this->getProductFields(5);
 
                 break;
-            case 2:
-                $result['contract'] = $this->getContractFields();
-                $result['customer'] = $this->getCustomerFields();
+            case 6:
+                $result['contract'] = $this->getContractFields(6);
+                $result['customer'] = $this->getCustomerFields(6);
                 $result['contacts'] = $this->getContactsFields();
-                $result['product']  = $this->getProductFields();
+                $result['product']  = $this->getProductFields(6);
 
                 break;
-            case 3:
-                $result['receivables'] = $this->getReceivablesFields();
-                $result['contract']    = $this->getContractFields();
+            case 7:
+                $result['receivables'] = $this->getReceivablesFields(7);
+                $result['contract']    = $this->getContractFields(7);
 
                 break;
             default:
-                $result['business']    = $this->getBusinessFields();
-                $result['customer']    = $this->getCustomerFields();
-                $result['product']     = $this->getProductFields();
-                $result['contract']    = $this->getContractFields();
-                $result['contacts']    = $this->getContactsFields();
-                $result['receivables'] = $this->getReceivablesFields();
+                $result[] = [];
         }
 
         return $result;
@@ -231,7 +236,7 @@ class PrintingLogic
      * @throws \think\db\exception\ModelNotFoundException
      * @throws \think\exception\DbException
      */
-    private function getCustomerFields()
+    private function getCustomerFields($type)
     {
         $result = [];
 
@@ -239,12 +244,19 @@ class PrintingLogic
 
         # 处理自定义字段
         foreach ($customerList AS $key => $value) {
-            if (in_array($value['field'], ['next_time', 'remark'])) continue;
+            if (in_array($value['field'], ['next_time'])) continue;
+            if (in_array($type, [5, 6]) && in_array($value['field'], ['deal_status'])) continue;
 
             $result[] = [
                 'name'  => $value['name'],
                 'field' => $value['field']
             ];
+        }
+
+        # 处理固定字段
+        if (in_array($type, [5, 6])) {
+            $result[] = ['name' => '详细地址', 'field' => 'address'];
+            $result[] = ['name' => '区域', 'field' => 'detail_address'];
         }
 
         return $result;
@@ -258,7 +270,7 @@ class PrintingLogic
      * @throws \think\db\exception\ModelNotFoundException
      * @throws \think\exception\DbException
      */
-    private function getProductFields()
+    private function getProductFields($type)
     {
         $result = [];
 
@@ -266,7 +278,8 @@ class PrintingLogic
 
         # 处理自定义字段
         foreach ($productList AS $key => $value) {
-            if ($value['field'] == 'status') continue;
+            if (in_array($value['field'], ['status'])) continue;
+            if (in_array($type, [5, 6]) && in_array($value['field'], ['description'])) continue;
 
             $result[] = [
                 'name'  => $value['name'],
@@ -280,6 +293,7 @@ class PrintingLogic
         $result[] = ['name' => '折扣', 'field' => 'discount'];
         $result[] = ['name' => '整单折扣', 'field' => 'discount_rate'];
         $result[] = ['name' => '合计', 'field' => 'subtotal'];
+        $result[] = ['name' => '产品总金额', 'field' => 'total_price'];
 
         return $result;
     }
@@ -292,7 +306,7 @@ class PrintingLogic
      * @throws \think\db\exception\ModelNotFoundException
      * @throws \think\exception\DbException
      */
-    private function getContractFields()
+    private function getContractFields($type)
     {
         $result = [];
 
@@ -300,19 +314,23 @@ class PrintingLogic
 
         # 处理自定义字段
         foreach ($contractList AS $key => $value) {
+            if (in_array($type, [6, 7]) && in_array($value['field'], ['customer_id'])) continue;
+            if ($type == 7 && in_array($value['field'], ['business_id'])) continue;
+
             $result[] = [
                 'name'  => $value['name'],
                 'field' => $value['field']
             ];
         }
 
-        # 处理固定字段
-        $result[] = ['name' => '负责人', 'field' => 'owner_user_id'];
-        $result[] = ['name' => '创建人', 'field' => 'create_user_id'];
-        $result[] = ['name' => '创建日期', 'field' => 'create_time'];
-        $result[] = ['name' => '更新日期', 'field' => 'update_time'];
-        $result[] = ['name' => '已收款金额', 'field' => 'received'];
-        $result[] = ['name' => '未收款金额', 'field' => 'uncollected'];
+        if (!in_array($type, [7])) {
+            $result[] = ['name' => '负责人', 'field' => 'create_user_id'];
+            $result[] = ['name' => '创建人', 'field' => 'owner_user_id'];
+            $result[] = ['name' => '创建日期', 'field' => 'create_time'];
+            $result[] = ['name' => '更新日期', 'field' => 'update_time'];
+            $result[] = ['name' => '已收款金额', 'field' => 'done_money'];
+            $result[] = ['name' => '未收款金额', 'field' => 'uncollected_money'];
+        }
 
         return $result;
     }
@@ -352,7 +370,7 @@ class PrintingLogic
      * @throws \think\db\exception\ModelNotFoundException
      * @throws \think\exception\DbException
      */
-    private function getReceivablesFields()
+    private function getReceivablesFields($type)
     {
         $result = [];
 
@@ -360,6 +378,9 @@ class PrintingLogic
 
         # 处理自定义字段
         foreach ($receivablesList AS $key => $value) {
+            if (in_array($value['field'], ['contract_id'])) continue;
+            if (in_array($type, [7]) && in_array($value['field'], ['contract_id'])) continue;
+
             $result[] = [
                 'name'  => $value['name'],
                 'field' => $value['field']

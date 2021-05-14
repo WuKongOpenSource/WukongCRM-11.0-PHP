@@ -2,7 +2,7 @@
 /**
  * PHPExcel
  *
- * Copyright (c) 2006 - 2015 PHPExcel
+ * Copyright (C) 2006 - 2014 PHPExcel
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,7 +20,7 @@
  *
  * @category   PHPExcel
  * @package    PHPExcel
- * @copyright  Copyright (c) 2006 - 2015 PHPExcel (http://www.codeplex.com/PHPExcel)
+ * @copyright  Copyright (c) 2006 - 2014 PHPExcel (http://www.codeplex.com/PHPExcel)
  * @license    http://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt	LGPL
  * @version    ##VERSION##, ##DATE##
  */
@@ -38,11 +38,15 @@ date_default_timezone_set('Europe/London');
 require_once dirname(__FILE__) . '/../Classes/PHPExcel/IOFactory.php';
 
 
+if (!file_exists("05featuredemo.xlsx")) {
+	exit("Please run 05featuredemo.php first." . EOL);
+}
+
 echo date('H:i:s') , " Load from Excel2007 file" , EOL;
 $objReader = PHPExcel_IOFactory::createReader('Excel2007');
-$objPHPExcel = $objReader->load("./templates/28iterators.xlsx");
+$objPHPExcel = $objReader->load("05featuredemo.xlsx");
 
-echo date('H:i:s') , " Iterate worksheets by Row" , EOL;
+echo date('H:i:s') , " Iterate worksheets" , EOL;
 foreach ($objPHPExcel->getWorksheetIterator() as $worksheet) {
 	echo 'Worksheet - ' , $worksheet->getTitle() , EOL;
 
@@ -51,24 +55,6 @@ foreach ($objPHPExcel->getWorksheetIterator() as $worksheet) {
 
 		$cellIterator = $row->getCellIterator();
 		$cellIterator->setIterateOnlyExistingCells(false); // Loop all cells, even if it is not set
-		foreach ($cellIterator as $cell) {
-			if (!is_null($cell)) {
-				echo '        Cell - ' , $cell->getCoordinate() , ' - ' , $cell->getCalculatedValue() , EOL;
-			}
-		}
-	}
-}
-
-
-echo date('H:i:s') , " Iterate worksheets by Column" , EOL;
-foreach ($objPHPExcel->getWorksheetIterator() as $worksheet) {
-	echo 'Worksheet - ' , $worksheet->getTitle() , EOL;
-
-	foreach ($worksheet->getColumnIterator() as $column) {
-		echo '    Column index - ' , $column->getColumnIndex() , EOL;
-
-		$cellIterator = $column->getCellIterator();
-		$cellIterator->setIterateOnlyExistingCells(true); // Loop all cells, even if it is not set
 		foreach ($cellIterator as $cell) {
 			if (!is_null($cell)) {
 				echo '        Cell - ' , $cell->getCoordinate() , ' - ' , $cell->getCalculatedValue() , EOL;

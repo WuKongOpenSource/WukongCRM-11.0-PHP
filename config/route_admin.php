@@ -111,6 +111,10 @@ return [
 	'admin/users/setParent' => ['admin/users/setParent', ['method' => 'POST']],
     // 【员工】获取下属(全部层级)
     'admin/users/subordinate' => ['admin/users/subordinate', ['method' => 'POST']],
+    // 【员工】重设部门
+    'admin/users/setUserDept' => ['admin/users/setUserDept', ['method' => 'POST']],
+    // 【员工】员工数量
+    'admin/users/countNumOfUser' => ['admin/users/countNumOfUser', ['method' => 'POST']],
 
 	// 【部门】列表
 	'admin/structures/index' => ['admin/structures/index', ['method' => 'POST']],
@@ -263,6 +267,8 @@ return [
     'admin/log/systemRecord' => ['admin/log/systemRecord', ['method' => 'POST']],
     // 【系统日志】登录日志
     'admin/log/loginRecord' => ['admin/log/loginRecord', ['method' => 'POST']],
+    // 【系统日志】导出
+    'admin/log/excelImport' => ['admin/log/excelImport', ['method' => 'POST']],
 
     // 【日志设置】欢迎语列表
     'admin/dailyRule/welcome' => ['admin/dailyRule/welcome', ['method' => 'POST']],
@@ -322,12 +328,22 @@ return [
     //【导入】导入历史列表
     'admin/index/importList' => ['admin/index/importList', ['method' => 'POST']],
 
-	// 【自动更新】检查更新
-	// 'admin/upgrade/checkNewVersion' => ['admin/upgrade/checkNewVersion', ['method' => 'POST']],
-	// // 【自动更新】下载新版
-	// 'admin/upgrade/download' => ['admin/upgrade/download', ['method' => 'POST']],
-	// // 【自动更新】执行升级
-	// 'admin/upgrade/upgrade' => ['admin/upgrade/upgrade', ['method' => 'POST']],
+    //【设置】公海配置列表
+    'admin/setting/pool' => ['admin/setting/pool', ['method' => 'POST']],
+    //【设置】添加公海配置
+    'admin/setting/setPool' => ['admin/setting/setPool', ['method' => 'POST']],
+    //【设置】公海配置详情
+    'admin/setting/readPool' => ['admin/setting/readPool', ['method' => 'POST']],
+    //【设置】变更公海配置状态
+    'admin/setting/changePool' => ['admin/setting/changePool', ['method' => 'POST']],
+    //【设置】删除公海配置
+    'admin/setting/deletePool' => ['admin/setting/deletePool', ['method' => 'POST']],
+    //【设置】转移公海客户
+    'admin/setting/transferPool' => ['admin/setting/transferPool', ['method' => 'POST']],
+    //【设置】客户级别
+    'admin/setting/customerLevel' => ['admin/setting/customerLevel', ['method' => 'POST']],
+    //【设置】公海字段
+    'admin/setting/poolField' => ['admin/setting/poolField', ['method' => 'POST']],
 
 	// MISS路由
 	'__miss__'  => 'admin/base/miss',

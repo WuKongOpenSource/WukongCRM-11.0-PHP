@@ -7,6 +7,7 @@
 
 namespace app\work\model;
 
+use app\admin\controller\ApiCommon;
 use think\Db;
 use app\admin\model\Common;
 
@@ -81,8 +82,10 @@ class Work extends Common
 
             # 提交事务
 			$this->commit();
-
-			return $workId;
+            $user=new ApiCommon();
+            $userInfo=$user->userInfo;
+            RecordActionLog($param['create_user_id'], 'work', 'save',$param['name'], '','','添加了项目：'.$param['name']);
+            return $workId;
 		} catch(\Exception $e) {
 		    # 回滚事务
 			$this->rollback();
@@ -92,6 +95,32 @@ class Work extends Common
 			return false;
 		}
 	}
+
+    /**
+     * 更新项目排序表
+     *
+     * @param int $workId 项目ID
+     * @param int $userId 用户ID
+     * @author fanqi
+     * @since 2021-03-27
+     */
+	public function updateWorkOrder($workId, $userId)
+    {
+        $workOrder = 0;
+
+        $workOrderList = db('work_order')->where('user_id', $userId)->select();
+
+        foreach ($workOrderList AS $key => $value) {
+            if (!empty($value['order']) && $value > $workOrder) $workOrder = $value['order'];
+        }
+
+        # 只同步有排序操作的用户的数据
+        if (!empty($workOrder)) db('work_order')->insert([
+            'work_id' => $workId,
+            'user_id' => $userId,
+            'order'   => $workOrder + 1
+        ]);
+    }
 
     /**
      * 编辑项目
@@ -144,7 +173,10 @@ class Work extends Common
 			$datalog['work_id'] = $param['work_id'];
 			$datalog['user_id'] = $userId;
 			$ret = $logmodel->workLogAdd($datalog);
-			return true;
+            $user=new ApiCommon();
+            $userInfo=$user->userInfo;
+            RecordActionLog($userInfo['id'], 'work', 'update',$param['name'], '','','编辑了项目：'.$param['name']);
+            return true;
 		} else {
 			$this->error = '重命名失败';
 			return false;
@@ -186,6 +218,8 @@ class Work extends Common
 	public function archiveData($param)
 	{
 		$map['work_id'] = $param['work_id'];
+        $dataInfo=$this->get($param['work_id']);
+        $dataInfo = json_decode(json_encode($dataInfo), true);
 		$flag = $this->where($map)->setField('status',0);
 		$this->where($map)->setField('archive_time',time());
 		if ($flag) {
@@ -193,7 +227,10 @@ class Work extends Common
 			$data['status'] = 3;
 			$data['archive_time'] = time();
 			Db::name('task')->where($map)->update($data);
-			return true;
+            $user=new ApiCommon();
+            $userInfo=$user->userInfo;
+            RecordActionLog($userInfo['id'], 'work', 'archiveData',$dataInfo['name'], '','','归档了项目：'.$dataInfo['name']);
+            return true;
 		} else {
 			$this->error = '归档失败';
 			return false;
@@ -237,12 +274,18 @@ class Work extends Common
 			$this->error = '参数错误';
 			return false;
 		}
+        $dataInfo=$this->get($work_id);
+        $dataInfo = json_decode(json_encode($dataInfo), true);
 		$map['work_id'] =$work_id;
 		$map['status'] = 0;
 		$this->where($map)->setField('status',1);
 		$map['status'] = 3;
 		Db::name('Task')->where($map)->setField('status',1);
-		return true;
+        $user=new ApiCommon();
+        $userInfo=$user->userInfo;
+        RecordActionLog($userInfo['id'], 'work', 'recover',$dataInfo['name'], '','','归档恢复项目：'.$dataInfo['name']);
+        
+        return true;
 	}
 
 	/**
@@ -258,6 +301,8 @@ class Work extends Common
 			$this->error = '项目创建人不可以退出';
 			return false;
 		}
+		$user=new ApiCommon();
+		$userInfo=$user->userInfo;
 		//从项目成员中移除
 		db('work_user')->where(['work_id' => $work_id,'user_id' => $user_id])->delete();
 		$str = ','.$user_id.',';
@@ -276,8 +321,10 @@ class Work extends Common
 				$data['main_user_id'] = '';
 			}
 			if ($data) Db::name('Task')->where(['task_id' => $value['task_id']])->update($data);
-		}
-		return true;
+            RecordActionLog($userInfo['id'], 'work_task', 'recover',$value['name'], '','','退出了项目：'.$value['name']);
+        }
+        RecordActionLog($userInfo['id'], 'work', 'update',$workInfo['name'], '','','退出了项目：'.$workInfo['name']);
+        return true;
 	}
 
     /**
@@ -356,7 +403,12 @@ class Work extends Common
 			$this->error = '删除失败，请重试！';
 			return false;
 		}
-		return true;
+        $user=new ApiCommon();
+        $userInfo=$user->userInfo;
+        $user= new \app\admin\model\User();
+        $user_info=$user->getUserById($param['owner_user_id']);
+        RecordActionLog($userInfo['id'], 'work', 'save',$workInfo['name'], '','','删除了项目成员：'.$user_info['realname']);
+        return true;
 	}
 	
 	/**

@@ -22,7 +22,7 @@ class IndexLogic extends Common
         '11' => 'november',
         '12' => 'december',
     ];
-
+    
     /**
      * @param $param
      * @return array
@@ -46,7 +46,7 @@ class IndexLogic extends Common
         $userIds = $whereArr['userIds'];
         $between_time = $whereArr['between_time'];
         $last_between_time = $lastArr['between_time'];
-      
+        
         
         $customerNum = 0; //新增客户
         $customerLastNum = 0; //上期对比
@@ -64,13 +64,13 @@ class IndexLogic extends Common
         $contractLastMoneyNum = 0; //上期对比
         $receivablesMoneyNum = 0; //新增回款金额
         $receivablesLastMoneyNum = 0; //上期对比
-
+        
         $where = [];
         $where['owner_user_id']['value'] = $userIds;
         $where['create_time']['start'] = $between_time[0];
         $where['create_time']['end'] = $between_time[1];
         $where['getCount'] = 1;
-
+        
         $customer_auth_user_ids = $userModel->getUserByPer('crm', 'customer', 'index');
         $contacts_auth_user_ids = $userModel->getUserByPer('crm', 'contacts', 'index');
         $business_auth_user_ids = $userModel->getUserByPer('crm', 'business', 'index');
@@ -89,7 +89,7 @@ class IndexLogic extends Common
                 'record_auth_user_ids' => array_intersect($userIds, $record_auth_user_ids) ? :[-1],
             ])
         );
-
+        
         $resLastCount = queryCache(
             $this->getCountSql([
                 'start_time' => $last_between_time[0],
@@ -102,7 +102,7 @@ class IndexLogic extends Common
                 'record_auth_user_ids' => array_intersect($userIds, $record_auth_user_ids) ? : [-1],
             ])
         );
-
+        
         $customerNum = (int)$resCount[0]['count1'] ?: 0;
         $contactsNum = (int)$resCount[1]['count1'] ?: 0;
         $businessNum = (int)$resCount[2]['count1'] ?: 0;
@@ -111,7 +111,7 @@ class IndexLogic extends Common
         $contractMoneyNum = $resCount[3]['count2'] ?: 0;
         $receivablesMoneyNum = $resCount[4]['count1'] ?: 0;
         $recordNum = (int)$resCount[5]['count1'] ?: 0;
-
+        
         $customerLastNum = (int)$resLastCount[0]['count1'] ?: 0;
         $contactsLastNum = (int)$resLastCount[1]['count1'] ?: 0;
         $businessLastNum = (int)$resLastCount[2]['count1'] ?: 0;
@@ -120,34 +120,34 @@ class IndexLogic extends Common
         $contractLastMoneyNum = $resLastCount[3]['count2'] ?: 0;
         $receivablesLastMoneyNum = $resLastCount[4]['count'] ?: 0;
         $recordLastNum = (int)$resLastCount[5]['count'] ?: 0;
-
+        
         $data = [];
         $data['data']['customerNum'] = $customerNum;
         $data['prev']['customerNum'] = $this->getProportion($customerNum, $customerLastNum);
-
+        
         $data['data']['contactsNum'] = $contactsNum;
         $data['prev']['contactsNum'] = $this->getProportion($contactsNum, $contactsLastNum);
-
+        
         $data['data']['businessNum'] = $businessNum;
         $data['prev']['businessNum'] = $this->getProportion($businessNum, $businessLastNum);
-
+        
         $data['data']['contractNum'] = $contractNum;
         $data['prev']['contractNum'] = $this->getProportion($contractNum, $contractLastNum);
-
+        
         $data['data']['recordNum'] = $recordNum;
         $data['prev']['recordNum'] = $this->getProportion($recordNum, $recordLastNum);
-
+        
         $data['data']['businessMoneyNum'] = $businessMoneyNum;
         $data['prev']['businessMoneyNum'] = $this->getProportion($businessMoneyNum, $businessLastMoneyNum);
-
+        
         $data['data']['contractMoneyNum'] = $contractMoneyNum;
         $data['prev']['contractMoneyNum'] = $this->getProportion($contractMoneyNum, $contractLastMoneyNum);
-
+        
         $data['data']['receivablesMoneyNum'] = $receivablesMoneyNum;
         $data['prev']['receivablesMoneyNum'] = $this->getProportion($receivablesMoneyNum, $receivablesLastMoneyNum);
         return $data;
     }
-
+    
     public function getCountSql($param)
     {
         $configModel = new \app\crm\model\ConfigData();
@@ -162,9 +162,8 @@ class IndexLogic extends Common
         count(1) count1,
         0 count2
         FROM 5kcrm_crm_customer
-        WHERE create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . "
+        WHERE (create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . " OR obtain_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . ")
         and owner_user_id IN (" . implode(',', $param['customer_auth_user_ids']) . ")
-        and ((  (  deal_time > ".$data['deal_time']." ) or (update_time > ".$data['follow_time']." and deal_time > ".$data['deal_time']."))or deal_status = '已成交'  or is_lock = 1 )
         UNION ALL
         SELECT
         count(1) AS count1,
@@ -173,7 +172,6 @@ class IndexLogic extends Common
          LEFT JOIN 5kcrm_crm_customer customer ON contacts.customer_id=customer.customer_id
         WHERE contacts.create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . "
         and contacts.owner_user_id IN (" . implode(',', $param['contacts_auth_user_ids']) . ")
-        and ((  (  customer.deal_time > ".$data['deal_time']." ) or (customer.update_time > ".$data['follow_time']." and customer.deal_time > ".$data['deal_time']."))or customer.deal_status = '已成交'  or customer. is_lock = 1 )
         UNION ALL
         SELECT
         count(1) AS count1,
@@ -183,7 +181,7 @@ class IndexLogic extends Common
         and owner_user_id IN (" . implode(',', $param['business_auth_user_ids']) . ")
         UNION ALL
         SELECT
-        count(1) AS count1,
+        count( CASE WHEN check_status = 2 THEN 1 ELSE null END) AS count1,
         SUM( CASE WHEN check_status = 2 THEN money ELSE 0 END) AS count2
         FROM 5kcrm_crm_contract
         WHERE create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . "
@@ -208,7 +206,7 @@ class IndexLogic extends Common
         and create_user_id IN (" . implode(',', $param['record_auth_user_ids']) . ")";
         return $countSql;
     }
-
+    
     ///计算涨幅
     public function getProportion($now, $last)
     {
@@ -224,8 +222,8 @@ class IndexLogic extends Common
         }
         return $res;
     }
-
-
+    
+    
     /**
      * 遗忘数据统计
      * @return mixed
@@ -246,14 +244,14 @@ class IndexLogic extends Common
         $auth_customer_user_ids = $userModel->getUserByPer('crm', 'customer', 'index');
         $auth_customer_user_ids = $auth_customer_user_ids ? array_intersect($userIds, $auth_customer_user_ids) : []; //取交集
         $owner_user_ids = array('in', $auth_customer_user_ids);
-
+        
         $customerParam = [];
         $customerParam['limit'] = $param['limit'];
         $customerParam['page'] = $param['page'];
         $customerParam['search'] = $param['search'];
         $customerParam['getCount'] = 1;
         $customerParam['owner_user_id'] = $owner_user_ids;
-
+        
         $sevenDaysParam['otherMap'] = " ( IFNULL(last_time,create_time) < " . strtotime('-1 week') . ") ";
         $fifteenDaysParam['otherMap'] = " ( IFNULL(last_time,create_time) < " . strtotime('-15 day') . ") ";
         $oneMonthParam['otherMap'] = " ( IFNULL(last_time,create_time) < " . strtotime('-30 day') . ") ";
@@ -266,10 +264,10 @@ class IndexLogic extends Common
         $data['threeMonth'] = $customerModel->getDataList(array_merge($customerParam, $threeMonthParam))['dataCount'] ?: 0;
         $data['sixMonth'] = $customerModel->getDataList(array_merge($customerParam, $sixMonthParam))['dataCount'] ?: 0;
         $data['unContactCustomerCount'] = $customerModel->getDataList(array_merge($customerParam, $unContactParam))['dataCount'] ?: 0;
-
+        
         return $data;
     }
-
+    
     /**
      * 遗忘数据列表
      * @return mixed
@@ -292,13 +290,13 @@ class IndexLogic extends Common
         $auth_customer_user_ids = $userModel->getUserByPer('crm', 'customer', 'index');
         $auth_customer_user_ids = $auth_customer_user_ids ? array_intersect($userIds, $auth_customer_user_ids) : []; //取交集
         $owner_user_ids = array('in', $auth_customer_user_ids);
-
+        
         $sql_unContactCustomerList = db('crm_customer')
             ->where(['owner_user_id' => $owner_user_ids])
             ->where('last_time < next_time AND next_time < now()')
             ->fetchSql()
             ->select();
-
+        
         $label = $param['label'];
         $day = $param['day'] ?: '';
         $customerParam = [];
@@ -306,7 +304,7 @@ class IndexLogic extends Common
         $customerParam['page'] = $param['page'];
         $customerParam['search'] = $param['search'];
         $customerParam['owner_user_id'] = $owner_user_ids;
-
+        
         switch ($label) {
             case 1 :
 //                ((( next_time < " . strtotime(date('Y-m-d 00:00:00')).") AND (last_time IS NOT NULL))  AND (IFNULL(last_time,next_time) >0))
@@ -330,7 +328,7 @@ class IndexLogic extends Common
         }
         return $customerModel->getDataList($customerParam);
     }
-
+    
     /**
      * 排行榜
      * @param $param
@@ -351,7 +349,7 @@ class IndexLogic extends Common
         $whereArr = $adminModel->getWhere($param, 1, ''); //统计条件
         $userIds = $whereArr['userIds'];
         $between_time = $whereArr['between_time'];
-
+        
         $auth_user_ids = $userModel->getUserByPer('bi', 'ranking', 'read');
         $auth_user_ids = $auth_user_ids ? array_intersect($userIds, $auth_user_ids) : []; //取交集
         switch ($param['label']) {
@@ -424,7 +422,6 @@ class IndexLogic extends Common
                     ->where([
                         'contract.owner_user_id' => ['in', $auth_user_ids],
                         'contract.create_time' => ['between', $between_time],
-                        'contract.check_status' => 2
                     ])
                     ->group('contract.owner_user_id')
                     ->order('count desc,owner_user_id asc')
@@ -433,6 +430,10 @@ class IndexLogic extends Common
             //新增客户数
             case '4':
                 //新增客户
+                $logMap=function ($query) use ($between_time) {
+                    $query->where('customer.create_time', array('between', $between_time))
+                        ->whereOr('customer.obtain_time', array('between', $between_time));
+                };
                 $list = db('crm_customer')
                     ->alias('customer')
                     ->join('__ADMIN_USER__ user', 'customer.create_user_id=user.id')
@@ -444,10 +445,10 @@ class IndexLogic extends Common
                         'user.thumb_img',
                         'structure.name',
                         'customer.owner_user_id as owner_user_id'])
-                    ->where([
-                        'customer.owner_user_id' => ['in', $auth_user_ids],
-                        'customer.create_time' => ['between', $between_time],
-                    ])
+                    ->where(
+                        'customer.owner_user_id' ,['in', $auth_user_ids]
+                    )
+                    ->where($logMap)
                     ->group('customer.owner_user_id')
                     ->order('count desc,owner_user_id asc')
                     ->select();
@@ -499,7 +500,7 @@ class IndexLogic extends Common
                     ->select();
                 break;
         }
-
+        
         //业绩目标
         $between_time = getTimeByType($param['type']);
         $start_time = $between_time[0];
@@ -558,12 +559,12 @@ class IndexLogic extends Common
             $ranking['ranking'][] = $v;
             $ranking['self'] = $list['self'];
         }
-
+        
         $data = [];
         $data = $ranking ?: [];
         return $data;
     }
-
+    
     /**
      * 数据汇总
      * @param $param
@@ -580,14 +581,14 @@ class IndexLogic extends Common
         $user_id = $param['user_id'] ?: [-1];
         $userIds = $whereArr['userIds'];
         $between_time = $whereArr['between_time'];
-
+        
         $customer_auth_user_ids = $userModel->getUserByPer('crm', 'customer', 'index');
         $contacts_auth_user_ids = $userModel->getUserByPer('crm', 'contacts', 'index');
         $business_auth_user_ids = $userModel->getUserByPer('crm', 'business', 'index');
         $contract_auth_user_ids = $userModel->getUserByPer('crm', 'contract', 'index');
         $receivables_auth_user_ids = $userModel->getUserByPer('crm', 'receivables', 'index');
         $record_auth_user_ids = $userModel->getUserByPer('crm', 'activity', 'index');
-
+        
         $resDataArr = [];
         for ($i = 1; $i <= 5; $i++) {
             $resData = queryCache(
@@ -607,7 +608,7 @@ class IndexLogic extends Common
         }
         return $resDataArr;
     }
-
+    
     /**
      * [数据汇总sql]
      * @return
@@ -629,19 +630,17 @@ class IndexLogic extends Common
                 count(1) allCustomer,
                 COUNT(CASE WHEN deal_status = '已成交' THEN 1 ELSE NULL END) AS dealCustomer
                 FROM 5kcrm_crm_customer
-                WHERE create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . "
-                AND owner_user_id IN (" . implode(',', $param['customer_auth_user_ids']) . ")
-                 and ((  (  deal_time > ".$data['deal_time']." ) or (update_time > ".$data['follow_time']." and deal_time > ".$data['deal_time']."))or deal_status = '已成交'  or is_lock = 1 )
-                ";
+                WHERE (create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . " OR obtain_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . ")
+                AND owner_user_id IN (" . implode(',', $param['customer_auth_user_ids']) . ")";
                 break;
             case 2 :
                 $countSql = "SELECT
                  COUNT(distinct CASE WHEN  b.activity_type_id in (SELECT customer_id FROM 5kcrm_crm_customer
-                WHERE create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . "
-                AND owner_user_id IN (" . implode(',', $param['customer_auth_user_ids']) . ")  AND next_time is not null
+                WHERE (create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . " OR obtain_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . ")
+                AND owner_user_id IN (" . implode(',', $param['customer_auth_user_ids']) . ") AND next_time is not null
                 ) THEN b.activity_type_id ELSE NULL END) as  activityNum
                 FROM 5kcrm_crm_activity AS b
-                WHERE create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . "
+                WHERE b.create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . "
                 AND b.type = '1'
                 AND b.activity_type = '2'
                 AND b.status = '1'
@@ -669,14 +668,15 @@ class IndexLogic extends Common
                 SUM( CASE WHEN r.check_status = 2 THEN r.money ELSE 0 END) AS receivablesMoney,
                 SUM(CASE WHEN p.money > 0 THEN p.money ELSE 0 END) AS planMoney
                 FROM 5kcrm_crm_receivables as r
-                LEFT JOIN 5kcrm_crm_receivables_plan AS p ON p.receivables_id = r.receivables_id                 
+                LEFT JOIN 5kcrm_crm_receivables_plan AS p ON p.receivables_id = r.receivables_id
                 WHERE r.create_time BETWEEN " . $param['start_time'] . " AND " . $param['end_time'] . "
                 AND r.owner_user_id IN (" . implode(',', $param['business_auth_user_ids']) . ")";
                 break;
         }
+        
         return $countSql;
     }
-
+    
     /**
      * 赢单输单查看
      */
@@ -708,7 +708,7 @@ class IndexLogic extends Common
         $data['businesslist'] = $businessList;
         return $data;
     }
-
+    
     /**
      * 仪表盘布局列表
      */
@@ -716,7 +716,7 @@ class IndexLogic extends Common
     {
         $data = [];
         $list = db('crm_dashboard')->where('user_id', $param['user_id'])->find();
-
+        
         if ($list) {
             $data = unserialize($list['dashboard']);
             return $data ?: [];
@@ -730,7 +730,7 @@ class IndexLogic extends Common
             $data['left'][2]['modelId'] = 7;
             $data['left'][2]['list'] = 1;
             $data['left'][2]['isHidden'] = 0;
-
+            
             $data['right'][0]['modelId'] = 2;
             $data['right'][0]['list'] = 2;
             $data['right'][0]['isHidden'] = 0;
@@ -742,16 +742,16 @@ class IndexLogic extends Common
             $data['right'][2]['isHidden'] = 0;
             return $data;
         }
-
+        
     }
-
+    
     /**
      * 修改自定义仪表盘
      * @param $param
      */
     public function updateDashboard($param)
     {
-
+        
         $data = db('crm_dashboard')->where('user_id', $param['user_id'])->find();
         if ($data) {
             $list = db('crm_dashboard')->where('user_id', $param['user_id'])->update(['dashboard' => serialize($param['dashboard'])]);
@@ -760,9 +760,9 @@ class IndexLogic extends Common
             $list = db('crm_dashboard')->insert(['user_id' => $param['user_id'], 'dashboard' => serialize($param['dashboard'])]);
             return $list;
         }
-
+        
     }
-
+    
     /**
      * 跟进记录列表
      * @param $param
@@ -815,7 +815,7 @@ class IndexLogic extends Common
                 $end_time = $param['end_time'] ? strtotime($param['end_time'] . ' 23:59:59') : strtotime(date('Y-m-01', time()) . ' +1 month -1 day');
                 $type['t.create_time'] = ['between', [$start_time, $end_time]];
             }
-
+            
             if ($param['queryType'] == 0) {
                 $type['t.type'] = ['in', [1, 4]];
             } else {
@@ -865,7 +865,7 @@ class IndexLogic extends Common
                     $list[$k]['business_list'] = $activity_business ?: [];
                     $list[$k]['contacts_list'] = $activity_contacts ?: [];
                 }
-
+                
                 if ($v['activity_type'] == 3) {
                     $activity_name = Db::name('crm_contacts')->where('contacts_id', $v['activity_type_id'])->find();
                     $list[$k]['activity_type_name'] = $activity_name['name'];
@@ -910,7 +910,12 @@ class IndexLogic extends Common
                 $dataInfo['contractList'] = $relation_list['contract_list'] ?: [];
                 $list[$k]['thumb_img'] = $v['thumb_img'] ? getFullPath($v['thumb_img']) : '';
                 $list[$k]['dataInfo'] = $dataInfo ?: [];
-
+                
+                $list[$k]['relation'] = arrayToString(array_column($relationArr['businessList'], 'name')) . ' ' .
+                    arrayToString(array_column($relationArr['contactsList'], 'name')) . ' ' .
+                    arrayToString(array_column($relationArr['contractList'], 'name')) . ' ' .
+                    arrayToString(array_column($relationArr['customerList'], 'name'));
+                
             }
         } else {
             $list = db('crm_activity')
@@ -937,7 +942,7 @@ class IndexLogic extends Common
                     $list[$k]['business_list'] = $activity_business ?: [];
                     $list[$k]['contacts_list'] = $activity_contacts ?: [];
                 }
-
+                
                 if ($param['activity_type'] == 3) {
                     $activity_name = Db::name('crm_contacts')->where('contacts_id', $v['activity_type_id'])->find();
                     $list[$k]['activity_type_name'] = $activity_name['name'];
@@ -982,10 +987,12 @@ class IndexLogic extends Common
                 $dataInfo['contractList'] = $relation_list['contract_list'] ?: [];
                 $list[$k]['thumb_img'] = $v['thumb_img'] ? getFullPath($v['thumb_img']) : '';
                 $list[$k]['dataInfo'] = $dataInfo ?: [];
+                $list[$k]['contacts_ids'] = arrayToString(array_column($relationArr['contactsList'], 'name'));
+                $list[$k]['business_ids'] = arrayToString(array_column($relationArr['businessList'], 'name'));
             }
         }
-
-
+        
+        
         $data = [];
         $data['list'] = $list;
         $data['dataCount'] = $dataCount ?: 0;
@@ -999,7 +1006,7 @@ class IndexLogic extends Common
             $data['firstPage'] = true;
             $data['lastPage'] = false;
         }
-
+        if(!empty($param['action'])) return $list;
         return $data ?: [];
     }
 }

@@ -469,4 +469,31 @@ class ExamineLogic extends Common
         return $data;
     }
     
+    /**
+     * @param $workIds
+     * @param $userId
+     *
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/4/16 0016 14:00
+     */
+    public function setWorkOrder($examineIds, $userId)
+    {
+        $data = [];
+        
+        foreach ($examineIds AS $key => $value) {
+            $data[] = [
+                'work_id' => $value,
+                'user_id' => $userId,
+                'order'   => $key + 1
+            ];
+        }
+        if (!empty($data)) {
+            if (db('oa_examine_order')->where('user_id', $userId)->delete() === false) return false;
+            if (db('oa_examine_order')->insertAll($data) === false) return false;
+        }
+        
+        return true;
+    }
+    
 }

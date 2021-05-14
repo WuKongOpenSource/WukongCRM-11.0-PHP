@@ -143,7 +143,7 @@ class Contract extends ApiCommon
         $receivablesModel = new \app\crm\model\Receivables();
         $param = $this->param;
         $userInfo = $this->userInfo;
-        $data = $contractModel->getDataById($param['id']);
+        $data = $contractModel->getDataById($param['id'], $userInfo['id']);
         //判断权限
         $auth_user_ids = $userModel->getUserByPer('crm', 'contract', 'read');
         //读权限
@@ -324,6 +324,7 @@ class Contract extends ApiCommon
                 $delIds[] = $v;
             }             
         }
+        $dataInfo = $contractModel->where('contract_id',['in',$delIds])->select();
         if ($delIds) {
             $data = $contractModel->delDatas($delIds);
             if (!$data) {
@@ -337,7 +338,10 @@ class Contract extends ApiCommon
             $actionRecordModel->delDataById(['types'=>'crm_contract','action_id'=>$delIds]);
             // 删除回款记录
             \app\crm\model\ReceivablesPlan::where(['contract_id' => ['IN', $delIds]])->delete();
-            actionLog($delIds,'','','');
+            $userInfo = $this->userInfo;
+            foreach ($dataInfo as $k => $v) {
+                RecordActionLog($userInfo['id'], 'crm_contacts', 'delete', $v['name'], '', '', '删除了合同：' . $v['name']);
+            }
         }
         if ($errorMessage) {
             return resultArray(['error' => $errorMessage]);
@@ -425,7 +429,9 @@ class Contract extends ApiCommon
             }
 
             //修改记录
-            updateActionLog($userInfo['id'], 'crm_contract', $contract_id, '', '', '将合同转移给：'.$ownerUserName);        
+            updateActionLog($userInfo['id'], 'crm_contract', $contract_id, '', '', '将合同转移给：'.$ownerUserName);
+            RecordActionLog($userInfo['id'], 'crm_contract', 'transfer',$contractInfo['name'], '','','将合同：'.$contractInfo['name'].'转移给：' . $ownerUserName);
+    
         }
         if (!$errorMessage) {
             return resultArray(['data' => '转移成功']);
@@ -676,9 +682,11 @@ class Contract extends ApiCommon
         $param = $this->param;
         $userInfo = $this->userInfo;
         $param['user_id'] = $userInfo['id'];
+        $action_name = '导出全部';
         if ($param['contract_id']) {
            $param['contract_id'] = ['condition' => 'in','value' => $param['contract_id'],'form_type' => 'text','name' => ''];
            $param['is_excel'] = 1;
+            $action_name='导出选中';
         }
         $excelModel = new \app\admin\model\Excel();
         // 导出的字段列表
@@ -693,6 +701,7 @@ class Contract extends ApiCommon
         $page = $param['page'] ?: 1;
         unset($param['page']);
         unset($param['export_queue_index']);
+        RecordActionLog($userInfo['id'],'crm_contract','excelexport',$action_name,'','','导出合同');
         return $excelModel->batchExportCsv($file_name, $temp_file, $field_list, $page, function($page, $limit) use ($model, $param, $field_list) {
             $param['page'] = $page;
             $param['limit'] = $limit;

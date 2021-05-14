@@ -6,6 +6,7 @@
 // +----------------------------------------------------------------------
 namespace app\admin\model;
 
+use app\admin\controller\ApiCommon;
 use think\Db;
 use app\admin\model\Common;
 use think\Request;
@@ -52,7 +53,7 @@ class ExamineFlow extends Common
 		$list = $list_view
         		->page($request['page'], $request['limit'])
         		->field('examine_flow.*,user.realname,user.thumb_img')
-                ->order('examine_flow.update_time', 'desc')
+                ->order('examine_flow.status desc,examine_flow.update_time desc')
         		->select();	
         foreach ($list as $k=>$v) {
             $list[$k]['user_ids_info'] = $userModel->getListByStr($v['user_ids']);

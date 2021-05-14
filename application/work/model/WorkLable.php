@@ -34,15 +34,24 @@ class WorkLable extends Common
      * @param     [number]                   $limit    [每页数量]
      * @return    [array]                    [description]
      */	    
-	public function getDataList()
+	public function getDataList($userId)
 	{
-		$map['status'] = 1;
-		$dataCount = $this->field('lable_id,name,create_time')->where($map)->count();
-		$list = $this->where($map)->select();
-		$data = [];
-		$data['list'] = $list ? : [];
-		$data['dataCount'] = $dataCount ? : 0;
-		return $data ? : [];
+		$map['l.status'] = 1;
+		$count = db('work_task_lable')->alias('l')->where($map)->count();
+
+		if (db('work_lable_order')->where('user_id', $userId)->count() > 0) {
+            $map['o.user_id'] = $userId;
+            $list = db('work_task_lable')->alias('l')
+                ->join('__WORK_LABLE_ORDER__ o', 'o.lable_id = l.lable_id', 'LEFT')
+                ->where($map)->order('o.order', 'asc')->select();
+        } else {
+            $list = db('work_task_lable')->alias('l')->where($map)->select();
+        }
+
+		$data['list'] = !empty($list) ? $list : [];
+		$data['dataCount'] = $count;
+
+		return $data;
 	}
 	
 	/**
@@ -61,6 +70,9 @@ class WorkLable extends Common
 			$data['color'] = $param['color'];
 			$data['status'] = 1; 
 			$this->insert($data);
+			$lableId = $this->getLastInsID();
+            # 更新排序
+            $this->updateLableOrder($lableId, $param['create_user_id']);
 			$this->commit();
 			return true;
 		} catch(\Exception $e) {
@@ -69,6 +81,31 @@ class WorkLable extends Common
 			return false;
 		}
 	}
+
+    /**
+     * 更新标签排序
+     *
+     * @param int $lableId 标签ID
+     * @param int $userId  用户ID
+     * @author fanqi
+     * @since 2021-03-27
+     */
+	private function updateLableOrder($lableId, $userId)
+    {
+        $order = 0;
+
+        $orderList = db('work_lable_order')->where('user_id', $userId)->select();
+
+        foreach ($orderList AS $key => $value) {
+            if (!empty($value['order']) && $value['order'] > $order) $order = $value['order'];
+        }
+
+        if (!empty($order)) db('work_lable_order')->insert([
+            'lable_id' => $lableId,
+            'user_id'  => $userId,
+            'order'    => $order + 1
+        ]);
+    }
 
 	/**
      * 编辑标签
@@ -146,5 +183,31 @@ class WorkLable extends Common
 	{
 		$list = Db::name('WorkTaskLable')->where(['lable_id' => ['in',$ids]])->column('name');
 		return $list ? : [];
-	}	
+	}
+
+    /**
+     * 标签排序
+     *
+     * @param array $param user_id 用户ID； labelIds 标签ID
+     * @author fanqi
+     * @since 2021-03-27
+     */
+	public function updateOrder($param)
+    {
+        if (!empty($param['labelIds'])) {
+            $data = [];
+
+            foreach ($param['labelIds'] AS $key => $value) {
+                $data[] = [
+                    'lable_id' => $value,
+                    'user_id'  => $param['user_id'],
+                    'order'    => $key + 1
+                ];
+            }
+
+            # 先删除在添加
+            db('work_lable_order')->where('user_id', $param['user_id'])->delete();
+            db('work_lable_order')->insertAll($data);
+        }
+    }
 }

@@ -546,6 +546,9 @@ class Examine extends Common
         $dataInfo = $examineDataInfo ? array_merge($dataInfo, $examineDataInfo) : $dataInfo;
         $dataInfo['start_time'] = $dataInfo['start_time'] ? date('Y-m-d H:i:s', $dataInfo['start_time']) : null;
         $dataInfo['end_time'] = $dataInfo['end_time'] ? date('Y-m-d H:i:s', $dataInfo['end_time']) : null;;
+        $dataInfo['create_time'] = $dataInfo['create_time'] ? date('Y-m-d H:i:s', $dataInfo['create_time']) : null;;
+        $realname=$userModel->getUserById($dataInfo['create_user_id']);
+        $dataInfo['value'] =  !empty($realname)?$realname['realname']: '';
         //表格数据处理
         // $fieldList = $fieldModel->getFieldByFormType('oa_examine', 'form');
         // foreach ($fieldList as $k=>$v) {
@@ -584,11 +587,13 @@ class Examine extends Common
                         }
                     }
                 }
+              
                 $travelList[$k]['start_time'] = date('Y-m-d H:i:s', $v['start_time']);
                 $travelList[$k]['end_time'] = date('Y-m-d H:i:s', $v['end_time']);
                 $travelList[$k]['create_time'] = date('Y-m-d H:i:s', $v['create_time']);
                 $travelList[$k]['fileList'] = $fileList ?: [];
                 $travelList[$k]['imgList'] = $imgList ?: [];
+                
             }
         }
         $dataInfo['travelList'] = $travelList;
@@ -610,7 +615,7 @@ class Examine extends Common
         }
         $dataInfo['fileList'] = $fileList ?: [];
         $dataInfo['imgList'] = $imgList ?: [];
-        $dataInfo['create_user_info'] = $userModel->getUserById($dataInfo['create_user_id']);
+        $dataInfo['create_user_info'] = $realname;
         $dataInfo['examine_id'] = $id;
         return $dataInfo;
     }

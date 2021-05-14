@@ -7,6 +7,7 @@
 
 namespace app\admin\model;
 
+use app\admin\controller\ApiCommon;
 use think\Db;
 use app\admin\model\Common;
 use com\verify\HonrayVerify;
@@ -107,6 +108,8 @@ class User extends Common
      */	    
 	public function getDataList($request)
 	{
+	    $structure_status=$request['isNeedChild'];
+        unset($request['isNeedChild']);
 		$request = $this->fmtRequest( $request );
 		$fieldarray = ['search','group_id','structure_id','status','type','page','limit','pageType'];
 		$map = $request['map'] ? : [];
@@ -127,10 +130,15 @@ class User extends Common
 		// $map['user.id'] = array('neq', 1);
 		if($map['structure_id']){
 			//获取部门下员工列表
-			$str_ids = structureList($map['structure_id'],'');
-			$new_str_ids = rtrim($str_ids,',');
-			$map['user.structure_id'] = ['in',$new_str_ids]; //$map['structure_id'];
+            if($structure_status==1){
+                $str_ids = structureList($map['structure_id'],'');
+                $new_str_ids = rtrim($str_ids,',');
+                $map['user.structure_id'] = ['in',$new_str_ids]; //$map['structure_id'];
+            }else{
+                $map['user.structure_id']=['in',$map['structure_id']];
+            }
 		}
+        $structureData=db('admin_structure')->where('id',$map['structure_id'])->value('owner_user_id');
 		unset($map['structure_id']);
 		if ($map['status'] || $map['group_id']) {
 		    if ($map['status'] != 3) {
@@ -187,11 +195,20 @@ class User extends Common
 			$list[$k]['create_time'] = $v['create_time'] ? date('Y-m-d H:i:s', $v['create_time']) : '';
 			$list[$k]['s_name'] = !empty($v['s_name']) ? $v['s_name'] : '';
 			$list[$k]['structure_id'] = !empty($v['structure_id']) ? $v['structure_id'] : '';
-		}															
+			if($v['id']==1){
+                $list[$k]['userIdentity']=0;
+            }elseif($v['id']==$structureData){
+                $list[$k]['userIdentity']=1;
+            }else{
+                $list[$k]['userIdentity']=2;
+            }
+		}
+		//二位数组排序
+        $last_names = array_column($list,'userIdentity');
+        array_multisort($last_names,SORT_ASC,$list);
 		$data = [];			
 		$data['list'] = $list;				
 		$data['dataCount'] = $dataCount;
-					
 		return $data;
 	}
 
@@ -262,12 +279,30 @@ class User extends Common
                 $this->error = '手机号已存在';
                 return false;
             }
+            if(db('admin_user')->where('realname',$param['realname'])->find()){
+                $this->error = '姓名已存在';
+                return false;
+            }
 		} else {
 			if (empty($param['group_id']) || !is_array($param['group_id'])) {
 				$this->error = '请至少勾选一个用户组';
 				return false;
 			}		
 		}
+		$nameData=db('admin_user')->where('realname','like','%'.$param['realname'].'%')->column('realname');
+        if(in_array($param['realname'],$nameData)){
+            for($j=1;$j<100;$j++){
+                $name=$param['realname'].$j;
+                if(in_array($name,$nameData)){
+                }else{
+                    $name= $param['realname'].$j;
+                    break ;
+                }
+            }
+            $param['realname']= $name;
+        }else{
+            $param['realname']= $param['realname'];
+        }
 		// 验证
 		$validate = validate($this->name);
 		if (!$validate->check($param)) {
@@ -311,8 +346,12 @@ class User extends Common
 		
 			$this->commit();
 			$param['user_id'] = $data['user_id'];
-			$resSync = $syncModel->syncData($param);			
-			return true;
+			$resSync = $syncModel->syncData($param);
+            # 添加记录
+            $user=new ApiCommon();
+            $userInfo=$user->userInfo;
+            SystemActionLog($userInfo['id'], 'admin_user','employee', $user_id,  'save', $param['realname'], '', '','新增用户：'.$param['realname']);
+            return true;
 		} catch(\Exception $e) {
 			$this->rollback();
 			$this->error = '添加失败';
@@ -355,13 +394,15 @@ class User extends Common
 	 */
 	public function updateDataById($param, $id)
 	{
-	 
+        $user=new ApiCommon();
+        $user_id=$user->userInfo;
 		if ($param['user_id']) {
 			//修改个人信息
 			$data['email'] = $param['email'];
 			$data['sex'] = $param['sex'];
 			// $data['mobile'] = $param['username'];
-			if (db('admin_user')->where(['username' => $param['username'],'id' => ['neq',$param['user_id']]])->find()) {
+            $userInfo=db('admin_user')->where(['username' => $param['username'],'id' => ['neq',$param['user_id']]])->find();
+			if ($userInfo) {
 				$this->error = '手机号已存在';
 				return false;				
 			}
@@ -370,7 +411,8 @@ class User extends Common
 			 $data['post'] = $param['post'];
 			$flag = $this->where(['id' => $param['user_id']])->update($data);
 			if ($flag==0 || $flag==1) {
-				return true;
+                SystemActionLog($user_id['id'],'admin_user', 'employee', $param['user_id'], 'update', $param['realname'], '', '','编辑了：'.$param['realname']);
+                return true;
 			} else {
 				$this->error = '保存失败';
 				return false;
@@ -421,8 +463,8 @@ class User extends Common
 				$this->allowField(true)->save($param, ['id' => $id]);
 				$this->commit();
 				Cache::rm('user_info' . $id);
-				
-				// $data['mobile'] = $param['username'];	 	
+                SystemActionLog($user_id['id'], 'admin_user','employee', $id, 'update', $userInfo['realname'], '', '','编辑了：'.$userInfo['realname']);
+                // $data['mobile'] = $param['username'];
 				$data['email'] = $param['email'];	
 				$data['sex'] = $param['sex'];				
 				$data['update_time'] = time();
@@ -504,8 +546,8 @@ class User extends Common
 			$login_record->createRecord(LoginRecord::TYPE_USER_BANNED);
 			return false;
 		}
-		
-		$login_record->createRecord(LoginRecord::TYPE_SUCCESS);
+        $platform = $paramArr['platform'] ? '_'.$paramArr['platform'] : ''; //请求平台(mobile,ding)
+		$login_record->createRecord($platform,LoginRecord::TYPE_SUCCESS);
 
         // 获取菜单和权限
         $dataList = $this->getMenuAndRule($userInfo['id']);
@@ -528,7 +570,6 @@ class User extends Common
         // $info['_AUTH_LIST_'] = $dataList['rulesList'];
         $info['authKey'] = $authKey;
         
-    	$platform = $paramArr['platform'] ? '_'.$paramArr['platform'] : ''; //请求平台(mobile,ding)
 		//删除旧缓存
         if (Cache::get('Auth_'.$userInfo['authkey'].$platform)) {
             Cache::rm('Auth_'.$userInfo['authkey'].$platform);
@@ -596,12 +637,17 @@ class User extends Common
 	        $resSync = $syncModel->syncData($syncData);        	
 
             $userInfo = $this->where('id', $userInfo['id'])->find();
+            # 添加记录
+            $user=new ApiCommon();
+            $user_id=$user->userInfo;
+            SystemActionLog($user_id['id'], 'admin_user','employee', $userInfo['id'], 'update', $userInfo['realname'], '', '','重置了密码：'.$userInfo['realname']);
             // 重新设置缓存
             session_start();
             $cache['userInfo'] = $userInfo;
             $cache['authKey'] = user_md5($userInfo['username'].$userInfo['password'].session_id(), $userInfo['salt']);
             cache('Auth_'.$cache['authKey'], null);
             cache('Auth_'.$cache['authKey'], $cache, $loginExpire);
+            
             return $cache['authKey'];//把auth_key传回给前端
         }
         $this->error = '修改失败';
@@ -613,21 +659,29 @@ class User extends Common
 	{
 		$syncModel = new \app\admin\model\Sync();
 		$flag = true;
+		$userInfo = new ApiCommon();
+		$user_id=$userInfo->userInfo;
 		foreach ($param['id'] as $value) {
 			$password = '';
-			$userInfo = db('admin_user')->where(['id' => $value])->find();;
+			$userInfo = db('admin_user')->where(['id' => $value])->find();
 			$salt = substr(md5(time()),0,4);
 			$temp['salt'] = $salt;
 			$temp['password']= $password = user_md5($param['password'], $salt, $userInfo['username']);
 			$flag = $flag && Db::name('AdminUser')->where('id ='.$value)->update($temp);
-
-			$syncData = [];
+            $syncData = [];
 	        $syncData['user_id'] = $value;
 	        $syncData['salt'] = $salt;
 	        $syncData['password'] = $password;
 	        $resSync = $syncModel->syncData($syncData);			
 		}
 		if ($flag) {
+		    foreach ($param['id'] as $v){
+                $userInfo = db('admin_user')->where(['id' => $v])->find();
+                # 添加记录
+                $user=new ApiCommon();
+                $user_id=$user->userInfo;
+                SystemActionLog($user_id['id'], 'admin_user','employee', $v,  'update',$userInfo['realname'],'', '', '重置了密码：'.$userInfo['realname']);
+            }
 			return $flag;
 		} else {
 			$this->error ='修改失败，请稍后重试';
@@ -733,9 +787,16 @@ class User extends Common
         if (in_array('calendar', $adminConfig)) {
             $authList['oa']['calendar'] = (Object)[];
         }
+        # 公海权限
+        $structureId = db('admin_user')->where('id', $u_id)->value('structure_id');
+        $poolStatus = db('crm_customer_pool')->whereLike('admin_user_ids', '%,' . $u_id . ',%')
+            ->whereOr('user_ids', 'like', '%,' . $u_id . ',%')
+            ->whereOr('department_ids', 'like', '%,' . $structureId . ',%')
+            ->value('pool_id');
+        if (!empty($poolStatus)) $authList['crm']['pool'] = ['index' => true];
 
 	    $ret['authList'] = $this->resetAuthorityFiled($authList);
-		$res['manage']=$rules;
+		$res['manage'] = $rules;
         return $ret;
     }
 
@@ -756,24 +817,10 @@ class User extends Common
             $authList['crm']['customer']['nearbyCustomer'] = $authList['crm']['customer']['nearby'];
             unset($authList['crm']['customer']['nearby']);
         }
+        # 公海权限
+        $authList['crm']['customer']['pool'] = !empty($authList['crm']['pool']['index']);;
         # 跟进记录
         $authList['crm']['followRecord'] = $authList['crm']['activity'];
-        # 公海
-        if (isset($authList['crm']['customer']['pool'])) {
-            $authList['crm']['pool']['index'] = $authList['crm']['customer']['pool'] ? true : false;
-        }
-        if (isset($authList['crm']['customer']['distribute'])) {
-            $authList['crm']['pool']['distribute'] = $authList['crm']['customer']['distribute'] ? true : false;
-        }
-        if (isset($authList['crm']['customer']['receive'])) {
-            $authList['crm']['pool']['receive'] = $authList['crm']['customer']['receive'] ? true : false;
-        }
-        if (isset($authList['crm']['customer']['poolexcelexport'])) {
-            $authList['crm']['pool']['excelexport'] = $authList['crm']['customer']['poolexcelexport'] ? true : false;
-        }
-        if (isset($authList['crm']['customer']['pooldelete'])) {
-            $authList['crm']['pool']['delete'] = $authList['crm']['customer']['pooldelete'] ? true : false;
-        }
         # 合同
         if (isset($authList['crm']['contract']['discard'])) {
             $authList['crm']['contract']['discard'] = false;
@@ -789,14 +836,6 @@ class User extends Common
         unset($authList['work']['work']);
         unset($authList['work']['task']);
         unset($authList['work']['taskclass']);
-        # 跟进记录
-        if (!empty($authList['crm']['record']['index'])) {
-            $authList['crm']['followRecord']['delete'] = true;
-            $authList['crm']['followRecord']['read'] = true;
-            $authList['crm']['followRecord']['save'] = true;
-            $authList['crm']['followRecord']['update'] = true;
-        }
-        unset($authList['crm']['record']);
         # admin:system
         if (!empty($authList['admin']['system']['index'])) {
             $authList['admin']['system']['read'] = $authList['admin']['system']['index'];
@@ -853,9 +892,9 @@ class User extends Common
             unset($authList['admin']['examine_flow']);
         }
         # admin:printing
-        if (!empty($authList['admin']['printing'])) {
-            $authList['admin']['print'] = $authList['admin']['printing'];
-            unset($authList['admin']['printing']);
+        if (!empty($authList['admin']['crm']['printing'])) {
+            $authList['admin']['crm']['print'] = $authList['admin']['crm']['printing'];
+            unset($authList['admin']['crm']['printing']);
         }
         # admin:work
         if (!empty($authList['admin']['work']['work'])) {
@@ -863,8 +902,19 @@ class User extends Common
             unset($authList['admin']['work']['work']);
         }
         # admin:log
-        unset($authList['admin']['loginrecord']);
-        unset($authList['admin']['log']);
+        if (isset($authList['admin']['adminlog']['loginlog'])) {
+            $authList['admin']['adminLog']['loginLog'] = $authList['admin']['adminlog']['loginlog'];
+            unset($authList['admin']['adminlog']['loginlog']);
+        }
+        if (isset($authList['admin']['adminlog']['actionrecord'])) {
+            $authList['admin']['adminLog']['actionRecord'] = $authList['admin']['adminlog']['actionrecord'];
+            unset($authList['admin']['adminlog']['actionrecord']);
+        }
+        if (isset($authList['admin']['adminlog']['systemlog'])) {
+            $authList['admin']['adminLog']['systemLog'] = $authList['admin']['adminlog']['systemlog'];
+            unset($authList['admin']['adminlog']['systemlog']);
+        }
+        unset($authList['admin']['adminlog']);
         # admin:initialize
         if (!empty($authList['admin']['initialize'])) {
             $authList['admin']['init']['initData'] = $authList['admin']['initialize']['update'];
@@ -1032,7 +1082,7 @@ class User extends Common
 					'structure.name' => 'structure_name',
 					'structure.id' => 'structure_id'
 				])
-				->cache('user_info' . $id, null, 'user_info')
+//				->cache('user_info' . $id, null, 'user_info')
 				->find();
 		$data['img'] = $data['img'] ? getFullPath($data['img']) : '';
 		$data['thumb_img'] = $data['thumb_img'] ? getFullPath($data['thumb_img']) : '';
@@ -1088,7 +1138,7 @@ class User extends Common
 		$list = $this
 				->alias('user')
 				->join('__ADMIN_STRUCTURE__ structure', 'structure.id = user.structure_id', 'LEFT')
-				->where(['user.id' => ['in', $id]])->field('user.id,username,img,thumb_img,realname,parent_id,structure.name as structure_name,structure.id as structure_id')->select();
+				->where(['user.id' => ['in', $ids]])->field('user.id,username,img,thumb_img,realname,parent_id,structure.name as structure_name,structure.id as structure_id')->select();
 		return $list ? : [];
 	}
 
@@ -1241,7 +1291,7 @@ class User extends Common
 	{
 		$user_id = $user_id ?: self::userInfo('id');
 		if (empty($group_list))
-		return !!Access::where(['user_id' => $user_id, 'group_id' => ['IN', $group]])->value('user_id');
+		return !!Access::where(['user_id' => $user_id, 'group_id' => ['IN', $group_list]])->value('user_id');
 	}
 
     /**
@@ -1311,12 +1361,77 @@ class User extends Common
             if (!empty($userGroup)) Db::name('admin_access')->insertAll($userGroup);
 
             Db::commit();
-
+            $user= new ApiCommon();
+            $user_id=$user->userInfo;
+            foreach ($userIds AS $key => $value) {
+                $userInfo=Db::name('admin_user')->where('id', $value)->find();
+                SystemActionLog($user_id['id'], 'admin_user','employee', $value,  'update', $userInfo['realname'], '', '','编辑员工角色：'.$userInfo['realname']);
+            }
             return true;
         } catch (\Exception $e) {
             Db::rollback();
 
             return false;
         }
+    }
+    
+    /**
+     * 重设部门
+     * @param array $ids 用户id
+     * @param $param 部门id
+     *
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/4/24 0024 14:05
+     *
+     */
+    public function setUserDept($ids = [],$param)
+    {
+        if (empty($ids)) {
+            $this->error = '参数错误';
+            return false;
+        }
+        foreach ($ids as $v){
+            $data['id']=$v;
+            $data['structure_id']=$param['structure_id'];
+            $flag=foreachData('',$data);
+        }
+        if ($flag) {
+            return $flag;
+        } else {
+            $this->error ='修改失败，请稍后重试';
+            return false;
+        }
+    }
+    
+    /**
+     * 员工分类总数
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/4/24 0024 14:42
+     */
+    public function countNumOfUser(){
+        //全部
+//        $data['allUserCount']=$this->count();
+//        //未激活
+//        $data['inactiveCount']=$this->where('status',2)->count();
+//        //激活
+//        $data['activateCount']=$this->where('status',1)->count();
+//        //停用
+//        $data['disableCount']=$this->where('status',0)->count();
+//        //新增
+//        $data['addNewlyCount']=$this->where('create_time','gt',strtotime('-1 week'))->count();
+        $time=strtotime('-1 week');
+        $list=db('admin_user')->field([
+            'count(id) as allUserCount,
+            count(case status when 2 then id else null end) as inactiveCount,
+            count(case status when 1 then id else null end) as activateCount,
+            count(case status when 0 then id else null end) as disableCount,
+            count(case when create_time >' .$time.' then id else null end) as addNewlyCount
+            '
+        ])->select();
+        $data=[];
+        $data['list']=$list;
+        return $data;
     }
 }

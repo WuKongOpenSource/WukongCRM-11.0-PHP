@@ -39,16 +39,23 @@ class System extends ApiCommon
 	public function save()
 	{
         $param = $this->param;
-
+        $userInfo=$this->userInfo;
+        $field_name='';
+        $dataInfo=[];
         if (isset($param['logo'])) {
+            $system_id=2;
+            $field_name='企业logo';
             $logo = !empty($param['logo']) ? './public/uploads/'.$param['logo'] : '';
+            $dataInfo =  db('admin_system')->where('id', $system_id)->column('name,value');
             db('admin_system')->where('name', 'logo')->update(['value' => $logo]);
-        }
-
-        if (isset($param['name'])) {
+        }elseif (isset($param['name'])) {
+            $system_id=1;
+            $field_name='企业名称';
+            $dataInfo =  db('admin_system')->where('id', $system_id)->column('name,value');
             db('admin_system')->where('name', 'name')->update(['value' => $param['name']]);
         }
-
+        # 修改记录
+        SystemActionLog($userInfo['id'],'admin_system','company',1,'update','企业基本信息设置','','','编辑了：'.$field_name);
         return resultArray(['data' => '操作成功！']);
 	}
 }

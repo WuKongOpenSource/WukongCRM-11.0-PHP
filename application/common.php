@@ -15,6 +15,7 @@ use think\Lang;
 use think\helper\Time;
 use com\IpLocation;
 use app\crm\traits\DataTime;
+
 /**
  * 对象 转 数组
  *
@@ -56,7 +57,7 @@ function array_to_object($arr)
 
 /**
  * 返回对象
- * @param $array 响应数据
+ * @param array $array 响应数据
  */
 function resultArray($array)
 {
@@ -135,7 +136,7 @@ function where_arr($array = [], $m = '', $c = '', $a = '')
     //查询自定义字段模块多选字段类型
     $check_field_arr = [];
     //特殊字段
-
+    
     //过滤系统参数
     $unset_arr = ['page', 'limit', 'order_type', 'order_field'];
     if (!is_array($array)) {
@@ -163,7 +164,7 @@ function where_arr($array = [], $m = '', $c = '', $a = '')
             }
             if ($v['form_type'] == 'date') {
                 if (!empty($v['start'])) $v['start'] = date('Y-m-d', $v['start']);
-                if (!empty($v['end']))   $v['end']   = date('Y-m-d', $v['end']);
+                if (!empty($v['end'])) $v['end'] = date('Y-m-d', $v['end']);
             }
             # 创建人、负责人、回访人（非自定义字段）
 //            if ($v['form_type'] == 'user' && in_array($k, ['create_user_id', 'owner_user_id'])) {
@@ -173,7 +174,7 @@ function where_arr($array = [], $m = '', $c = '', $a = '')
             if (($v['form_type'] == 'user' && !in_array($k, ['create_user_id', 'owner_user_id'])) || $v['form_type'] == 'structure') {
                 if ($v['condition'] == 'is') $v['condition'] = 'contains';
                 if ($v['condition'] == 'isNot') {
-                    return "(".$c.$k." not like ',%".$v['value'][0]."%,' OR ".$c.$k." is null)";
+                    return "(" . $c . $k . " not like ',%" . $v['value'][0] . "%,' OR " . $c . $k . " is null)";
                 }
             }
             # 处理多选字段的精确搜索
@@ -181,10 +182,10 @@ function where_arr($array = [], $m = '', $c = '', $a = '')
                 if ($v['condition'] == 'is' && count($v['value']) == 1) $v['value'][0] = ',' . $v['value'][0] . ',';
                 if ($v['condition'] == 'is' && count($v['value']) > 1) {
                     $checkboxLike = '';
-                    foreach ($v['value'] AS $kk => $vv) {
-                        $checkboxLike .= $c.$k." like "."',%".$vv."%,' AND ";
+                    foreach ($v['value'] as $kk => $vv) {
+                        $checkboxLike .= $c . $k . " like " . "',%" . $vv . "%,' AND ";
                     }
-                    return "(".$checkboxLike."LENGTH(".$c.$k.") = LENGTH('".arrayToString($v['value'])."'))";
+                    return "(" . $checkboxLike . "LENGTH(" . $c . $k . ") = LENGTH('" . arrayToString($v['value']) . "'))";
                 }
             }
             if ($types == 'contract' && !empty($v['value'])) {
@@ -195,9 +196,9 @@ function where_arr($array = [], $m = '', $c = '', $a = '')
                         break;
                     case 'contacts_id' :
                         $contactsIds = [];
-                        foreach ($v['value'] AS $kk => $vv) {
+                        foreach ($v['value'] as $kk => $vv) {
                             $contactsIdArray = db('crm_contacts')->whereLike('name', '%' . $vv . '%')->column('contacts_id');
-                            foreach ($contactsIdArray AS $kkk => $vvv) {
+                            foreach ($contactsIdArray as $kkk => $vvv) {
                                 $contactsIds[] = $vvv;
                             }
                         }
@@ -211,16 +212,16 @@ function where_arr($array = [], $m = '', $c = '', $a = '')
             }
             if ($types == 'receivables' && $k == 'plan_id' && !empty($v['value'])) {
                 $planIds = [];
-                foreach ($v['value'] AS $kk => $vv) {
+                foreach ($v['value'] as $kk => $vv) {
                     $planIdArray = db('crm_receivables_plan')->whereLike('num', '%' . $vv . '%')->column('plan_id');
-                    foreach ($planIdArray AS $kkk => $vvv) {
+                    foreach ($planIdArray as $kkk => $vvv) {
                         $planIds[] = $vvv;
                     }
                 }
                 $v['value'] = array_unique($planIds);
             }
             if ($types == 'invoice' && $v['type'] == 'invoice_status' && !empty($v['value'])) {
-                foreach ($v['value'] AS $kk => $vv) {
+                foreach ($v['value'] as $kk => $vv) {
                     if ($vv == '已开票') $v['value'][$kk] = 1;
                     if ($vv == '未开票') $v['value'][$kk] = 0;
                 }
@@ -279,7 +280,11 @@ function where_arr($array = [], $m = '', $c = '', $a = '')
                     if (in_array($k, $check_field_arr)) {
                         $where[$c . $k] = field($v['value'], 'contains');
                     } else {
-                        $where[$c . $k] = field($v['value'], $v['condition'], $k);
+                        if ($v['condition'] == 'isNot' || $v['condition'] == 'notContains') {
+                            $where[$c . $k] = [field($v['value'], $v['condition'], $k), ['null'], 'or'];
+                        } else {
+                            $where[$c . $k] = field($v['value'], $v['condition'], $k);
+                        }
                     }
                 } elseif (in_array($v['condition'], ['isNull', 'isNotNull', 'in'])) {
                     $where[$c . $k] = field($v['value'], $v['condition']);
@@ -293,13 +298,13 @@ function where_arr($array = [], $m = '', $c = '', $a = '')
             }
         }
     }
-
+    
     # 商机阶段为赢单、输单、无效的值保存在is_end中，将status_id改为is_end；
-    if (!empty($where['business.status_id']) && in_array($where['business.status_id'][1], [1,2,3])) {
+    if (!empty($where['business.status_id']) && in_array($where['business.status_id'][1], [1, 2, 3])) {
         $where['business.is_end'] = $where['business.status_id'];
         unset($where['business.status_id']);
     }
-
+    
     return $where ?: [];
 }
 
@@ -322,22 +327,22 @@ function field($search, $condition = '', $k = '')
             break;
         case "contains" :
             $containsWhere = [];
-            foreach ((array)$search AS $key1 => $value1) $containsWhere[] = '%' . $value1 . '%';
+            foreach ((array)$search as $key1 => $value1) $containsWhere[] = '%' . $value1 . '%';
             $where = ['like', $containsWhere, 'OR'];
             break;
         case "notContains" :
             $containsWhere = [];
-            foreach ((array)$search AS $key1 => $value1) $containsWhere[] = '%' . $value1 . '%';
+            foreach ((array)$search as $key1 => $value1) $containsWhere[] = '%' . $value1 . '%';
             $where = ['notlike', $containsWhere, 'AND'];
             break;
         case "startWith" :
             $startWithWhere = [];
-            foreach ((array)$search AS $key1 => $value1) $startWithWhere[] = $value1 . '%';
+            foreach ((array)$search as $key1 => $value1) $startWithWhere[] = $value1 . '%';
             $where = ['like', $startWithWhere, 'OR'];
             break;
         case "endWith" :
             $endWithWhere = [];
-            foreach ((array)$search AS $key1 => $value1) $endWithWhere[] = '%' . $value1;
+            foreach ((array)$search as $key1 => $value1) $endWithWhere[] = '%' . $value1;
             $where = ['like', $endWithWhere, 'OR'];
             break;
         case "isNull" :
@@ -348,42 +353,42 @@ function field($search, $condition = '', $k = '')
             break;
         case "eq" :
             $where = function ($query) use ($search, $k) {
-                foreach ((array)$search AS $key1 => $value1) {
+                foreach ((array)$search as $key1 => $value1) {
                     $query->whereOr($k, $value1);
                 }
             };
             break;
         case "neq" :
             $where = function ($query) use ($search, $k) {
-                foreach ((array)$search AS $key1 => $value1) {
+                foreach ((array)$search as $key1 => $value1) {
                     $query->whereOr($k, '<>', $value1);
                 }
             };
             break;
         case "gt" :
             $where = function ($query) use ($search, $k) {
-                foreach ((array)$search AS $key1 => $value1) {
+                foreach ((array)$search as $key1 => $value1) {
                     $query->whereOr($k, '>', $value1);
                 }
             };
             break;
         case "egt" :
             $where = function ($query) use ($search, $k) {
-                foreach ((array)$search AS $key1 => $value1) {
+                foreach ((array)$search as $key1 => $value1) {
                     $query->whereOr($k, '>=', $value1);
                 }
             };
             break;
         case "lt" :
             $where = function ($query) use ($search, $k) {
-                foreach ((array)$search AS $key1 => $value1) {
+                foreach ((array)$search as $key1 => $value1) {
                     $query->whereOr($k, '<', $value1);
                 }
             };
             break;
         case "elt" :
             $where = function ($query) use ($search, $k) {
-                foreach ((array)$search AS $key1 => $value1) {
+                foreach ((array)$search as $key1 => $value1) {
                     $query->whereOr($k, '<=', $value1);
                 }
             };
@@ -408,12 +413,12 @@ function field($search, $condition = '', $k = '')
 function field_arr($value, $condition = '')
 {
     if (is_array($value)) {
-
+    
     } else {
         $condition = $condition ?: 'eq';
         $where_arr = ['value' => $value, 'condition' => $condition];
     }
-
+    
     return $where_arr;
 }
 
@@ -432,18 +437,18 @@ function actionLog($id, $join_user_ids = '', $structure_ids = '', $content = '')
     }
     $header = Request::instance()->header();
     $authKey = $header['authkey'];
-    $cache = cache('Auth_'.$authKey);
+    $cache = cache('Auth_' . $authKey);
     if (!$cache) {
         return false;
     }
     $userInfo = $cache['userInfo'];
     $category = $userInfo['id'] == 1 ? '管理员' : '员工';
-
+    
     $request = request();
     $m = strtolower($request->module());
     $c = strtolower($request->controller());
     $a = strtolower($request->action());
-
+    
     $res_action = true;
     foreach ($idArr as $v) {
         $data = [];
@@ -454,27 +459,27 @@ function actionLog($id, $join_user_ids = '', $structure_ids = '', $content = '')
         $data['action_id'] = $v;
         $data['create_time'] = time();
         $data['client_ip'] = request()->ip();
-        $data['content'] = $content ? : lang('ACTIONLOG', [$category, $userInfo['realname'], date('Y-m-d H:i:s'), lang($action_name), $v, lang($controller_name)]);
-        $data['join_user_ids'] = $join_user_ids ? : ''; //抄送人
-        $data['structure_ids'] = $structure_ids ? : ''; //抄送部门
+        $data['content'] = $content ?: lang('ACTIONLOG', [$category, $userInfo['realname'], date('Y-m-d H:i:s'), lang($action_name), $v, lang($controller_name)]);
+        $data['join_user_ids'] = $join_user_ids ?: ''; //抄送人
+        $data['structure_ids'] = $structure_ids ?: ''; //抄送部门
         if ($action_name == 'delete' || $action_name == 'commentdel') {
             $data['action_delete'] = 1;
         }
         if (!db('admin_action_log')->insert($data)) {
             $res_action = false;
         }
-
+        
         # 数据操作日志
         db('admin_operation_log')->insert([
-            'user_id'     => $userInfo['id'],
-            'client_ip'   => request()->ip(),
-            'module'      => $m . '_' . $c,
-            'action_id'   => $v,
-            'content'     => $content,
+            'user_id' => $userInfo['id'],
+            'client_ip' => request()->ip(),
+            'module' => $m . '_' . $c,
+            'action_id' => $v,
+            'content' => $content,
             'create_time' => time()
         ]);
     }
-
+    
     if ($res_action) {
         return true;
     } else {
@@ -598,14 +603,14 @@ function getSubUserId($self = true, $type = 0, $user_id = '')
         $userInfo = $cache['userInfo'];
         $user_id = $userInfo['id'];
         $adminTypes = adminGroupTypes($user_id);
-
+        
         if (in_array(1, $adminTypes)) {
             $type = 1;
         }
     }
     $belowIds = [];
     if (empty($type)) {
-
+        
         if ($user_id) {
             $belowIds = getSubUser($user_id);
         }
@@ -629,7 +634,7 @@ function getSubUser($userId, $queried = [], $allUserList = [])
     if (empty($allUserList)) {
         $allUserList = db('admin_user')->field('id,parent_id')->select();
     }
-    foreach ($allUserList as $k=>$v) {
+    foreach ($allUserList as $k => $v) {
         if ($v['parent_id'] == $userId) {
             $sub_user[] = $v['id'];
         }
@@ -725,7 +730,7 @@ function sendMessage($user_id, $content, $action_id, $sysMessage = 0)
     $m = strtolower($request->module());
     $c = strtolower($request->controller());
     $a = strtolower($request->action());
-
+    
     $userInfo = [];
     if ($sysMessage == 0) {
         $header = $request->header();
@@ -739,7 +744,7 @@ function sendMessage($user_id, $content, $action_id, $sysMessage = 0)
     foreach ($user_ids as $v) {
         $data = [];
         $data['content'] = $content;
-        $data['from_user_id'] = $userInfo['id'] ? : 0;
+        $data['from_user_id'] = $userInfo['id'] ?: 0;
         $data['to_user_id'] = $v;
         $data['read_time'] = 0;
         $data['send_time'] = time();
@@ -777,6 +782,11 @@ function format_bytes($size, $delimiter = '')
  */
 function updateActionLog($user_id, $types, $action_id, $oldData = [], $newData = [], $content = '')
 {
+    # 转格式
+    if (!empty($oldData['next_time']) && $oldData['next_time'] != strtotime($oldData['next_time'])) {
+        $oldData['next_time'] = strtotime($oldData['next_time']);
+    }
+
     if (is_array($oldData) && is_array($newData) && $user_id) {
         $differentData = array_diff_assoc($newData, $oldData);
         $fieldModel = new FieldModel();
@@ -787,19 +797,18 @@ function updateActionLog($user_id, $types, $action_id, $oldData = [], $newData =
         foreach ($field_arr as $k => $v) {
             $newFieldArr[$v['field']] = $v;
         }
-        $unField = ['update_time','create_time']; //定义过滤字段
+        $unField = ['update_time', 'create_time']; //定义过滤字段
         $message = [];
         $un_form_type = ['file', 'form'];
-        
         foreach ($differentData as $k => $v) {
             if ($newFieldArr[$k] && !in_array($newFieldArr[$k]['form_type'], $un_form_type)) {
                 $field_name = '';
                 $field_name = $newFieldArr[$k]['name'];
-                $new_value = $v;
+                $new_value = $v ?: '空';
                 $old_value = $oldData[$k] ?: '空';
                 if ($newFieldArr[$k]['form_type'] == 'datetime') {
-                    $new_value = $v ? date('Y-m-d', $v) : '';
-                    $old_value = date('Y-m-d', $oldData[$k]);
+                    $new_value = $v ? date('Y-m-d', $v) : '空';
+                    $old_value = !empty($oldData[$k]) ? date('Y-m-d', $oldData[$k]) : '空';
                     if (empty($v) && empty($oldData[$k])) continue;
                 } elseif ($newFieldArr[$k]['form_type'] == 'user') {
                     $new_value = $v ? implode(',', $userModel->getUserNameByArr(stringToArray($v))) : '';
@@ -829,13 +838,15 @@ function updateActionLog($user_id, $types, $action_id, $oldData = [], $newData =
                 } elseif ($newFieldArr[$k]['form_type'] == 'visit') {
                     $new_value = $v ? db('crm_visit')->where(['visit_id' => $v])->value('number') : '';
                     $old_value = $v ? db('crm_visit')->where(['visit_id' => $oldData[$k]])->value('number') : '';
-                } elseif ($newFieldArr[$k]['form_type'] == 'single_user'){
+                } elseif ($newFieldArr[$k]['form_type'] == 'single_user') {
                     $new_value = $v ? db('admin_user')->where(['id' => $v])->value('realname') : '';
                     $old_value = $v ? db('admin_user')->where(['id' => $oldData['owner_user_id']])->value('realname') : '';
-                }elseif($newFieldArr[$k]['form_type'] == 'floatnumber'){
-                    $new_value = $v ? number_format($v,2) : '';
+                } elseif ($newFieldArr[$k]['form_type'] == 'floatnumber') {
+                    $new_value = $v ? number_format($v, 2) : '';
                 }
-                $message[] = '将 ' . "'" . $field_name . "'" . ' 由 ' . $old_value . ' 修改为 ' . $new_value;
+                if ($old_value != $new_value) {
+                    $message[] = '将 ' . "'" . $field_name . "'" . ' 由 ' . $old_value . ' 修改为 ' . $new_value;
+                }
             }
         }
         if ($message) {
@@ -846,15 +857,6 @@ function updateActionLog($user_id, $types, $action_id, $oldData = [], $newData =
             $data['action_id'] = $action_id;
             $data['content'] = implode('.|.', $message);
             db('admin_action_record')->insert($data);
-            # 数据操作日志
-            db('admin_operation_log')->insert([
-                'user_id'     => $user_id,
-                'client_ip'   => request()->ip(),
-                'module'      => $types,
-                'action_id'   => $action_id,
-                'content'     => implode('.|.', $message),
-                'create_time' => time()
-            ]);
         }
     } elseif ($content) {
         $data = [];
@@ -864,15 +866,6 @@ function updateActionLog($user_id, $types, $action_id, $oldData = [], $newData =
         $data['action_id'] = $action_id;
         $data['content'] = $content;
         db('admin_action_record')->insert($data);
-        # 数据操作日志
-        db('admin_operation_log')->insert([
-            'user_id'     => $user_id,
-            'client_ip'   => request()->ip(),
-            'module'      => $types,
-            'action_id'   => $action_id,
-            'content'     => $content,
-            'create_time' => time()
-        ]);
     }
 }
 
@@ -923,7 +916,7 @@ function checkVerify($saftCode = '5kcrm@')
     $parmList['sessionId'] = $header['sessionId'];
     $authkey = $header['authKey'];
     $clientSign = $parmList['client_sign'];
-
+    
     if ($clientSign) {
         unset($parmList['client_sign']);
         if (count($parmList) > 0) {
@@ -1348,7 +1341,7 @@ function getTimeByType($type = 'today', $is_last = false)
                 $daterange_start_time = strtotime(date('Y-10-01 00:00:00'));
                 $daterange_end_time = strtotime(date("Y-12-31 23:59:59"));
             }
-
+            
             //上季度
             $month = date('m');
             if ($month == 1 || $month == 2 || $month == 3) {
@@ -1609,12 +1602,12 @@ function nextCheckData($user_id, $flow_id, $types, $types_id, $order_id, $check_
     $new_order_id = $order_id;
     $max_order_id = db('admin_examine_step')->where(['flow_id' => $flow_id])->max('order_id'); //审批流最大排序ID
     $examineStepModel = new \app\admin\model\ExamineStep();
-
+    
     $stepInfo = $examineStepModel->getStepByOrder($flow_id, $new_order_id); //审批步骤
     $next_user_ids = [];
     $is_end = 0; //审批结束
     //固定流程（status 1负责人主管，2指定用户（任意一人），3指定用户（多人会签），4上一级审批人主管）
-
+    
     //当前步骤审批人user_id
     $step_user_ids = $examineStepModel->getUserByStep($stepInfo['step_id'], $user_id);
     if ($step_user_ids) {
@@ -1771,7 +1764,7 @@ function getWhereUserByParam(&$where, $field = 'owner_user_id', $m = '', $c = ''
 {
     $param = request()->param();
     $userModel = new UserModel();
-
+    
     $map_user_ids = [];
     if ($param['user_id']) {
         $map_user_ids = array($param['user_id']);
@@ -1782,7 +1775,7 @@ function getWhereUserByParam(&$where, $field = 'owner_user_id', $m = '', $c = ''
         $where[$field] = array('in', $map_user_ids);
         return;
     }
-
+    
     $perUserIds = $userModel->getUserByPer($m, $c, $a); //权限范围内userIds
     $userIds = array_intersect($map_user_ids, $perUserIds); //数组交集
     $where[$field] = array('in', $userIds);
@@ -1877,10 +1870,10 @@ function download($file, $name = '', $del = false)
             'error' => '文件路径错误',
         ]);
     }
-
+    
     $fp = fopen($file, 'r');
     $size = filesize($file);
-
+    
     //下载文件需要的头
     header("Content-type: application/octet-stream");
     header("Accept-Ranges: bytes");
@@ -1889,12 +1882,12 @@ function download($file, $name = '', $del = false)
     $file_name = $name != '' ? $name : pathinfo($file, PATHINFO_BASENAME);
     // urlencode 处理中文乱码
     header("Content-Disposition:attachment; filename=" . urlencode($file_name));
-
+    
     // 导出数据时  csv office Excel 需要添加bom头
     if (pathinfo($file, PATHINFO_EXTENSION) == 'csv') {
         echo "\xEF\xBB\xBF";    // UTF-8 BOM
     }
-
+    
     $fileCount = 0;
     $fileUnit = 1024;
     while (!feof($fp) && $size - $fileCount > 0) {
@@ -1903,7 +1896,7 @@ function download($file, $name = '', $del = false)
         $fileCount += $fileUnit;
     }
     fclose($fp);
-
+    
     // 删除
     if ($del) @unlink($file);
     die();
@@ -1924,7 +1917,7 @@ function tempFileName($ext = '')
     if (!file_exists($path)) {
         mkdir($path, 0777, true);
     }
-
+    
     $ext = trim($ext, '.');
     do {
         $temp_file = md5(time() . rand(1000, 9999));
@@ -1953,7 +1946,7 @@ function delDir($dir)
             }
         }
     }
-
+    
     closedir($dh);
     //删除当前文件夹：
     @rmdir($dir);
@@ -2065,7 +2058,7 @@ function getTimeArray($start = null, $end = null)
                 break;
         }
     }
-
+    
     $between = [$start, $end];
     $list = [];
     $len = ($end - $start) / 86400;
@@ -2094,7 +2087,7 @@ function getTimeArray($start = null, $end = null)
             $start = $item['end_time'] + 1;
         }
     }
-
+    
     return [
         'list' => $list,        // 时间段列表
         'time_format' => $time_format,      // 时间格式 mysql 格式化时间戳
@@ -2127,8 +2120,8 @@ function DBBackup($file = '', $path = '')
     $username = config('database.username');
     $password = config('database.password');
     $dsn = "{$type}:host={$host};dbname={$dbname};port={$port}";
-
-
+    
+    
     if ($file == '') {
         $save_path = dirname(APP_PATH) . DS . 'data' . DS . date('Ym') . DS;
         if (!file_exists($save_path) && !mkdir($save_path, '0777', true)) {
@@ -2136,11 +2129,11 @@ function DBBackup($file = '', $path = '')
         }
         $file = $save_path . date('d_H_i') . '_db_backup' . '.sql';
     }
-
+    
     if (file_exists($file)) {
         return '数据库备份文件已存在（自动备份时间间隔需大于1分钟）。';
     }
-
+    
     try {
         $backup = new \com\Mysqldump($dsn, $username, $password);
         $backup->start($file);
@@ -2148,7 +2141,7 @@ function DBBackup($file = '', $path = '')
     } catch (\Exception $e) {
         return '备份失败，请手动备份。错误原因：' . $e->getMessage();
     }
-
+    
 }
 
 /**
@@ -2171,17 +2164,17 @@ if (!function_exists('isSuperAdministrators')) {
     function isSuperAdministrators($userId)
     {
         $status = false;
-
+        
         $apiCommon = new \app\admin\controller\ApiCommon();
-
+        
         $userId = !empty($userId) ? $userId : $apiCommon->userInfo['id'];
-
+        
         $data = db('admin_access')->where('user_id', $userId)->column('group_id');
-
+        
         if ($userId == 1 || in_array(1, $data)) {
             $status = true;
         }
-
+        
         return $status;
     }
 }
@@ -2195,11 +2188,11 @@ if (!function_exists('getFieldGrantData')) {
     function getFieldGrantData($userId)
     {
         $result = [];
-
+        
         $apiCommon = new \app\admin\controller\ApiCommon();
-
+        
         $userId = !empty($userId) ? $userId : $apiCommon->userInfo['id'];
-
+        
         $grantData = Db::query("
             SELECT 
                 `grant`.`module`, `grant`.`column`, `grant`.`content` 
@@ -2212,12 +2205,14 @@ if (!function_exists('getFieldGrantData')) {
             WHERE 
                 `access`.`user_id` = 
         " . $userId);
-
+        
         # 存在多角色多授权的情况
-        foreach ($grantData AS $key => $value) {
+        foreach ($grantData as $key => $value) {
+            if (empty($value['module']) || empty($value['column'])) continue;
+            
             $result[$value['module'] . '_' . $value['column']][] = !empty($value['content']) ? unserialize($value['content']) : [];
         }
-
+        
         return $result;
     }
 }
@@ -2234,27 +2229,34 @@ if (!function_exists('getFieldGrantStatus')) {
     {
         # 默认状态都是不能查看、不能编辑，通过配置来取最大权限。
         $result = ['read' => 0, 'write' => 0];
-
-        foreach ($grantData AS $key => $value) {
-            # 对于不在权限控制之内的字段，将状态都改为1。
+        
+        foreach ($grantData as $key => $value) {
             $fieldBool = false;
-
-            foreach ($value AS $ke => $va) {
-                if ($va['field'] == $field) {
-                    $result['read']  = $va['read']  > $result['read']  ? $va['read']  : $result['read'];
-                    $result['write'] = $va['write'] > $result['write'] ? $va['write'] : $result['write'];
-                    $fieldBool       = true;
+            
+            foreach ($value as $ke => $va) {
+                # 多个字段授权，只取最高的读权限
+                if ($va['field'] == $field && $result['read'] == 0) {
+                    $result['read'] = $va['read'] > $result['read'] ? $va['read'] : $result['read'];
                 }
+                
+                # 多个字段授权，只取最高的写权限
+                if ($va['field'] == $field && $result['write'] == 0) {
+                    $result['write'] = $va['write'] > $result['write'] ? $va['write'] : $result['write'];
+                }
+                
+                if ($va['field'] == $field) $fieldBool = true;
             }
-
+            
+            # 对于不在权限控制之内的字段，将状态都改为1。
             if (!$fieldBool) {
-                $result['read']  = 1;
+                $result['read'] = 1;
                 $result['write'] = 1;
             }
         }
-
+        
         return $result;
     }
+    
     /**
      * 仪表盘日志使用
      * 根据类型获取开始结束时间戳数组
@@ -2299,7 +2301,7 @@ if (!function_exists('getFieldGrantStatus')) {
                     $daterange_start_time = strtotime(date('Y-10-01 00:00:00'));
                     $daterange_end_time = strtotime(date("Y-12-31 23:59:59"));
                 }
-
+                
                 //上季度
                 $month = date('m');
                 if ($month == 1 || $month == 2 || $month == 3) {
@@ -2317,7 +2319,7 @@ if (!function_exists('getFieldGrantStatus')) {
                     $daterange_end_time_last_time = strtotime(date("Y-09-30 23:59:59"));
                 }
                 $timeArr['last_time'] = array($daterange_start_time_last_time, $daterange_end_time_last_time);
-
+                
                 $timeArr = array($daterange_start_time, $daterange_end_time);
                 break;
             case 'lastQuarter' :
@@ -2376,5 +2378,153 @@ if (!function_exists('getFieldGrantStatus')) {
                 break;
         }
         return $timeArr;
+    }
+    
+    /**
+     * 系统操作日志
+     * @param int $user_id 用户
+     * @param string $types 方法所属模块
+     * @param int $action_id 操作
+     * @param string $module_name 模块
+     * @param string $action_name 修改添加删除新建
+     * @param array $oldData 旧数据
+     * @param array $newData 新数据
+     * @param string $target_name 被操作对象
+     * @param string $content 添加时创建使用
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/3/26 0026 15:10
+     */
+    function SystemActionLog($user_id, $types, $module_name, $action_id, $action_name, $target_name, $oldData = [], $newData = [], $content = '')
+    {
+        //action_name 修改添加删除新建 action_id 操作id client_ip ip create_time时间 content 操作记录 target_name 被操作对象 module_name 模块 系统管理 固定  user_id 用户
+        $data = [];
+        $data['user_id'] = $user_id;
+        $data['create_time'] = time();
+        $data['client_ip'] = request()->ip();
+        $data['action_id'] = $action_id;
+        $data['action_name'] = $action_name;
+        $data['target_name'] = $target_name;
+        $data['module_name'] = $module_name;
+        $data['controller_name'] = $types;
+        $data['content'] = $content;
+        db('admin_system_log')->insert($data);
+    }
+    
+    /**
+     * 系统操作日志
+     * @param int $user_id 用户
+     * @param string $types 方法所属模块
+     * @param string $action_name 修改添加删除新建
+     * @param string $target_name 被操作对象
+     * @param array $oldData 旧数据
+     * @param array $newData 新数据
+     * @param string $content 添加时创建使用
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/4/2 0026 15:10
+     */
+    function RecordActionLog($user_id, $types, $action_name, $target_name, $oldData = [], $newData = [], $content = '')
+    {
+        //action_name 修改 添加 删除  client_ip ip create_time时间 content 操作记录 target_name 被操作对象 module 模块  user_id 用户
+        if (is_array($oldData) && is_array($newData) && $user_id) {
+            $differentData = array_diff_assoc($newData, $oldData);
+            $fieldModel = new FieldModel();
+            $userModel = new UserModel();
+            $structureModel = new \app\admin\model\Structure();
+            $field_arr = $fieldModel->getField(['types' => $types, 'unFormType' => ['file', 'form']]); //获取字段属性
+            $newFieldArr = array();
+            foreach ($field_arr as $k => $v) {
+                $newFieldArr[$v['field']] = $v;
+            }
+            $unField = ['update_time', 'create_time']; //定义过滤字段
+            $message = [];
+            $un_form_type = ['file', 'form'];
+            foreach ($differentData as $k => $v) {
+                if ($newFieldArr[$k] && !in_array($newFieldArr[$k]['form_type'], $un_form_type)) {
+                    $field_name = '';
+                    $field_name = $newFieldArr[$k]['name'];
+                    $new_value = $v ?: '空';
+                    $old_value = $oldData[$k] ?: '空';
+                    switch ($newFieldArr[$k]['form_type']) {
+                        case 'datetime' :
+                            $new_value = $v ? date('Y-m-d', $v) : '';
+                            $old_value = date('Y-m-d', $oldData[$k]);
+                            if (!empty($v) && !empty($oldData[$k]))
+                            break;
+                        case 'user' :
+                            $new_value = $v ? implode(',', $userModel->getUserNameByArr(stringToArray($v))) : '';
+                            $old_value = $v ? implode(',', $userModel->getUserNameByArr(stringToArray($oldData[$k]))) : '';
+                            break;
+                        case 'structure' :
+                            $new_value = $v ? implode(',', $structureModel->getStructureNameByArr(stringToArray($v))) : '';
+                            $old_value = $v ? implode(',', $structureModel->getStructureNameByArr(stringToArray($oldData[$k]))) : '';
+                            break;
+                        case 'business_status' :
+                            $new_value = $v ? db('crm_business_status')->where(['status_id' => $v])->value('name') : '';
+                            $old_value = $v ? db('crm_business_status')->where(['status_id' => $oldData[$k]])->value('name') : '';
+                            break;
+                        case 'business_type' :
+                            $new_value = $v ? db('crm_business_type')->where(['type_id' => $v])->value('name') : '';
+                            $old_value = $v ? db('crm_business_type')->where(['type_id' => $oldData[$k]])->value('name') : '';
+                            break;
+                        case 'customer' :
+                            $new_value = $v ? db('crm_customer')->where(['customer_id' => $v])->value('name') : '';
+                            $old_value = $v ? db('crm_customer')->where(['customer_id' => $oldData[$k]])->value('name') : '';
+                            break;
+                        case 'category' :
+                            $new_value = $v ? db('crm_product_category')->where(['category_id' => $v])->value('name') : '';
+                            $old_value = $v ? db('crm_product_category')->where(['category_id' => $oldData[$k]])->value('name') : '';
+                            break;
+                        case 'business' :
+                            $new_value = $v ? db('crm_business')->where(['business_id' => $v])->value('name') : '';
+                            $old_value = $v ? db('crm_business')->where(['business_id' => $oldData[$k]])->value('name') : '';
+                            break;
+                        case 'visit' :
+                            $new_value = $v ? db('crm_visit')->where(['visit_id' => $v])->value('number') : '';
+                            $old_value = $v ? db('crm_visit')->where(['visit_id' => $oldData[$k]])->value('number') : '';
+                            break;
+                        case 'single_user' :
+                            $new_value = $v ? db('admin_user')->where(['id' => $v])->value('realname') : '';
+                            $old_value = $v ? db('admin_user')->where(['id' => $oldData['owner_user_id']])->value('realname') : '';
+                            break;
+                        case 'floatnumber' :
+                            $new_value = $v ? number_format($v, 2) : '';
+                            break;
+                    }
+                    if ($newFieldArr[$k]['field'] == 'check_status') {
+                        $statusArr = ['0' => '待审核', '1' => '审核中', '2' => '审核通过', '3' => '已拒绝', '4' => '已撤回', '5' => '未提交'];
+                        $new_value = $statusArr[$v];
+                        $old_value = $statusArr[$oldData[$k]];
+                    }
+                    if ($old_value != $new_value) {
+                        $message[] = '将 ' . "'" . $field_name . "'" . ' 由 ' . $old_value . ' 修改为 ' . $new_value;
+                    }
+                }
+            }
+            if ($message) {
+                $data = [];
+                $data['user_id'] = $user_id;
+                $data['create_time'] = time();
+                $data['client_ip'] = request()->ip();
+                $data['action_name'] = $action_name;
+                $data['action_id'] = 1;
+                $data['target_name'] = $target_name;
+                $data['module'] = $types;  //子模块 客户线索
+                $data['content'] = implode(',', $message);
+                db('admin_operation_log')->insert($data);
+            }
+        } elseif ($content) {
+            $data = [];
+            $data['user_id'] = $user_id;
+            $data['create_time'] = time();
+            $data['client_ip'] = request()->ip();
+            $data['action_name'] = $action_name;
+            $data['target_name'] = $target_name;
+            $data['action_id'] = 1;
+            $data['module'] = $types;  //子模块 客户线索
+            $data['content'] = $content;
+            db('admin_operation_log')->insert($data);
+        }
     }
 }

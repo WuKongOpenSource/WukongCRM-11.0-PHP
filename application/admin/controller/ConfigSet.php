@@ -54,6 +54,8 @@ class ConfigSet extends ApiCommon
     {
         $configModel = model('Config');
         $param = $this->param;
+        $userInfo=$this->userInfo;
+        $param['user_id']=$userInfo['id'];
 		if (!$param['id']) {
 			return resultArray(['error' => '参数错误']);
 		}

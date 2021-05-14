@@ -207,14 +207,15 @@ class Message extends ApiCommon
             }
         }
         # 待进入公海提醒
-        if ($configData['remind_config'] == 1) {
+        $pool = db('crm_customer_pool')->where(['status' => 1, 'remind_conf' => 1])->count();
+        if (!empty($pool)) {
             $remindCustomerTime  = cache('remindCustomerTime'.$userInfo['id']);
             $remindCustomerCount = cache('remindCustomerCount'.$userInfo['id']);
             if (time() <= $remindCustomerTime) {
                 $data['putInPoolRemind'] = (int)$remindCustomerCount;
             } else {
                 $remindCustomer = $this->remindCustomer(true);
-                $data['putInPoolRemind'] = $remindCustomer['dataCount'] ? : 0;
+                $data['putInPoolRemind'] = !empty($remindCustomer['dataCount']) ? $remindCustomer['dataCount'] : 0;
                 cache('remindCustomerCount'.$userInfo['id'], $data['putInPoolRemind']);
                 cache('remindCustomerTime'.$userInfo['id'], time() + 180);
             }
@@ -661,7 +662,7 @@ class Message extends ApiCommon
     }  
 
     /**
-     * 待进入客户池（默认5天）
+     * 待进入客户池
      * @author Michael_xu
      * @return 
      */
@@ -684,16 +685,19 @@ class Message extends ApiCommon
         $param['owner_user_id'] = !empty($isSub) ? ['in', getSubUserId(false, 0, $userInfo['id'])] : $userInfo['id'];
 
         # 是否提醒
-        $remind = db('crm_config')->where('name', 'remind_config')->value('value');
-
-        $whereData              = $param ? : [];
-        $whereData['is_remind'] = !empty($remind) ? 1 : 0;
-        $whereData['user_id']   = $userInfo['id'];
-        $whereData['scene_id']  = db('admin_scene')->where(['types' => 'crm_customer','bydata' => 'me'])->value('scene_id');
-        if ($isSub) {
-            $whereData['scene_id'] = db('admin_scene')->where(['types' => 'crm_customer','bydata' => 'sub'])->value('scene_id');
+        $data = [];
+        $remind = db('crm_customer_pool')->where(['status' => 1, 'remind_conf' => 1])->count();
+        if (!empty($remind)) {
+            $whereData = $param ? : [];
+            $whereData['is_remind'] = 1;
+            $whereData['user_id'] = $userInfo['id'];
+            $whereData['pool_remain'] = 0;
+            $whereData['scene_id'] = db('admin_scene')->where(['types' => 'crm_customer','bydata' => 'me'])->value('scene_id');
+            if ($isSub) {
+                $whereData['scene_id'] = db('admin_scene')->where(['types' => 'crm_customer','bydata' => 'sub'])->value('scene_id');
+            }
+            $data = $customerModel->getDataList($whereData);
         }
-        $data = $customerModel->getDataList($whereData);
         if ($types == 'list') {
             return resultArray(['data' => $data]);
         }
@@ -859,30 +863,24 @@ class Message extends ApiCommon
         # 处理待进入公海
         if ($type == 'putInPoolRemind') {
             if (!empty($typeId)) {
-                Db::name('crm_customer')->whereIn('customer_id', $typeId)->update([
-                    'follow'      => '已跟进',
-                    'last_time'   => time(),
-                    'deal_time'   => time(),
-                    'update_time' => time(),
-                ]);
+                Db::name('crm_customer')->whereIn('customer_id', $typeId)->update(['pool_remain' => 1]);
             } else {
-                $whereData['page']      = 1;
-                $whereData['limit']     = 100;
-                $whereData['is_remind'] = db('crm_config')->where('name', 'remind_config')->value('value');;
-                $whereData['user_id']   = $userId;
-                $whereData['scene_id']  = db('admin_scene')->where(['types' => 'crm_customer','bydata' => empty($isSub) ? 'me' : 'sub'])->value('scene_id');
-                $whereData['owner_user_id'] = !empty($isSub) ? ['in', getSubUserId(false, 0, $userId)] : $userId;
-                $poolCustomers = (new \app\crm\model\Customer())->getDataList($whereData);
-                $ids = [];
-                foreach ($poolCustomers['list'] AS $key => $value) {
-                    if (!empty($value['customer_id'])) $ids[] = $value['customer_id'];
+                $poolConfig = db('crm_customer_pool')->where(['status' => 1, 'remind_conf' => 1])->count();
+                if (!empty($poolConfig)) {
+                    $whereData['page'] = 1;
+                    $whereData['limit'] = 100;
+                    $whereData['is_remind'] = 1;
+                    $whereData['user_id'] = $userId;
+                    $whereData['pool_remain'] = 0;
+                    $whereData['scene_id'] = db('admin_scene')->where(['types' => 'crm_customer','bydata' => empty($isSub) ? 'me' : 'sub'])->value('scene_id');
+                    $whereData['owner_user_id'] = !empty($isSub) ? ['in', getSubUserId(false, 0, $userId)] : $userId;
+                    $poolCustomers = (new \app\crm\model\Customer())->getDataList($whereData);
+                    $ids = [];
+                    foreach ($poolCustomers['list'] AS $key => $value) {
+                        if (!empty($value['customer_id'])) $ids[] = $value['customer_id'];
+                    }
+                    if (!empty($ids)) Db::name('crm_customer')->whereIn('customer_id', $ids)->update(['pool_remain' => 1]);
                 }
-                if (!empty($ids)) Db::name('crm_customer')->whereIn('customer_id', $ids)->update([
-                    'follow'      => '已跟进',
-                    'last_time'   => time(),
-                    'deal_time'   => time(),
-                    'update_time' => time(),
-                ]);
             }
         }
 

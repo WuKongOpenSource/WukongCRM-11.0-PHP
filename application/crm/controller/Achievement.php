@@ -96,6 +96,8 @@ class Achievement extends ApiCommon
         $param = $this->param;
         $userInfo = $this->userInfo;
         if ($model->createData($param)) {
+            # 系统操作日志
+            SystemActionLog($userInfo['id'], 'crm_number_sequence','customer', 1,  'save','业绩目标设置' , '', '','添加了业绩目标');
             return resultArray(['data' => '添加成功']);
         } else {
             return resultArray(['error' => $model->getError()]);
@@ -129,9 +131,11 @@ class Achievement extends ApiCommon
     public function update()
     {    
         $model = model('Achievement');
-      
+        $userInfo = $this->userInfo;
         $param = $this->param;
         if ($model->updateData($param)) {
+            # 系统操作日志
+            SystemActionLog($userInfo['id'], 'crm_number_sequence','customer', 1, 'update','业绩目标设置' , '', '','设置了业绩目标');
             return resultArray(['data' => '编辑成功']);
         } else {
             return resultArray(['error' => $model->getError()]);
@@ -150,9 +154,10 @@ class Achievement extends ApiCommon
         if (empty($this->param['achievement_id'])) return resultArray(['error' => '参数错误！']);
 
         $model = new \app\crm\model\Achievement();
-
+        $userInfo = $this->userInfo;
         if (!$model->delete($this->param['achievement_id'])) return resultArray(['error' => '操作失败！']);
-
+        # 系统操作日志
+        SystemActionLog($userInfo['id'], 'crm_number_sequence','customer', 1, 'update','业绩目标设置' , '', '','删除了业绩目标');
         return resultArray(['data' => '操作成功！']);
     }
 }

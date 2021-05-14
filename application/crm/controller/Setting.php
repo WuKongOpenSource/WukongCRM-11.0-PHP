@@ -26,24 +26,9 @@ class Setting extends ApiCommon
         $action = [
             'permission' => [''],
             'allow' => [
-                'config',
-                'configdata',
-                'team',
-                'teamsave',
-                'contractday',
-                'recordlist',
-                'recordedit',
-                'customerconfiglist',
-                'customerconfigsave',
-                'customerconfigupdate',
-                'customerconfigdelete',
-                'numberSequenceAdd',
-                'quitteam',
-                'setvisitday',
-                'getvisitday',
-                'setnumber',
-                'customerconfigdel',
-                'numbersequencelist'
+                'config', 'configdata', 'team', 'teamsave', 'contractday', 'recordlist', 'recordedit', 'customerconfiglist',
+                'customerconfigsave', 'customerconfigupdate', 'customerconfigdelete', 'numberSequenceAdd', 'quitteam',
+                'setvisitday', 'getvisitday', 'setnumber', 'customerconfigdel', 'numbersequencelist',
             ]
         ];
         Hook::listen('check_auth', $action);
@@ -307,7 +292,7 @@ class Setting extends ApiCommon
                 $param['type'] = $param['type'] ?: 1;
                 $param['is_del'] = $param['is_del'] ?: 3;
                 $param['owner_user_id'] = $userInfo['id'];
-                if (!$param['is_del']) {
+                if (empty($param['is_del'])) {
                     $res = $settingModel->createTeamData($param);
                     if (!$res) {
                         $errorMessage = $typesName . $dataInfo['name'] . "'操作失败，错误原因：修改失败";
@@ -320,12 +305,25 @@ class Setting extends ApiCommon
                             ],
                             $param['user_id']
                         );
+                        $username=db('admin_user')->where('id',['in',$param['user_id']])->column('realname');
+                        RecordActionLog($userInfo['id'], 'crm_customer', 'teamSave',$dataInfo['name'], '','','给' . $typesName. $dataInfo['name'].'添加了团队成员 ：'.implode(',',$username));
                     }
                 } else {
                     $res = $settingModel->createTeamData($param);
                     if (!$res) {
                         $errorMessage = $typesName . $dataInfo['name'] . "'操作失败，错误原因：修改失败";
+                    }else{
+                        (new Message())->send(
+                            Message::TEAM_END,
+                            [
+                                'title' => $dataInfo['name'],
+                                'action_id' => $v
+                            ],
+                            $param['user_id']
+                        );
                     }
+                    $username=db('admin_user')->where('id',['in',$param['user_id']])->column('realname');
+                    RecordActionLog($userInfo['id'], 'crm_customer', 'teamSave',$dataInfo['name'], '','','移除了' . $typesName. $dataInfo['name'].'团队成员 ：'.implode(',',$username));
                 }
 
             }
@@ -352,11 +350,14 @@ class Setting extends ApiCommon
             exit(json_encode(['code' => 102, 'error' => '无权操作']));
         }
         $param = $this->param;
+        $userInfo=$this->userInfo;
         $data = [];
         $contract_day = $param['contract_day'] ? intval($param['contract_day']) : 0;
         $contract_config = $param['contract_config'] ? intval($param['contract_config']) : 0;
         $res = db('crm_config')->where(['name' => 'contract_config'])->update(['value' => $contract_config]);
         if ($contract_day && $contract_config == 1) $res = db('crm_config')->where(['name' => 'contract_day'])->update(['value' => $contract_day]);
+        # 系统操作日志
+        SystemActionLog($userInfo['id'], 'crm_config','customer', 1, 'update','' , '', '','编辑了合同到期提醒设置');
         return resultArray(['data' => '设置成功']);
     }
 
@@ -373,6 +374,7 @@ class Setting extends ApiCommon
     public function recordEdit()
     {
         $param = $this->param;
+        $userInfo=$this->userInfo;
         //权限判断
         if (!checkPerByAction('admin', 'crm', 'setting')) {
             header('Content-Type:application/json; charset=utf-8');
@@ -383,14 +385,18 @@ class Setting extends ApiCommon
             $record_type = db('crm_config')->where(['name' => 'record_type'])->find();
             if ($record_type) {
                 $res = db('crm_config')->where(['name' => 'record_type'])->update(['value' => $array]);
+                $id=$record_type['id'];
             } else {
                 $data = array();
                 $data['name'] = 'record_type';
                 $data['value'] = $array;
                 $data['description'] = '跟进记录类型';
-                $res = db('crm_config')->insert($data);
+                $res = db('crm_config')->insertGetId($data);
+                $id=$res;
+                $record_type['description']='跟进记录类型';
             }
             if ($res) {
+                SystemActionLog($userInfo['id'], 'crm_config','customer', $id,  'update',$record_type['description'] , '', '','编辑了跟进记录类型：'.$record_type['description']);
                 return resultArray(['data' => '设置成功']);
             } else {
                 return resultArray(['error' => '设置失败，请重试！']);
@@ -523,29 +529,6 @@ class Setting extends ApiCommon
     }
 
     /**
-     * 编号添加
-     *
-     * @return \think\response\Json
-     */
-    public function numberSequenceAdd()
-    {
-        //权限判断
-        if (!checkPerByAction('admin', 'crm', 'setting')) {
-            header('Content-Type:application/json; charset=utf-8');
-            exit(json_encode(['code' => 102, 'error' => '无权操作']));
-        }
-        $userInfo = $this->userInfo;
-        $param = $this->param;
-        $param['user_id'] = $userInfo['id'];
-        $numberSequenceModel = new \app\crm\model\NumberSequence();
-        $res = $numberSequenceModel->createData($param);
-        if (!$res) {
-            return resultArray(['error' => $numberSequenceModel->getError()]);
-        }
-        return resultArray(['data' => '创建成功']);
-    }
-
-    /**
      * 编号修改
      *
      * @return \think\response\Json
@@ -605,7 +588,7 @@ class Setting extends ApiCommon
 
         return resultArray(['data' => '操作成功！']);
     }
-
+    
     /**
      * 获取回访提醒
      *
@@ -614,12 +597,11 @@ class Setting extends ApiCommon
     public function getVisitDay()
     {
         $settingModel = new \app\crm\model\Setting();
-
+        
         $data = $settingModel->getVisitDay();
-
+        
         return resultArray(['data' => $data]);
     }
-
     /**
      * 设置自动编号
      *

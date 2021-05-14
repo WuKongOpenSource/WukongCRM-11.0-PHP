@@ -8,19 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org).
 ## [Unreleased]
 
 
-## [1.8.2] - 2019-07-08
-
-### Fixed
-
-- Uncaught error when opening ods file and properties aren't defined - [Issue #1047](https://github.com/PHPOffice/PhpSpreadsheet/issues/1047)
-- Xlsx Reader Cell datavalidations bug - [PR #1052](https://github.com/PHPOffice/PhpSpreadsheet/pull/1052)
-
-## [1.8.1] - 2019-07-02
-
-### Fixed
-
-- Allow nullable theme for Xlsx Style Reader class - [Issue #1043](https://github.com/PHPOffice/PhpSpreadsheet/issues/1043)
-
 ## [1.8.0] - 2019-07-01
 
 ### Security Fix (CVE-2019-12331)

@@ -8,6 +8,13 @@ use PhpOffice\PhpSpreadsheet\Settings;
 class XmlScanner
 {
     /**
+     * Identifies whether the thread-safe libxmlDisableEntityLoader() function is available.
+     *
+     * @var bool
+     */
+    private $libxmlDisableEntityLoader = false;
+
+    /**
      * String used to identify risky xml elements.
      *
      * @var string
@@ -25,7 +32,7 @@ class XmlScanner
         $this->disableEntityLoaderCheck();
 
         // A fatal error will bypass the destructor, so we register a shutdown here
-        register_shutdown_function([__CLASS__, 'shutdown']);
+        register_shutdown_function([$this, '__destruct']);
     }
 
     public static function getInstance(Reader\IReader $reader)
@@ -72,17 +79,16 @@ class XmlScanner
         }
     }
 
-    public static function shutdown()
+    private function shutdown()
     {
         if (self::$libxmlDisableEntityLoaderValue !== null) {
             libxml_disable_entity_loader(self::$libxmlDisableEntityLoaderValue);
-            self::$libxmlDisableEntityLoaderValue = null;
         }
     }
 
     public function __destruct()
     {
-        self::shutdown();
+        $this->shutdown();
     }
 
     public function setAdditionalCallback(callable $callback)
@@ -94,13 +100,13 @@ class XmlScanner
     {
         $pattern = '/encoding="(.*?)"/';
         $result = preg_match($pattern, $xml, $matches);
-        $charset = strtoupper($result ? $matches[1] : 'UTF-8');
+        $charset = $result ? $matches[1] : 'UTF-8';
 
         if ($charset !== 'UTF-8') {
             $xml = mb_convert_encoding($xml, 'UTF-8', $charset);
 
             $result = preg_match($pattern, $xml, $matches);
-            $charset = strtoupper($result ? $matches[1] : 'UTF-8');
+            $charset = $result ? $matches[1] : 'UTF-8';
             if ($charset !== 'UTF-8') {
                 throw new Reader\Exception('Suspicious Double-encoded XML, spreadsheet file load() aborted to prevent XXE/XEE attacks');
             }

@@ -50,10 +50,11 @@ class LoginRecord extends Common
 
     /**
      * 添加登录记录
-     *
+     * todo 登录设备暂时不加 数据表字段未加。
      * @param int $type
+     * @param int $platform 登录设备
      */
-    public function createRecord($type = 0)
+    public function createRecord($platform='',$type = 0)
     {
         $data = [];
         $data['type'] = $type;
@@ -62,7 +63,13 @@ class LoginRecord extends Common
         $data['ip'] = (new Scan())->get_client_ip();
         $data['os'] = getOS();
         $data['browser'] = getBrowser();
-
+        # todo登录设备暂时不加 数据表字段未加
+//        $platform=['_mobile'=>'手机','_ding'=>'钉钉','_wechat'=>'微信','_wxwork'=>'企业微信'];
+//        if(empty($platform)){
+//            $data['device']='网页';
+//        }else{
+//            $data['device']=$platform[$platform];
+//        }
         $ip_address = getAddressById($data['ip']);
         $data['address'] = $ip_address['country'];
 

@@ -226,6 +226,8 @@ class CommonLogic
             //修改记录
             $user_id = $apiCommon->userInfo;
             updateActionLog($user_id['id'], $types, $actionId, $info, $data);
+            RecordActionLog($user_id['id'], $types, 'update',$info['name'], $info, $data);
+    
         }
         return $res;
     }

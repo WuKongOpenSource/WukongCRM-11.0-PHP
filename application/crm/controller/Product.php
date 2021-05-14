@@ -94,7 +94,8 @@ class Product extends ApiCommon
         $productModel = model('Product');
         $userModel = new \app\admin\model\User();
         $param = $this->param;
-        $data = $productModel->getDataById($param['id']);
+        $userInfo = $this->userInfo;
+        $data = $productModel->getDataById($param['id'], $userInfo['id']);
         //判断权限
         $auth_user_ids = $userModel->getUserByPer('crm', 'product', 'read');
         if (!in_array($data['owner_user_id'], $auth_user_ids)) {
@@ -151,6 +152,8 @@ class Product extends ApiCommon
         $data = [];
         $data['status'] = ($param['status'] == '上架') ? '上架' : '下架'; 
         $data['update_time'] = time();
+        $userModel = new \app\admin\model\User();
+        $owner_user_info = $userModel->getUserById($this->param['owner_user_id']);
         if (!is_array($param['id'])) {
             $productIds[] = $param['id'];
         } else {
@@ -163,6 +166,16 @@ class Product extends ApiCommon
         if (!$res) {
             return resultArray(['error' => '操作失败']);
         }
+        foreach ($productIds as $v){
+            $product_info=db('crm_product')->where('product_id',$v)->find();
+           if($param['status'] == '上架'){
+               updateActionLog($userInfo['id'], 'crm_product', $v, '', '', '将产品上架');
+               RecordActionLog($userInfo['id'], 'crm_product', 'up',$product_info['name'], '','','将产品上架');
+            }else{
+               updateActionLog($userInfo['id'], 'crm_product', $v, '', '', '将产品下架');
+               RecordActionLog($userInfo['id'], 'crm_product', 'down',$product_info['name'], '','','将产品下架');
+            }}
+        
         return resultArray(['data' => $data['status'].'成功']);
     }
 
@@ -177,13 +190,40 @@ class Product extends ApiCommon
         $param = $this->param;
         $userInfo = $this->userInfo;
         $excelModel = new \app\admin\model\Excel();
-
+    
         // 导出的字段列表
         $fieldModel = new \app\admin\model\Field();
-        $fieldParam['types'] = 'crm_product'; 
-        $fieldParam['action'] = 'excel'; 
+        $fieldParam['types'] = 'crm_product';
+        $fieldParam['action'] = 'excel';
         $field_list = $fieldModel->field($fieldParam);
         $excelModel->excelImportDownload($field_list, 'crm_product', $save_path);
+        # 下次升级
+//        $param = $this->param;
+//        $userInfo = $this->userInfo;
+//        $excelModel = new \app\admin\model\Excel();
+//
+//        // 导出的字段列表
+//        $fieldModel = new \app\admin\model\Field();
+//        $fieldParam['types'] = 'crm_product';
+//        $fieldParam['action'] = 'excel';
+//        $field_list = $fieldModel->field($fieldParam);
+//        $field=[1=>[
+//            'field'=>'owner_user_id',
+//            'types'=>'crm_product',
+//            'name'=>'负责人',
+//            'form_type'=>'user',
+//            'default_value'=>'',
+//            'is_unique' => 1,
+//            'is_null' => 1,
+//            'input_tips' =>'',
+//            'setting' => Array(),
+//            'is_hidden'=>0,
+//            'writeStatus' => 1,
+//            'value' => '']
+//        ];
+//        $first_array = array_splice($field_list, 0, 2);
+//        $array = array_merge($first_array, $field, $field_list);
+//        $excelModel->excelImportDownload($array, 'crm_product', $save_path);
     }  
 
     /**
@@ -197,8 +237,10 @@ class Product extends ApiCommon
         $param = $this->param;
         $userInfo = $this->userInfo;
         $param['user_id'] = $userInfo['id'];
+        $action_name='导出全部';
         if ($param['product_id']) {
            $param['product_id'] = ['condition' => 'in','value' => $param['product_id'],'form_type' => 'text','name' => ''];
+            $action_name='导出选中';
         }        
 
         $excelModel = new \app\admin\model\Excel();
@@ -214,6 +256,7 @@ class Product extends ApiCommon
         $page = $param['page'] ?: 1;
         unset($param['page']);
         unset($param['export_queue_index']);
+        RecordActionLog($userInfo['id'],'crm_product','excelexport',$action_name,'','','导出产品');
         return $excelModel->batchExportCsv($file_name, $temp_file, $field_list, $page, function($page, $limit) use ($model, $param, $field_list) {
             $param['page'] = $page;
             $param['limit'] = $limit;
@@ -239,6 +282,7 @@ class Product extends ApiCommon
         $param['owner_user_id'] = $param['owner_user_id'] ? : $userInfo['id'];
         $file = request()->file('file');
         $res = $excelModel->batchImportData($file, $param, $this);
+        RecordActionLog($userInfo['id'],'crm_product','excel','导入产品','','','导入产品');
         return resultArray(['data' => $excelModel->getError()]);
     }
 
@@ -283,8 +327,8 @@ class Product extends ApiCommon
             if ($isDel) {
                 $delIds[] = $v;
             }
-        }     
-        
+        }
+        $dataInfo = $productModel->where('product_id',['in',$delIds])->select();
         if ($delIds) {
             // 开启事务
             ProductModel::startTrans();
@@ -298,7 +342,10 @@ class Product extends ApiCommon
                 // 操作记录
                 (new ActionRecordModel)->delDataById('crm_product', $delIds);
                 // 添加删除记录
-                actionLog($delIds, '', '', '');
+                $userInfo = $this->userInfo;
+                foreach ($dataInfo as $k => $v) {
+                    RecordActionLog($userInfo['id'], 'crm_contacts', 'delete', $v['name'], '', '', '删除了产品：' . $v['name']);
+                }
                 return resultArray(['data' => '删除成功']);
             } else {
                 // 事务回滚
@@ -359,11 +406,16 @@ class Product extends ApiCommon
     {
         if (empty($this->param['product_id']) || !is_array($this->param['product_id'])) return resultArray(['error' => '产品参数错误！']);
         if (empty($this->param['owner_user_id'])) return resultArray(['error' => '请选择要变更的负责人']);
-
+        $userModel = new \app\admin\model\User();
+        $userInfo=$this->userInfo;
         $productModel = new \app\crm\model\Product();
-
         if (!$productModel->transfer($this->param)) return resultArray(['error' => '操作失败！']);
-
+        $owner_user_info = $userModel->getUserById($this->param['owner_user_id']);
+        foreach ($this->param['product_id'] as $v){
+            $product_info=db('crm_product')->where('product_id',$v)->find();
+            updateActionLog($userInfo['id'], 'crm_product', $v, '', '', '将产品转移给：' . $owner_user_info['realname']);
+            RecordActionLog($userInfo['id'], 'crm_product', 'transfer',$product_info['name'], '','','将产品：'.$product_info['name'].'转移给：' . $owner_user_info['realname']);
+        }
         return resultArray(['data' => '操作成功！']);
     }
 }

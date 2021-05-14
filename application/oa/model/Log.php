@@ -6,6 +6,7 @@
 // +----------------------------------------------------------------------
 namespace app\oa\model;
 
+use app\admin\controller\ApiCommon;
 use think\Db;
 use app\admin\model\Common;
 use app\admin\model\Message;
@@ -221,7 +222,7 @@ class Log extends Common
         if ($this->data($param)->allowField(true)->save()) {
             $log_id = $this->log_id;
             //操作记录
-            actionLog($log_id, $param['send_user_ids'], $param['send_structure_ids'], '创建了日志');
+//            actionLog($log_id, $param['send_user_ids'], $param['send_structure_ids'], '创建了日志');
             //处理附件关系
             if ($fileArr) {
                 $fileModel = new \app\admin\model\File();
@@ -288,7 +289,7 @@ class Log extends Common
                     'contract_ids' => !empty($rdata['contract_ids']) ? $rdata['contract_ids'] : '',
                 ]);
             }
-            
+            RecordActionLog($param['create_user_id'],'oa_log','save',$param['title'],'','','新增了日志'.$param['title']);
             return $data;
         } else {
             $this->error = '添加失败';
@@ -332,11 +333,18 @@ class Log extends Common
         unset($param['file']);
         $param['send_user_ids'] = $param['send_user_ids'] ? arrayToString($param['send_user_ids']) : '';
         $param['send_structure_ids'] = $param['send_structure_ids'] ? arrayToString($param['send_structure_ids']) : '';
-        
+        if(empty($param['is_relation'])){
+            $param['is_relation']=0;
+            $param['save_customer'] = 0;
+            $param['save_business'] = 0;
+            $param['save_contract'] = 0;
+            $param['save_receivables'] = 0;
+            $param['save_activity'] = 0;
+        }
         if ($this->allowField(true)->save($param, ['log_id' => $log_id])) {
             //操作日志
             Db::name('AdminActionLog')->where(['action_id' => $log_id])->update(['join_user_ids' => $this->send_user_ids, 'structure_ids' => $this->send_structure_ids]);
-            actionLog($log_id, $this->send_user_ids, $this->send_structure_ids, '修改了日志');
+//            actionLog($log_id, $this->send_user_ids, $this->send_structure_ids, '修改了日志');
             //处理附件关系
             if ($fileArr) {
                 $fileModel = new \app\admin\model\File();
@@ -367,6 +375,9 @@ class Log extends Common
                     'contract_ids' => !empty($rdata['contract_ids']) ? $rdata['contract_ids'] : ''
                 ]);
             }
+            $user=new ApiCommon();
+            $userInfo=$user->userInfo;
+            RecordActionLog($userInfo['id'], 'oa_log', 'update',$dataInfo['title'], '','','修改了日志：'.$dataInfo['title']);
             return $data;
         } else {
             $this->error = '编辑失败';
@@ -442,6 +453,8 @@ class Log extends Common
      */
     public function delDataById($param)
     {
+        $user=new ApiCommon();
+        $userInfo=$user->userInfo;
         $map['log_id'] = $param['log_id'];
         $dataInfo = $this->get($map['log_id']);
         if (!$dataInfo) {
@@ -456,7 +469,7 @@ class Log extends Common
             $fileModel->delRFileByModule('oa_log', $param['log_id']);
             //删除相关评论
             $commentModel->delDataById(['type' => 'oa_log', 'type_id' => $param['log_id']]);
-            actionLog($param['log_id'], $dataInfo['send_user_ids'], $dataInfo['send_structure_ids'], '删除了日志');
+            RecordActionLog($userInfo['id'], 'crm_contacts', 'delete', $dataInfo['title'], '', '', '删除了日志：' . $dataInfo['title']);
             # 删除活动记录
             Db::name('crm_activity')->where(['activity_type' => 8, 'activity_type_id' => $param['log_id']])->delete();
             return true;

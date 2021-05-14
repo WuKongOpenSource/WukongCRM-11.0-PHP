@@ -87,12 +87,11 @@ class Visit extends ApiCommon
      */
     public function read()
     {
-
         $visit = new VisitLogic;
         $userModel = new \app\admin\model\User();
         $param = $this->param;
         $userInfo = $this->userInfo;
-        $data = $visit->getDataById($param['id']);
+        $data = $visit->getDataById($param['id'], $userInfo['id']);
         //判断权限
         $auth_user_ids = $userModel->getUserByPer('crm', 'visit', 'read');
         //读权限

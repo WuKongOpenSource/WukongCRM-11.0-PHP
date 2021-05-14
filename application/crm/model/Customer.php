@@ -7,11 +7,13 @@
 namespace app\crm\model;
 
 use app\admin\controller\ApiCommon;
+use app\admin\model\User;
 use think\Db;
 use app\admin\model\Common;
 use app\admin\model\User as UserModel;
 use app\admin\model\Record as RecordModel;
 use think\Request;
+use think\response\Json;
 use think\Validate;
 
 class Customer extends Common
@@ -68,6 +70,8 @@ class Customer extends Common
         $request = $this->fmtRequest( $request );
         $requestMap = $request['map'] ? : [];
 		$sceneModel = new \app\admin\model\Scene();
+		# 默认条件
+        $customerMap = $this->getWhereByCustomer();
         # getCount是代办事项传来的参数，代办事项不需要使用场景
         $sceneMap = [];
         if (empty($getCount)) {
@@ -88,8 +92,9 @@ class Customer extends Common
 			        	->whereOr('customer.telephone',array('like','%'.$search.'%'));
 			};
 		}
-		$partMap = [];
 		//优先级：普通筛选>高级筛选>场景
+        $map = [];
+        $partMap = [];
 		if (is_array($sceneMap)) {
 			if ($sceneMap['ro_user_id'] && $sceneMap['rw_user_id']) {
 				//相关团队查询
@@ -104,64 +109,74 @@ class Customer extends Common
 		}
 		//高级筛选
 		$map = where_arr($map, 'crm', 'customer', 'index');
-		//公海
-		$customerMap = [];
-		$authMap = [];
-		$poolMap = [];
-		$requestData = $this->requestData();
-		if ($requestData['a'] == 'pool' || $action == 'pool') {	
-			//客户公海条件(没有负责人或已经到期)
-        	$poolMap = is_object($sceneMap) ? $sceneMap : $this->getWhereByPool();
-		} else {
-			$customerMap = ($is_remind == 1) ? $this->getWhereByRemind() : $this->getWhereByCustomer(); //默认条件
-			//工作台仪表盘
-			if ($requestData['a'] == 'indexlist' && $requestData['c'] == 'index') {
-				$customerMap =$this->getWhereByCustomer();
-			}
-			if (!$partMap) {
-				//权限
-				$a = 'index';
-				if ($is_excel) $a = 'excelExport';
-				$auth_user_ids = $userModel->getUserByPer('crm', 'customer', $a);
-			    //过滤权限
-			    if (isset($map['customer.owner_user_id']) && $map['customer.owner_user_id'][0] != 'like') {
-			    	if (!is_array($map['customer.owner_user_id'][1])) {
-						$map['customer.owner_user_id'][1] = [$map['customer.owner_user_id'][1]];
-					}
-					if (in_array($map['customer.owner_user_id'][0], ['neq', 'notin'])) {
-						$auth_user_ids = array_diff($auth_user_ids, $map['customer.owner_user_id'][1]) ? : [];	//取差集
-					} else {
-						$auth_user_ids = array_intersect($map['customer.owner_user_id'][1], $auth_user_ids) ? : [];	//取交集
-					}
-			        unset($map['customer.owner_user_id']);
-					$auth_user_ids = array_merge(array_unique(array_filter($auth_user_ids))) ? : ['-1'];
-				    //负责人、相关团队
-				    $authMap['customer.owner_user_id'] = array('in',$auth_user_ids);
-			    } else {
-					$authMapData = [];
-			    	$authMapData['auth_user_ids'] = $auth_user_ids;
-			    	$authMapData['user_id'] = $user_id;
-			    	$authMap = function($query) use ($authMapData){
-			    		$query->where(['customer.owner_user_id' => array('in',$authMapData['auth_user_ids'])])
-			    			  	->whereOr(function ($query) use ($authMapData) {
-			                        $query->where('FIND_IN_SET("'.$authMapData['user_id'].'", customer.ro_user_id)')->where(['customer.owner_user_id' => array('neq','')]);
-			                    })
-								->whereOr(function ($query) use ($authMapData) {
-			                        $query->where('FIND_IN_SET("'.$authMapData['user_id'].'", customer.rw_user_id)')->where(['customer.owner_user_id' => array('neq','')]);
-			                    });
-				    };			    			    	
-			    }
-			}			
-		}
+        //工作台仪表盘
+        $requestData = $this->requestData();
+        $dashboardWhere = [];
+        if ($requestData['a'] == 'indexlist' && $requestData['c'] == 'index') {
+            $dashboardWhere = function ($query) use ($requestMap) {
+                $query->where('customer.create_time', array('between', [$requestMap['create_time']['start'],$requestMap['create_time']['end']]))
+                    ->whereOr('customer.obtain_time', array('between',  [$requestMap['create_time']['start'],$requestMap['create_time']['end']]));
+            };
+            unset($map['customer.create_time']);
+        }
+        //权限
+        $authMap = [];
+        $auth_user_ids = [];
+        if (!$partMap) {
+            $a = 'index';
+            if ($is_excel) $a = 'excelExport';
+            $auth_user_ids = $userModel->getUserByPer('crm', 'customer', $a);
+            //过滤权限
+            if (isset($map['customer.owner_user_id']) && $map['customer.owner_user_id'][0] != 'like') {
+                if (!is_array($map['customer.owner_user_id'][1])) {
+                    $map['customer.owner_user_id'][1] = [$map['customer.owner_user_id'][1]];
+                }
+                if (in_array($map['customer.owner_user_id'][0], ['neq', 'notin'])) {
+                    $auth_user_ids = array_diff($auth_user_ids, $map['customer.owner_user_id'][1]) ? : [];	//取差集
+                } else {
+                    $auth_user_ids = array_intersect($map['customer.owner_user_id'][1], $auth_user_ids) ? : [];	//取交集
+                }
+                unset($map['customer.owner_user_id']);
+                $auth_user_ids = array_merge(array_unique(array_filter($auth_user_ids))) ? : ['-1'];
+                //负责人、相关团队
+                $authMap['customer.owner_user_id'] = array('in',$auth_user_ids);
+            } else {
+                $authMapData = [];
+                $authMapData['auth_user_ids'] = $auth_user_ids;
+                $authMapData['user_id'] = $user_id;
+                $authMap = function($query) use ($authMapData){
+                    $query->where(['customer.owner_user_id' => array('in',$authMapData['auth_user_ids'])])
+                        ->whereOr(function ($query) use ($authMapData) {
+                            $query->where('FIND_IN_SET("'.$authMapData['user_id'].'", customer.ro_user_id)')->where(['customer.owner_user_id' => array('neq','')]);
+                        })
+                        ->whereOr(function ($query) use ($authMapData) {
+                            $query->where('FIND_IN_SET("'.$authMapData['user_id'].'", customer.rw_user_id)')->where(['customer.owner_user_id' => array('neq','')]);
+                        });
+                };
+            }
+        }
+
+        # 代办事项 - 待进入公海
+        $remindWhere = [];
+        if ($is_remind) {
+            $userIds = getSubUserId(false, 0, $user_id);
+            $userIds[] = $user_id;
+            $poolDays = $this->getPoolDay([], $userIds);
+            $remindWhere['customer.customer_id'] = ['in', array_keys($poolDays)];
+            if ($getCount == 1) return ['dataCount' => count($poolDays)];
+        }
+
 		$dataCount = db('crm_customer')->alias('customer')
         			->where($map)
+        			->where($dashboardWhere)
         			->where($searchMap)
         			->where($customerMap)
         			->where($authMap)
         			->where($partMap)
-        			->where($poolMap)
         			->where($otherMap)
+                    ->where($remindWhere)
         			->count();
+
         if ($getCount == 1) {
 			$data['dataCount'] = $dataCount ? : 0;
 	        return $data;
@@ -182,33 +197,22 @@ class Customer extends Common
 		} else {
 			$order = 'customer.update_time desc';
 		}
-		//置顶
-		// $tops = Db::name('crm_top')->where(['module' => ['eq','customer'],'create_role_id' => ['eq',$user_id],'set_top' => ['eq',1]])->order('top_time asc')->column('module_id');
-		// $top_ids = implode(",", $tops);
-		// if ($tops) {
-		// 	$order_t = DB::raw("field(customer_id, $top_ids) desc");
-		// }
+
 		$list = db('crm_customer')->alias('customer')
 				->where($map)
+				->where($dashboardWhere)
 				->where($searchMap)
 				->where($customerMap)
 				->where($authMap)
 				->where($partMap)
-				->where($poolMap)
 				->where($otherMap)
+                ->where($remindWhere)
         		->limit($request['offset'], $request['length'])
-        		->field('customer.*')
+        		->field($indexField)
         		->orderRaw($order)
 				->select();
-        //保护规则
-		$configModel = new \app\crm\model\ConfigData();
-        $configInfo = $configModel->getData();
-        $paramPool = [];
-        $paramPool['config'] = $configInfo['config'] ? : 0;
-        $paramPool['follow_day'] = $configInfo['follow_day'] ? : 0;
-        $paramPool['deal_day'] = $configInfo['deal_day'] ? : 0;
-        $paramPool['remind_config'] = $configInfo['remind_config'] ? : 0;
-
+        # 查询公海数据的条件
+        $poolWhere = [];
         $readAuthIds = $userModel->getUserByPer('crm', 'customer', 'read');
         $updateAuthIds = $userModel->getUserByPer('crm', 'customer', 'update');
 		$deleteAuthIds = $userModel->getUserByPer('crm', 'customer', 'delete');
@@ -249,21 +253,6 @@ class Customer extends Common
                 }
 				//商机数
 				$list[$k]['business_count'] = $business_count[$v['customer_id']]['count'] ?: 0;
-	        	//距进入公海天数
-	        	$poolData = [];
-	        	if ($paramPool['config'] == 1 && $requestData['a'] !== 'pool') {
-					$paramPool['update_time'] = $v['update_time'];
-					$paramPool['deal_time'] = $v['deal_time'];
-					$paramPool['is_lock'] = $v['is_lock'];
-					$paramPool['deal_status'] = $v['deal_status'];
-					$poolData = $this->getPoolDay($paramPool);
-                    $list[$k]['pool_day'] = $poolData ? $poolData['poolDay'] : '';
-                    $list[$k]['is_pool'] = $poolData ? $poolData['isPool'] : '';
-	        	}
-	        	if ($paramPool['remind_config'] == 0) {
-                    $list[$k]['pool_day'] = '';
-                }
-
 	        	//权限
 	        	$roPre = $userModel->rwPre($user_id, $v['ro_user_id'], $v['rw_user_id'], 'read');
 	        	$rwPre = $userModel->rwPre($user_id, $v['ro_user_id'], $v['rw_user_id'], 'update');
@@ -287,7 +276,18 @@ class Customer extends Common
                 $list[$k]['create_time'] = !empty($v['create_time']) ? date('Y-m-d H:i:s', $v['create_time']) : null;
                 $list[$k]['update_time'] = !empty($v['update_time']) ? date('Y-m-d H:i:s', $v['update_time']) : null;
                 $list[$k]['last_time']   = !empty($v['last_time'])   ? date('Y-m-d H:i:s', $v['last_time'])   : null;
-	        }     	
+                //查询公海数据的条件
+                $poolWhere[] = $v['customer_id'];
+                $list[$k]['pool_day'] = '';
+                $list[$k]['is_pool'] = 0;
+	        }
+            # 获取公海天数
+            $poolDays = !empty($poolWhere) ? $this->getPoolDay($poolWhere) : [];
+            if (!empty($poolDays)) {
+                foreach ($list AS $key => $value) {
+                    $list[$key]['pool_day'] = isset($poolDays[$value['customer_id']]) ? $poolDays[$value['customer_id']] : '';
+                }
+            }
         }
         $data = [];
         $data['list'] = $list ? : [];
@@ -311,6 +311,8 @@ class Customer extends Common
 			$this->error = $customerConfigModel->getError();
 			return false;
 		}
+		// 获取客户时间
+        $param['obtain_time'] = time();
 		//地址
 		$param['address'] = $param['address'] ? implode(chr(10),$param['address']) : '';
 		$param['deal_time'] = time(); //领取、分配时间
@@ -336,18 +338,31 @@ class Customer extends Common
 		}
         unset($param['customer_id']);
 
-		//处理部门、员工、附件、多选类型字段
+		// 处理部门、员工、附件、多选类型字段
 		$arrFieldAtt = $fieldModel->getArrayField('crm_customer');
 		foreach ($arrFieldAtt as $k=>$v) {
 			$param[$v] = arrayToString($param[$v]);
 		}
+        // 处理日期（date）类型
+        $dateField = $fieldModel->getFieldByFormType('crm_customer', 'date');
+        if (!empty($dateField)) {
+            foreach ($param AS $key => $value) {
+                if (in_array($key, $dateField) && empty($value)) $param[$key] = null;
+            }
+        }
 
         # 设置今日需联系客户
         if (!empty($param['next_time']) && $param['next_time'] >= strtotime(date('Y-m-d 00:00:00'))) $param['is_dealt'] = 0;
 
         if ($this->data($param)->allowField(true)->isUpdate(false)->save()) {
+            if(!empty($param['pool_id'])){
+               db('crm_customer_pool_relation') ->insertGetId(['pool_id'=>$param['pool_id'],'customer_id'=>$this->customer_id]);
+            }
 			//修改记录
-			updateActionLog($param['create_user_id'], 'crm_customer', $this->customer_id, '', '', '创建了客户');			
+            if(empty($param['leads_id'])){
+                updateActionLog($param['create_user_id'], 'crm_customer', $this->customer_id, '', '', '创建了客户');
+                RecordActionLog($param['create_user_id'],'crm_customer','save',$param['name'],'','','新增了客户'.$param['name']);
+            }
 			$data = [];
 			$data['customer_id'] = $this->customer_id;
 			$data['name'] = $param['name'];
@@ -396,19 +411,21 @@ class Customer extends Common
             return false;
         }
         $id = $param['id']?:$customer_id;
+        
         //数据权限判断
         $userModel = new \app\admin\model\User();
         $auth_user_ids = $userModel->getUserByPer('crm', 'customer', 'update');
         //读写权限
         $rwPre = $userModel->rwPre($user_id, $dataInfo['ro_user_id'], $dataInfo['rw_user_id'], 'update');
         //判断是否客户池数据
-        $wherePool = $this->getWhereByPool();
-        $resPool = db('crm_customer')->alias('customer')->where(['customer_id' => $id])->where($wherePool)->find();
-        if ($resPool || (!in_array($dataInfo['owner_user_id'],$auth_user_ids) && !$rwPre)) {
-            $this->error = '无权操作';
-            return false;
+        if(empty($param['pool_id'])){
+            $wherePool = $this->getWhereByPool();
+            $resPool = db('crm_customer')->alias('customer')->where(['customer_id' => $id])->where($wherePool)->find();
+            if ($resPool || (!in_array($dataInfo['owner_user_id'],$auth_user_ids) && !$rwPre)) {
+                $this->error = '无权操作';
+                return false;
+            }
         }
-        
         $param['customer_id'] = $customer_id;
         //过滤不能修改的字段
         $unUpdateField = ['create_user_id','is_deleted','delete_time','user_id'];
@@ -418,7 +435,8 @@ class Customer extends Common
         $param['deal_status'] = $dataInfo['deal_status'];
         $fieldModel = new \app\admin\model\Field();
         // 自动验证
-        $validateArr = $fieldModel->validateField($this->name); //获取自定义字段验证规则
+//        $validateArr = $fieldModel->validateField($this->name); //获取自定义字段验证规则
+        $validateArr = $fieldModel->validateField($this->name, 0, 'update'); //获取自定义字段验证规则
         $validate = new Validate($validateArr['rule'], $validateArr['message']);
         $result = $validate->check($param);
         if (!$result) {
@@ -431,18 +449,28 @@ class Customer extends Common
             $param['deal_time'] = time();
         }
         
-        //处理部门、员工、附件、多选类型字段
+        // 处理部门、员工、附件、多选类型字段
         $arrFieldAtt = $fieldModel->getArrayField('crm_customer');
         foreach ($arrFieldAtt as $k=>$v) {
-            $param[$v] = arrayToString($param[$v]);
+            if (isset($param[$v])) $param[$v] = arrayToString($param[$v]);
+        }
+        // 处理日期（date）类型
+        $dateField = $fieldModel->getFieldByFormType('crm_customer', 'date');
+        if (!empty($dateField)) {
+            foreach ($param AS $key => $value) {
+                if (in_array($key, $dateField) && empty($value)) $param[$key] = null;
+            }
         }
 
         # 设置今日需联系客户
         if (!empty($param['next_time']) && $param['next_time'] >= strtotime(date('Y-m-d 00:00:00'))) $param['is_dealt'] = 0;
-
         if ($this->update($param, ['customer_id' => $customer_id], true)) {
+            if(!empty($param['pool_id'])){
+                db('crm_customer_pool_relation')->where('customer_id',$customer_id) ->update(['pool_id'=>$param['pool_id']]);
+            }
             //修改记录
             updateActionLog($user_id, 'crm_customer', $customer_id, $dataInfo->data, $param);
+            RecordActionLog($user_id, 'crm_customer', 'update',$dataInfo['name'], $dataInfo->data, $param);
             $data = [];
             $data['customer_id'] = $customer_id;
             return $data;
@@ -471,32 +499,15 @@ class Customer extends Common
 		}
 		$userModel = new \app\admin\model\User();
 		$dataInfo['create_user_id_info'] = isset($dataInfo['create_user_id']) ? $userModel->getUserById($dataInfo['create_user_id']) : [];
-		$dataInfo['owner_user_id_info'] = isset($dataInfo['owner_user_id']) ? $userModel->getUserById($dataInfo['owner_user_id']) : [];
+		$dataInfo['owner_user_id_info'] = !empty($dataInfo['owner_user_id']) ? $userModel->getUserById($dataInfo['owner_user_id']) : [];
+		$dataInfo['before_owner_user_id_info'] = !empty($dataInfo['before_owner_user_id']) ? $userModel->getUserById($dataInfo['before_owner_user_id']) : [];
         $dataInfo['create_user_name'] = !empty($dataInfo['create_user_id_info']['realname']) ? $dataInfo['create_user_id_info']['realname'] : '';
         $dataInfo['owner_user_name'] = !empty($dataInfo['owner_user_id_info']['realname']) ? $dataInfo['owner_user_id_info']['realname'] : '';
-		//保护规则
-		$configModel = new \app\crm\model\ConfigData();
-        $configInfo = $configModel->getData();
-        $paramPool = [];
-        $paramPool['config'] = $configInfo['config'] ? : 0;
-        $paramPool['follow_day'] = $configInfo['follow_day'] ? : 0;
-        $paramPool['deal_day'] = $configInfo['deal_day'] ? : 0;
-		//是否公海
-    	$poolData = [];
-    	if ($paramPool['config'] == 1) {
-			$paramPool['update_time'] = $dataInfo['update_time'];
-			$paramPool['deal_time'] = $dataInfo['deal_time'];
-			$paramPool['is_lock'] = $dataInfo['is_lock'];
-			$paramPool['deal_status'] = $dataInfo['deal_status'];
-			$paramPool['owner_user_id'] = $dataInfo['owner_user_id'];
-			$poolData = $this->getPoolDay($paramPool);
-    	} else {
-    		if (!$dataInfo['owner_user_id']) {
-		        $poolData['isPool'] = 1;
-		    }
-    	}
-    	$dataInfo['pool_day'] = $poolData ? $poolData['poolDay'] : '';
-    	$dataInfo['is_pool'] = $poolData ? $poolData['isPool'] : '';
+        $dataInfo['before_owner_user_name'] = !empty($dataInfo['before_owner_user_id_info']['realname']) ? $dataInfo['before_owner_user_id_info']['realname'] : '';
+		# 公海信息
+        $poolData = $this->getPoolDay([$id]);
+    	$dataInfo['pool_day'] = !empty($poolData[$id]) ? $poolData[$id] : '';
+    	$dataInfo['is_pool'] = !empty($dataInfo['owner_user_id']) ? 0 : 1;
     	# 关注
     	$starId = empty($userId) ? 0 : Db::name('crm_star')->where(['user_id' => $userId, 'target_id' => $id, 'type' => 'crm_customer'])->value('star_id');
     	$dataInfo['star'] = !empty($starId) ? 1 : 0;
@@ -509,9 +520,23 @@ class Customer extends Common
         foreach ($datetimeField as $key => $val) {
             $dataInfo[$val] = !empty($dataInfo[$val]) ? date('Y-m-d H:i:s', $dataInfo[$val]) : null;
         }
-        $dataInfo['create_time'] = !empty($dataInfo['create_time']) ? date('Y-m-d H:i:s', $dataInfo['create_time']) : null;
-        $dataInfo['update_time'] = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
-        $dataInfo['last_time']   = !empty($dataInfo['last_time'])   ? date('Y-m-d H:i:s', $dataInfo['last_time'])   : null;
+        $dataInfo['create_time']    = !empty($dataInfo['create_time']) ? date('Y-m-d H:i:s', $dataInfo['create_time']) : null;
+        $dataInfo['update_time']    = !empty($dataInfo['update_time']) ? date('Y-m-d H:i:s', $dataInfo['update_time']) : null;
+        $dataInfo['last_time']      = !empty($dataInfo['last_time'])   ? date('Y-m-d H:i:s', $dataInfo['last_time'])   : null;
+        $dataInfo['into_pool_time'] = !empty($dataInfo['into_pool_time']) ? date('Y-m-d H:i:s', $dataInfo['into_pool_time']) : null;
+        // 字段授权
+        if (!empty($userId)) {
+            $grantData = getFieldGrantData($userId);
+            $userLevel = isSuperAdministrators($userId);
+            foreach ($dataInfo AS $key => $value) {
+                if (!$userLevel && !empty($grantData['crm_customer'])) {
+                    $status = getFieldGrantStatus($key, $grantData['crm_customer']);
+
+                    # 查看权限
+                    if ($status['read'] == 0) unset($dataInfo[$key]);
+                }
+            }
+        }
         return $dataInfo;
    	}
 
@@ -546,7 +571,6 @@ class Customer extends Common
             $where_time = " > 0 ";
             $where_date = " != '' ";
         }
-        
 		//员工IDS
 		$map_user_ids = [];
 		if (!empty($map['user_id'])) {
@@ -592,7 +616,7 @@ class Customer extends Common
 				FROM
 					{$prefix}crm_customer as cu
 				WHERE
-					cu.create_time {$where_time}
+					(cu.create_time {$where_time} OR obtain_time {$where_time})
 					AND cu.owner_user_id = {$user_id}
 					AND ((  (  deal_time > ".$data['deal_time']." ) OR (update_time > ".$data['follow_time']." AND deal_time > ".$data['deal_time']."))OR deal_status = '已成交'  OR is_lock = 1 )
 			";
@@ -642,9 +666,6 @@ class Customer extends Common
      */		
 	public function getDataCount($map)
 	{
-		//非公海条件
-		// $where = $this->getWhereByCustomer();
-        $where = [];
 		$dataCount = $this->where($map)->fetchSql(false)->count();
         $count = $dataCount ? : 0;
         return $count;		
@@ -658,35 +679,36 @@ class Customer extends Common
      */	
     public function getWhereByCustomer()
     {
-		$configModel = new \app\crm\model\ConfigData();
-		$userModel = new \app\admin\model\User();
-        $configInfo = $configModel->getData();
-    	$config = $configInfo['config'] ? : 0;
-    	$follow_day = $configInfo['follow_day'] ? : 0;
-    	$deal_day = $configInfo['deal_day'] ? : 0;
-    	//默认条件(没有到期或已锁定)
-    	$data['follow_time'] = time()-$follow_day*86400;
-    	$data['deal_time'] = time()-$deal_day*86400;
-    	if ($config == 1) {
-    		if ($follow_day < $deal_day) {
-				$whereData = function($query) use ($data){
-			        		$query->where(function ($query) use ($data) {
-		                        $query->where(['customer.update_time' => array('gt',$data['follow_time']),'customer.deal_time' => array('gt',$data['deal_time'])]);
-		                    })
-		                    ->whereOr(['customer.deal_status' => '已成交'])
-		                    ->whereOr(['customer.is_lock' => 1]);
-						};    			
-    		} else {
-				$whereData = function($query) use ($data){
-			        		$query->where(function ($query) use ($data) {
-		                        $query->where(['customer.deal_time' => array('gt',$data['deal_time'])]);
-		                    })
-		                    ->whereOr(['customer.deal_status' => '已成交'])
-		                    ->whereOr(['customer.is_lock' => 1]);
-						};    			
-    		}
-    	}
-    	return $whereData ? : '';
+        return ['customer.owner_user_id' => ['neq', 0]];
+//		$configModel = new \app\crm\model\ConfigData();
+//		$userModel = new \app\admin\model\User();
+//        $configInfo = $configModel->getData();
+//    	$config = $configInfo['config'] ? : 0;
+//    	$follow_day = $configInfo['follow_day'] ? : 0;
+//    	$deal_day = $configInfo['deal_day'] ? : 0;
+//    	//默认条件(没有到期或已锁定)
+//    	$data['follow_time'] = time()-$follow_day*86400;
+//    	$data['deal_time'] = time()-$deal_day*86400;
+//    	if ($config == 1) {
+//    		if ($follow_day < $deal_day) {
+//				$whereData = function($query) use ($data){
+//			        		$query->where(function ($query) use ($data) {
+//		                        $query->where(['customer.update_time' => array('gt',$data['follow_time']),'customer.deal_time' => array('gt',$data['deal_time'])]);
+//		                    })
+//		                    ->whereOr(['customer.deal_status' => '已成交'])
+//		                    ->whereOr(['customer.is_lock' => 1]);
+//						};
+//    		} else {
+//				$whereData = function($query) use ($data){
+//			        		$query->where(function ($query) use ($data) {
+//		                        $query->where(['customer.deal_time' => array('gt',$data['deal_time'])]);
+//		                    })
+//		                    ->whereOr(['customer.deal_status' => '已成交'])
+//		                    ->whereOr(['customer.is_lock' => 1]);
+//						};
+//    		}
+//    	}
+//    	return $whereData ? : '';
     }	
 
 	/**
@@ -697,46 +719,46 @@ class Customer extends Common
      */	
     public function getWhereByPool()
     {
-		$configModel = new \app\crm\model\ConfigData();
-        $configInfo = $configModel->getData();
-    	$config = $configInfo['config'] ? : 0;
-		$follow_day = $configInfo['follow_day'] ? : 0;
-    	$deal_day = $configInfo['deal_day'] ? : 0;
-    	$whereData = [];
-    	//启用    	
-    	if ($config == 1) {
-			//默认公海条件(没有负责人或已经到期)
-	    	$data['follow_time'] = time()-$follow_day*86400;
-	    	$data['deal_time'] = time()-$deal_day*86400;
-	    	$data['deal_status'] = '未成交';
-	    	if ($follow_day < $deal_day) {
-				$whereData = function($query) use ($data){
-				        	$query->where(['customer.owner_user_id'=>0])
-					        	->whereOr(function ($query) use ($data) {
-									$query->where(function ($query) use ($data) {
-				                        $query->where(['customer.update_time' => array('elt',$data['follow_time'])])
-											->whereOr(['customer.deal_time' => array('elt',$data['deal_time'])]);
-				                    })
-				                    ->where(['customer.is_lock' => 0])
-				                    ->where(['customer.deal_status' => ['neq','已成交']]);
-								});							
-							};  		
-	    	} else {
-				$whereData = function($query) use ($data){
-				        	$query->where(['customer.owner_user_id'=>0])
-					        	->whereOr(function ($query) use ($data) {
-									$query->where(function ($query) use ($data) {
-				                        $query->where(['customer.deal_time' => array('elt',$data['deal_time'])]);
-				                    })
-				                    ->where(['customer.is_lock' => 0])
-				                    ->where(['customer.deal_status' => ['neq','已成交']]);
-								});							
-							};	    		
-	    	}
-    	} else {
+//		$configModel = new \app\crm\model\ConfigData();
+//        $configInfo = $configModel->getData();
+//    	$config = $configInfo['config'] ? : 0;
+//		$follow_day = $configInfo['follow_day'] ? : 0;
+//    	$deal_day = $configInfo['deal_day'] ? : 0;
+//    	$whereData = [];
+//    	//启用
+//    	if ($config == 1) {
+//			//默认公海条件(没有负责人或已经到期)
+//	    	$data['follow_time'] = time()-$follow_day*86400;
+//	    	$data['deal_time'] = time()-$deal_day*86400;
+//	    	$data['deal_status'] = '未成交';
+//	    	if ($follow_day < $deal_day) {
+//				$whereData = function($query) use ($data){
+//				        	$query->where(['customer.owner_user_id'=>0])
+//					        	->whereOr(function ($query) use ($data) {
+//									$query->where(function ($query) use ($data) {
+//				                        $query->where(['customer.update_time' => array('elt',$data['follow_time'])])
+//											->whereOr(['customer.deal_time' => array('elt',$data['deal_time'])]);
+//				                    })
+//				                    ->where(['customer.is_lock' => 0])
+//				                    ->where(['customer.deal_status' => ['neq','已成交']]);
+//								});
+//							};
+//	    	} else {
+//				$whereData = function($query) use ($data){
+//				        	$query->where(['customer.owner_user_id'=>0])
+//					        	->whereOr(function ($query) use ($data) {
+//									$query->where(function ($query) use ($data) {
+//				                        $query->where(['customer.deal_time' => array('elt',$data['deal_time'])]);
+//				                    })
+//				                    ->where(['customer.is_lock' => 0])
+//				                    ->where(['customer.deal_status' => ['neq','已成交']]);
+//								});
+//							};
+//	    	}
+//    	} else {
     		$whereData['customer.owner_user_id'] = 0;
-    	}
-    	return $whereData ? : '';
+//    	}
+    	return !empty($whereData) ? $whereData : '';
     }
 
 	/**
@@ -764,109 +786,415 @@ class Customer extends Common
     	}
     	$this->error = '没有权限';
     	return false;
-    } 
-
-	/**
-     * 客户到期天数
-     * @author Michael_xu
-     * @param 
-     * @return
-     */     
-    public function getPoolDay($param)
-    {
-    	$poolDay = '';
-    	$isPool = 0;
-    	$is_lock = $param['is_lock'] ? : 0;
-    	$deal_status = $param['deal_status'] ? : '未成交';
-    	$update_time = $param['update_time'];
-    	if (strtotime(date('Y-m-d H:i:s', $param['update_time'])) != $param['update_time']) {
-    		$update_time = strtotime($param['update_time']);
-    	}
-    	if (!$is_lock && $deal_status !== '已成交') {
-    		$follow_time = time()-$param['follow_day']*86400;
-	    	$deal_time = time()-$param['deal_day']*86400;
-	    	if (($update_time < $follow_time) || ($param['deal_time'] < $deal_time)) {
-				$isPool = 1; //是公海
-	    	} else {
-				$sub_follow_day = ceil(($update_time-$follow_time)/86400);
-				$sub_deal_day = ceil(($param['deal_time']-$deal_time)/86400);
-	    		$poolDay = ($sub_deal_day > $sub_follow_day) ? $sub_follow_day : $sub_deal_day;
-	    		$poolDay = $poolDay ? : 0;
-	    		if ($poolDay < 0) {
-	    			$isPool = 1; //是公海
-	    		}	    		
-	    	}
-    	} elseif ($is_lock == 1) {
-    		$poolDay = ''; //锁定
-    	} elseif ($deal_status == '已成交') {
-    		$poolDay = '';
-    	}
-    	if (!$param['owner_user_id']) {
-    		$isPool = 1; //是公海
-    	}
-    	$data = [];
-    	$data['poolDay'] = $poolDay;
-    	$data['isPool'] = $isPool;
-    	return $data;
     }
 
-	/**
-     * [待进入客户池条件]
-     * @author Michael_xu
-     * @param 
-     * @return                   
-     */	
-    public function getWhereByRemind()
+    /**
+     * 客户到期天数
+     *
+     * @param array $customerIds 客户ID
+     * @author fanqi
+     * @since 2021-04-19
+     * @return array
+     */
+    public function getPoolDay($customerIds = [], $userIds = [])
     {
-		$configModel = new \app\crm\model\ConfigData();
-        $configInfo = $configModel->getData();
-        $config = $configInfo['config'] ? : 0;
-        $follow_day = $configInfo['follow_day'] ? : 0;
-        $deal_day = $configInfo['deal_day'] ? : 0;
-		$remind_config = $configInfo['remind_config'] ? : 0;
-		$remind_day = $configInfo['remind_day'] ? : 0;
-        $whereData = [];    
-		//启用        
-        if ($config == 1 && $remind_config == 1) {
-            //默认公海条件(没有负责人或已经到期)
-            //通过提前提醒时间,计算查询时间段
-            $remind_follow_day = ($follow_day-$remind_day > 0) ? ($follow_day-$remind_day) : $follow_day-1;
-            $remind_deal_day = ($deal_day-$remind_day > 0) ? ($deal_day-$remind_day) : $deal_day-1;
-            if (($follow_day > 0) && ($deal_day > 0)) {
-				$follow_between = array(time()-$follow_day*86400,time()-$remind_follow_day*86400);
-                $deal_between = array(time()-$deal_day*86400,time()-$remind_deal_day*86400);
-                $data['update_between'] = $follow_between;
-                $data['deal_between'] = $deal_between;
-				if ($follow_day < $deal_day) {
-					$whereData = function($query) use ($data){
-					        	$query->where(function ($query) use ($data) {
-										$query->where(function ($query) use ($data) {
-					                        $query->where(['customer.update_time' => array('between',$data['update_between'])])
-					                        ->whereOr(['customer.deal_time' => array('between',$data['deal_between'])]);
-					                    })
-					                    ->where(['customer.is_lock' => 0])
-					                    ->where(['customer.deal_status' => ['neq','已成交']]);
-									});							
-								};
-		    	} else {
-					$whereData = function($query) use ($data){
-					        	$query->where(function ($query) use ($data) {
-										$query->where(function ($query) use ($data) {
-					                        $query->where(['customer.deal_time' => array('between',$data['deal_between'])]);
-					                    })
-					                    ->where(['customer.is_lock' => 0])
-					                    ->where(['customer.deal_status' => ['neq','已成交']]);
-									});							
-								};	    		
-		    	}
-            } else {
-                $whereData['customer.customer_id'] = 0;
+        $result = [];
+
+        $where['pool.status'] = 1;      # 公海开启
+        $where['pool.remind_conf'] = 1; # 提醒开启
+        $poolRules = db('crm_customer_pool_rule')->alias('rule')->field(['rule.*', 'pool.remain_day'])->join('__CRM_CUSTOMER_POOL__ pool', 'rule.pool_id = pool.pool_id', 'LEFT')->where($where)->select();
+
+        if (!empty($poolRules)) {
+            foreach ($poolRules AS $key => $value) {
+                if ($value['type'] == 1) $result[] = $this->getFollowUpQueryResult($value['level_conf'], $value['level'], $value['deal_handle'], $value['business_handle'], $value['remain_day'], $customerIds, $userIds);
+                if ($value['type'] == 2) $result[] = $this->getBusinessQueryResult($value['level_conf'], $value['level'], $value['deal_handle'], $value['remain_day'], $customerIds, $userIds);
+                if ($value['type'] == 3) $result[] = $this->getDealQueryResult($value['level_conf'], $value['level'], $value['business_handle'], $value['remain_day'], $customerIds, $userIds);
             }
-        } else {
-            $whereData['customer.customer_id'] = 0;
         }
-        return $whereData ? : '';
-    } 
+
+        return $this->getMinIntoPoolDay($result);
+    }
+
+    /**
+     * 获取每个客户最快进入公海天数
+     *
+     * @param $data
+     * @author fanqi
+     * @since 2021-04-19
+     * @return array
+     */
+    private function getMinIntoPoolDay($data)
+    {
+        $result = [];
+        $temporary = [];
+
+        # 整理数据
+        foreach ($data AS $k1 => $v1) {
+            if (empty($v1)) continue;
+
+            foreach ($v1 AS $k2 => $v2) {
+                $temporary[$k2][] = $v2;
+            }
+        }
+
+        # 每个客户最快进入公海天数
+        foreach ($temporary AS $k1 => $v1) {
+            $result[$k1] = min($v1);
+        }
+
+        return $result;
+    }
+
+    /**
+     * 获取公海规则最小数字（最快进入公海天数）
+     *
+     * @param $data
+     * @author fanqi
+     * @since 2021-04-19
+     * @return int
+     */
+    private function getMinDay($data)
+    {
+        $number = 1;
+
+        foreach ($data AS $k1 => $v1) {
+            if (empty($number) || $v1['limit_day'] < $number) $number = $v1['limit_day'];
+        }
+
+        return $number;
+    }
+
+    /**
+     * N天内无新建跟进记录的客户
+     *
+     * @param int $type 类型：1 所有用户，不分级别，2 根据用户级别区分
+     * @param Json $levels 级别数据
+     * @param int $dealStatus 是否排除成交用户：1 排除，0 不排除
+     * @param int $businessStatus 是否排除有商机用户：1 排除，0 不排除
+     * @param int $remainDay 提前几天提醒
+     * @param array $customerIds 客户ID
+     * @param array $userIds 员工ID
+     * @author fanqi
+     * @since 2021-04-01
+     * @return array
+     */
+    private function getFollowUpQueryResult($type, $levels, $dealStatus, $businessStatus, $remainDay, $customerIds = [], $userIds = [])
+    {
+        # 结果数据
+        $result = [];
+
+        # 转换格式
+        $levels = json_decode($levels, true);
+
+        # 用于最后计算还有几天进入公海池
+        $limitDay = [];
+
+        # 数据权限
+        $authUserIds = (new User())->getUserByPer('crm', 'customer', 'index');
+        if (empty($authUserIds)) return $result;
+
+        # 默认条件
+        $where = "`customer`.`owner_user_id` IN (".implode(',', $authUserIds).")";
+
+        # 所有用户，不区分级别
+        if ($type == 1) {
+            foreach ($levels AS $k1 => $v1) {
+                if (!empty($v1['limit_day'])) {
+                    $time = strtotime(date('Y-m-d 00:00:00', time() - 86400 * $v1['limit_day']));
+                    $where .= " AND ((`customer`.`last_time` > ".$time." AND `customer`.`last_time` > `customer`.`obtain_time`) OR (`customer`.`obtain_time` > ".$time." AND `customer`.`obtain_time` > `customer`.`last_time`)  OR (`customer`.`obtain_time` > ".$time." AND ISNULL(`customer`.`last_time`)))";
+
+                    $limitDay['all'] = $v1['limit_day'];
+                }
+            }
+        }
+
+        # 根据用户级别设置条件
+        if ($type == 2) {
+            foreach ($levels AS $k1 => $v1) {
+                if (!empty($v1['level']) && !empty($v1['limit_day'])) {
+                    $time = strtotime(date('Y-m-d 00:00:00', time() - 86400 * $v1['limit_day']));
+                    if ($k1 == 0) {
+                        $where .= " AND ( ((`customer`.`level` = '".$v1['level']."' AND `customer`.`last_time` > " . $time . " AND `customer`.`last_time` > `customer`.`obtain_time`) OR (`customer`.`level` = '".$v1['level']."' AND `customer`.`obtain_time` > ".$time." AND `customer`.`obtain_time` > `customer`.`last_time`) OR (`customer`.`level` = '".$v1['level']."' AND `customer`.`obtain_time` > " . $time . " AND ISNULL(`customer`.`last_time`)))";
+                    } else {
+                        $where .= " OR ((`customer`.`level` = '".$v1['level']."' AND `customer`.`last_time` > " . $time . " AND `customer`.`last_time` > `customer`.`obtain_time`) OR (`customer`.`level` = '".$v1['level']."' AND `customer`.`obtain_time` > ".$time." AND `customer`.`obtain_time` > `customer`.`last_time`) OR (`customer`.`level` = '".$v1['level']."' AND `customer`.`obtain_time` > " . $time . " AND ISNULL(`customer`.`last_time`)))";
+                    }
+
+                    $limitDay[$v1['level']] = $v1['limit_day'];
+                }
+            }
+
+            # 获取最小天数，对于没有设置级别的客户数据使用
+            $minLimit = $this->getMinDay($levels);
+            $minTime = strtotime(date('Y-m-d 00:00:00', time() - 86400 * $minLimit));
+
+            $where .= " OR ((!`customer`.`level` AND `customer`.`last_time` > ".$minTime." AND `customer`.`last_time` > `customer`.`obtain_time`) OR (!`customer`.`level` AND `customer`.`obtain_time` > ".$time." AND `customer`.`obtain_time` > `customer`.`last_time`) OR (!`customer`.`level` AND `customer`.`obtain_time` > ".$minTime." AND ISNULL(`customer`.`last_time`))) )";
+        }
+
+        # 选择不进入公海的客户（已成交客户）
+        if (!empty($dealStatus)) $where .= " AND (`customer`.`deal_status` <> '已成交' OR ISNULL(`customer`.`deal_status`))";
+
+        # 选择不进入公海的客户（有商机客户)
+        if (!empty($businessStatus)) $where .= " AND ISNULL(`business`.`customer_id`)";
+
+        # 查询指定客户
+        if (!empty($customerIds)) $where .= " AND `customer`.`customer_id` IN (".implode(',', $customerIds).")";
+
+        # 查询指定员工
+        if (!empty($userIds)) $where .= " AND `customer`.`owner_user_id` IN (".implode(',', $userIds).")";
+
+        # 锁定的客户不提醒
+        $where .= " AND `customer`.`is_lock` = 0";
+
+        # 查询符合条件的客户
+        $data = db('crm_customer')->alias('customer')
+            ->field(['customer.customer_id', 'customer.obtain_time', 'customer.level', 'customer.last_time'])
+            ->join('__CRM_BUSINESS__ business', 'business.customer_id = customer.customer_id', 'LEFT')
+            ->where($where)->select();
+
+        # 计算到期天数
+        foreach ($data AS $k1 => $v1) {
+            if ($type == 1) {
+                $customerTime = !empty($v1['last_time']) && $v1['last_time'] > $v1['obtain_time'] ? $v1['last_time'] : $v1['obtain_time'];
+                $date = date('Y-m-d 00:00:00', ($customerTime + $limitDay['all'] * 86400) - $remainDay * 86400);
+                $dateRange = strtotime($date);
+                if (time() > $dateRange) {
+                    $inPool = (($customerTime + $limitDay['all'] * 86400) - time()) / 86400;
+                    $result[$v1['customer_id']] = $inPool > 0 ? round($inPool) : 0;
+                }
+            }
+            if ($type == 2) {
+                $customerTime = !empty($v1['last_time']) && $v1['last_time'] > $v1['obtain_time'] ? $v1['last_time'] : $v1['obtain_time'];
+                $day = !empty($limitDay[$v1['level']]) ? $limitDay[$v1['level']] : min($limitDay);
+                $date = date('Y-m-d 00:00:00', ($customerTime + $day * 86400) - $remainDay * 86400);
+                $dateRange = strtotime($date);
+                if (time() > $dateRange) {
+                    $inPool = (($customerTime + $day * 86400) - time()) / 86400;
+                    $result[$v1['customer_id']] = $inPool > 0 ? round($inPool) : 0;
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * N天内无新建商机的客户
+     *
+     * @param int $type 类型：1 所有用户，不分级别，2 根据用户级别区分
+     * @param Json $levels 级别数据
+     * @param int $dealStatus 是否排除成交用户：1 排除，0 不排除
+     * @param int $remainDay 提前几天提醒
+     * @param array $customerIds 客户ID
+     * @param array $userIds 员工ID
+     * @author fanqi
+     * @since 2021-04-01
+     * @return array|false|string
+     */
+    private function getBusinessQueryResult($type, $levels, $dealStatus, $remainDay, $customerIds = [], $userIds = [])
+    {
+        # 结果数据
+        $result = [];
+
+        # 转换格式
+        $levels = json_decode($levels, true);
+
+        # 用于最后计算还有几天进入公海池
+        $limitDay = [];
+
+        # 数据权限
+        $authUserIds = (new User())->getUserByPer('crm', 'customer', 'index');
+        if (empty($authUserIds)) return $result;
+
+        # 默认条件
+        $where = "`customer`.`owner_user_id` IN (".implode(',', $authUserIds).")";
+
+        # 所有用户，不区分级别
+        if ($type == 1) {
+            foreach ($levels AS $k1 => $v1) {
+                if (!empty($v1['limit_day'])) {
+                    $time = strtotime(date('Y-m-d 00:00:00', time() - 86400 * $v1['limit_day']));
+                    $where .= " AND ( (ISNULL(`business`.`customer_id`) AND `customer`.`obtain_time` > ".$time.") OR (`customer`.`obtain_time` > ".$time." AND `customer`.`obtain_time` > `business`.`create_time`) OR (`business`.`create_time` > ".$time." AND `business`.`create_time` > `customer`.`obtain_time`) )";
+
+                    $limitDay['all'] = $v1['limit_day'];
+                }
+            }
+        }
+
+        # 根据用户级别设置条件
+        if ($type == 2) {
+            foreach ($levels AS $k1 => $v1) {
+                if (!empty($v1['level']) && !empty($v1['limit_day'])) {
+                    $time = strtotime(date('Y-m-d 00:00:00', time() - 86400 * $v1['limit_day']));
+                    if ($k1 == 0) {
+                        $where .= " AND ( ((ISNULL(`business`.`customer_id`) AND `customer`.`obtain_time` > ".$time." AND `customer`.`level` = '".$v1['level']."') OR (`customer`.`obtain_time` > ".$time." AND `customer`.`obtain_time` > `business`.`create_time` AND `customer`.`level` = '".$v1['level']."') OR (`business`.`create_time` > $time AND `business`.`create_time` > `customer`.`obtain_time` AND `customer`.`level` = '".$v1['level']."'))";
+                    } else {
+                        $where .= " OR ((ISNULL(`business`.`customer_id`) AND `customer`.`obtain_time` > ".$time." AND `customer`.`level` = '".$v1['level']."') OR (`customer`.`obtain_time` > ".$time." AND `customer`.`obtain_time` > `business`.`create_time` AND `customer`.`level` = '".$v1['level']."') OR (`business`.`create_time` > $time AND `business`.`create_time` > `customer`.`obtain_time` AND `customer`.`level` = '".$v1['level']."'))";
+                    }
+                }
+
+                $limitDay[$v1['level']] = $v1['limit_day'];
+            }
+
+            # 获取最小天数，对于没有设置级别的客户数据使用
+            $minLimit = $this->getMinDay($levels);
+            $minTime = strtotime(date('Y-m-d 00:00:00', time() - 86400 * $minLimit));
+
+            $where .= " OR ((ISNULL(`business`.`customer_id`) AND `customer`.`obtain_time` > ".$minTime." AND !`customer`.`level`) OR (`customer`.`obtain_time` > ".$minTime." AND `customer`.`obtain_time` > `business`.`create_time` AND !`customer`.`level`) OR (`business`.`create_time` > ".$minTime." AND `business`.`create_time` > `customer`.`obtain_time` AND !`customer`.`level`)) )";
+        }
+
+        # 选择不进入公海的客户（已成交客户）
+        if (!empty($dealStatus)) $where .= " AND (`customer`.`deal_status` <> '已成交' OR ISNULL(`customer`.`deal_status`))";
+
+        # 查询指定客户
+        if (!empty($customerIds)) $where .= " AND `customer`.`customer_id` IN (".implode(',', $customerIds).")";
+
+        # 查询指定员工
+        if (!empty($userIds)) $where .= " AND `customer`.`owner_user_id` IN (".implode(',', $userIds).")";
+
+        # 锁定的客户不提醒
+        $where .= " AND `customer`.`is_lock` = 0";
+
+        # 查询匹配条件的客户
+        $data = db('crm_customer')->alias('customer')
+            ->field(['customer.customer_id', 'customer.obtain_time AS customer_time', 'customer.level', 'business.create_time AS business_time'])
+            ->join('__CRM_BUSINESS__ business', 'business.customer_id = customer.customer_id', 'LEFT')
+            ->where($where)->select();
+
+        # 计算到期天数
+        foreach ($data AS $k1 => $v1) {
+            if ($type == 1) {
+                $customerTime = !empty($v1['business_time']) && $v1['business_time'] > $v1['customer_time'] ? $v1['business_time'] : $v1['customer_time'];
+                $date = date('Y-m-d 00:00:00', ($customerTime + $limitDay['all'] * 86400) - $remainDay * 86400);
+                $dateRange = strtotime($date);
+                if (time() > $dateRange) {
+                    $inPool = (($customerTime + $limitDay['all'] * 86400) - time()) / 86400;
+                    $result[$v1['customer_id']] = $inPool > 0 ? round($inPool) : 0;
+                }
+            }
+            if ($type == 2) {
+                $customerTime = !empty($v1['business_time']) && $v1['business_time'] > $v1['customer_time'] ? $v1['business_time'] : $v1['customer_time'];
+                $day = !empty($limitDay[$v1['level']]) ? $limitDay[$v1['level']] : min($limitDay);
+                $date = date('Y-m-d 00:00:00', ($customerTime + $day * 86400) - $remainDay * 86400);
+                $dateRange = strtotime($date);
+                if (time() > $dateRange) {
+                    $inPool = (($customerTime + $day * 86400) - time()) / 86400;
+                    $result[$v1['customer_id']] = $inPool > 0 ? round($inPool) : 0;
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * N天内没有成交的客户
+     *
+     * @param int $type 类型：1 所有用户，不分级别，2 根据用户级别区分
+     * @param Json $levels 级别数据
+     * @param int $businessStatus 是否排除有商机用户：1 排除，0 不排除
+     * @param int $remainDay 提前几天提醒
+     * @param array $customerIds 客户ID
+     * @param array $userIds 员工ID
+     * @author fanqi
+     * @since 2021-04-01
+     * @return array|false|string
+     */
+    private function getDealQueryResult($type, $levels, $businessStatus, $remainDay, $customerIds = [], $userIds = [])
+    {
+        # 结果数据
+        $result = [];
+
+        # 转换格式
+        $levels = json_decode($levels, true);
+
+        # 用于最后计算还有几天进入公海池
+        $limitDay = [];
+
+        # 数据权限
+        $authUserIds = (new User())->getUserByPer('crm', 'customer', 'index');
+        if (empty($authUserIds)) return $result;
+
+        # 默认条件
+        $where = "`customer`.`owner_user_id` IN (".implode(',', $authUserIds).")";
+
+        # 所有用户，不区分级别
+        if ($type == 1) {
+            foreach ($levels AS $k1 => $v1) {
+                if (!empty($v1['limit_day'])) {
+                    $time = strtotime(date('Y-m-d 00:00:00', time() - 86400 * $v1['limit_day']));
+                    $where .= " AND ( (ISNULL(`contract`.`customer_id`) AND `customer`.`obtain_time` > ".$time.") OR (`customer`.`obtain_time` > ".$time." AND `customer`.`obtain_time` > `contract`.`create_time`) OR (`contract`.`create_time` > ".$time." AND `contract`.`create_time` > `customer`.`obtain_time`) )";
+
+                    $limitDay['all'] = $v1['limit_day'];
+                }
+            }
+        }
+
+        # 根据用户级别设置条件
+        if ($type == 2) {
+            foreach ($levels AS $k1 => $v1) {
+                if (!empty($v1['level']) && !empty($v1['limit_day'])) {
+                    $time = strtotime(date('Y-m-d 00:00:00', time() - 86400 * $v1['limit_day']));
+                    if ($k1 == 0) {
+                        $where .= " AND ( ((ISNULL(`contract`.`customer_id`) AND `customer`.`level` = '".$v1['level']."' AND `customer`.`obtain_time` > ".$time.") OR (`customer`.`level` = '".$v1['level']."' AND `customer`.`obtain_time` > ".$time." AND `customer`.`obtain_time` > `contract`.`create_time`) OR (`contract`.`create_time` > ".$time." AND `contract`.`create_time` > `customer`.`obtain_time` AND `customer`.`level` = '".$v1['level']."'))";
+                    } else {
+                        $where .= " OR ((ISNULL(`contract`.`customer_id`) AND `customer`.`level` = '".$v1['level']."' AND `customer`.`obtain_time` > ".$time.") OR (`customer`.`level` = '".$v1['level']."' AND `customer`.`obtain_time` > ".$time." AND `customer`.`obtain_time` > `contract`.`create_time`) OR (`contract`.`create_time` > ".$time." AND `contract`.`create_time` > `customer`.`obtain_time` AND `customer`.`level` = '".$v1['level']."'))";
+                    }
+                }
+
+                $limitDay[$v1['level']] = $v1['limit_day'];
+            }
+
+            # 获取最小天数，对于没有设置级别的客户数据使用
+            $minLimit = $this->getMinDay($levels);
+            $minTime = strtotime(date('Y-m-d 00:00:00', time() - 86400 * $minLimit));
+
+            $where .= "  OR ((ISNULL(`contract`.`customer_id`) AND !`customer`.`level` AND `customer`.`obtain_time` > ".$minTime.") OR (!`customer`.`level` AND `customer`.`obtain_time` > ".$minTime." AND `customer`.`obtain_time` > `contract`.`create_time`) OR (`contract`.`create_time` > ".$minTime." AND `contract`.`create_time` > `customer`.`obtain_time` AND !`customer`.`level`)) )";
+        }
+
+        # 选择不进入公海的客户（有商机客户）
+        if (!empty($businessStatus)) $where .= " AND ISNULL(`business`.`customer_id`)";
+
+        # 查询指定客户
+        if (!empty($customerIds)) $where .= " AND `customer`.`customer_id` IN (".implode(',', $customerIds).")";
+
+        # 查询指定员工
+        if (!empty($userIds)) $where .= " AND `customer`.`owner_user_id` IN (".implode(',', $userIds).")";
+
+        # 锁定的客户不提醒
+        $where .= " AND `customer`.`is_lock` = 0";
+
+        # 查询符合条件的客户
+        $data = db('crm_customer')->alias('customer')
+            ->field(['customer.customer_id', 'customer.obtain_time AS customer_time', 'customer.level', 'contract.create_time AS contract_time'])
+            ->join('__CRM_BUSINESS__ business', 'business.customer_id = customer.customer_id', 'LEFT')
+            ->join('__CRM_CONTRACT__ contract', 'contract.customer_id = customer.customer_id', 'LEFT')
+            ->where($where)->select();
+
+        # 计算到期天数
+        foreach ($data AS $k1 => $v1) {
+            if ($type == 1) {
+                $customerTime = !empty($v1['contract_time']) && $v1['contract_time'] >  $v1['customer_time'] ? $v1['contract_time'] : $v1['customer_time'];
+                $date = date('Y-m-d 00:00:00', ($customerTime + $limitDay['all'] * 86400) - $remainDay * 86400);
+                $dateRange = strtotime($date);
+                if (time() > $dateRange) {
+                    $inPool = (($customerTime + $limitDay['all'] * 86400) - time()) / 86400;
+                    $result[$v1['customer_id']] = $inPool > 0 ? round($inPool) : 0;
+                }
+            }
+            if ($type == 2) {
+                $customerTime = !empty($v1['contract_time']) && $v1['contract_time'] > $v1['customer_time'] ? $v1['contract_time'] : $v1['customer_time'];
+                $day = !empty($limitDay[$v1['level']]) ? $limitDay[$v1['level']] : min($limitDay);
+                $date = date('Y-m-d 00:00:00', ($customerTime + $day * 86400) - $remainDay * 86400);
+                $dateRange = strtotime($date);
+                if (time() > $dateRange) {
+                    $inPool = (($customerTime + $day * 86400) - time()) / 86400;
+                    $result[$v1['customer_id']] = $inPool > 0 ? round($inPool) : 0;
+                }
+            }
+        }
+
+        return $result;
+    }
 
 	/**
      * [今日进入客户池条件]
@@ -928,91 +1256,112 @@ class Customer extends Common
         	$whereData['customer.update_time'] = array('between',array(strtotime(date('Y-m-d',time())),time()));
         }
         return $whereData ? : '';
-    }    
-
-	/**
-     * [客户拥有、锁定数]
-     * @author Michael_xu
-     * @param is_deal 1包含成交客户
-     * @param types 1拥有客户上限2锁定客户上限 
-     * @return                   
-     */	
-    public function getCountByHave($user_id, $is_deal = 0,$types = 1)
-    {
-		$where = [];
-    	$where['owner_user_id'] = $user_id;    	
-    	//公海逻辑
-		$configModel = new \app\crm\model\ConfigData();
-		$userModel = new \app\admin\model\User();
-        $configInfo = $configModel->getData();
-    	$config = $configInfo['config'] ? : 0;
-    	$follow_day = $configInfo['follow_day'] ? : 0;
-    	$deal_day = $configInfo['deal_day'] ? : 0;
-    	//默认条件(没有到期或已锁定)
-    	$data['follow_time'] = time()-$follow_day*86400;
-    	$data['deal_time'] = time()-$deal_day*86400;
-    	$whereData = '';
-    	//公海开启
-    	if ($config == 1) {
-			switch ($types) {
-				case '1' : 
-					if ($is_deal !== 1) {
-						//不包含成交客户
-						$where['deal_status'] = ['neq','已成交'];
-						if ($follow_day < $deal_day) {
-							$whereData = function($query) use ($data){
-						        		$query->where(function ($query) use ($data) {
-					                        $query->where(['update_time' => array('gt',$data['follow_time']),'deal_time' => array('gt',$data['deal_time'])]);
-					                    });
-									};    			
-			    		} else {
-							$whereData = function($query) use ($data){
-						        		$query->where(function ($query) use ($data) {
-					                        $query->where(['deal_time' => array('gt',$data['deal_time'])]);
-					                    });
-									};    			
-			    		}						
-					} else {
-						if ($follow_day < $deal_day) {
-							$whereData = function($query) use ($data){
-						        		$query->where(function ($query) use ($data) {
-					                        $query->where(['update_time' => array('gt',$data['follow_time']),'deal_time' => array('gt',$data['deal_time'])]);
-					                    })
-					                    ->whereOr(['deal_status' => ['eq','已成交']]);
-									};    			
-			    		} else {
-							$whereData = function($query) use ($data){
-						        		$query->where(function ($query) use ($data) {
-					                        $query->where(['deal_time' => array('gt',$data['deal_time'])]);
-					                    })
-					                    ->whereOr(['deal_status' => ['eq','已成交']]);
-									};    			
-			    		}						
-					}
-		    		break;    						
-				case '2' : 
-					$where['is_lock'] = ['eq',1]; 
-					//默认不包含成交客户
-					$where['deal_status'] = ['neq','已成交'];
-		    		break;    					
-			}
-    	} else {
-			//公海未开启
-    		if ($is_deal !== 1) {
-				//不包含成交客户
-				$where['deal_status'] = ['neq','已成交'];					
-    		} 
-			switch ($types) {
-				case '2' : 
-					//锁定，默认不包含成交客户
-					$where['deal_status'] = ['neq','已成交'];
-					$where['is_lock'] = 1; 
-					break;
-			}
-    	}
-    	$count = $this->where($where)->where($whereData)->count();
-    	return $count ? : 0;
     }
+
+    /**
+     * 获取客户拥有数或锁定数
+     *
+     * @param int $userId 用户ID
+     * @param int $isDeal 成交客户是否占用拥有客户数条件：1 占用 0 不占用
+     * @param int $types 类型：1 拥有客户数，2 锁定客户数
+     * @author fanqi
+     * @since 2021-04-15
+     * @return int
+     */
+    public function getCountByHave($userId, $isDeal = 0, $types = 1)
+    {
+        # 默认条件
+        $where['owner_user_id'] = $userId;
+
+        # 成交客户是否占用拥有客户数条件
+        if ($types == 1 && empty($isDeal)) {
+            $where['deal_status'] = ['neq', '已成交'];
+        }
+
+        # 锁定客户数条件，默认排除已成交客户
+        if ($types == 2) {
+            $where['deal_status'] = ['neq', '已成交'];
+            $where['is_lock'] = 1;
+        }
+
+        return $this->where($where)->count();
+    }
+//    public function getCountByHave($user_id, $is_deal = 0,$types = 1)
+//    {
+//		$where = [];
+//    	$where['owner_user_id'] = $user_id;
+//    	//公海逻辑
+//		$configModel = new \app\crm\model\ConfigData();
+//		$userModel = new \app\admin\model\User();
+//        $configInfo = $configModel->getData();
+//    	$config = $configInfo['config'] ? : 0;
+//    	$follow_day = $configInfo['follow_day'] ? : 0;
+//    	$deal_day = $configInfo['deal_day'] ? : 0;
+//    	//默认条件(没有到期或已锁定)
+//    	$data['follow_time'] = time()-$follow_day*86400;
+//    	$data['deal_time'] = time()-$deal_day*86400;
+//    	$whereData = '';
+//    	//公海开启
+//    	if ($config == 1) {
+//			switch ($types) {
+//				case '1' :
+//					if ($is_deal !== 1) {
+//						//不包含成交客户
+//						$where['deal_status'] = ['neq','已成交'];
+//						if ($follow_day < $deal_day) {
+//							$whereData = function($query) use ($data){
+//						        		$query->where(function ($query) use ($data) {
+//					                        $query->where(['update_time' => array('gt',$data['follow_time']),'deal_time' => array('gt',$data['deal_time'])]);
+//					                    });
+//									};
+//			    		} else {
+//							$whereData = function($query) use ($data){
+//						        		$query->where(function ($query) use ($data) {
+//					                        $query->where(['deal_time' => array('gt',$data['deal_time'])]);
+//					                    });
+//									};
+//			    		}
+//					} else {
+//						if ($follow_day < $deal_day) {
+//							$whereData = function($query) use ($data){
+//						        		$query->where(function ($query) use ($data) {
+//					                        $query->where(['update_time' => array('gt',$data['follow_time']),'deal_time' => array('gt',$data['deal_time'])]);
+//					                    })
+//					                    ->whereOr(['deal_status' => ['eq','已成交']]);
+//									};
+//			    		} else {
+//							$whereData = function($query) use ($data){
+//						        		$query->where(function ($query) use ($data) {
+//					                        $query->where(['deal_time' => array('gt',$data['deal_time'])]);
+//					                    })
+//					                    ->whereOr(['deal_status' => ['eq','已成交']]);
+//									};
+//			    		}
+//					}
+//		    		break;
+//				case '2' :
+//					$where['is_lock'] = ['eq',1];
+//					//默认不包含成交客户
+//					$where['deal_status'] = ['neq','已成交'];
+//		    		break;
+//			}
+//    	} else {
+//			//公海未开启
+//    		if ($is_deal !== 1) {
+//				//不包含成交客户
+//				$where['deal_status'] = ['neq','已成交'];
+//    		}
+//			switch ($types) {
+//				case '2' :
+//					//锁定，默认不包含成交客户
+//					$where['deal_status'] = ['neq','已成交'];
+//					$where['is_lock'] = 1;
+//					break;
+//			}
+//    	}
+//    	$count = $this->where($where)->where($whereData)->count();
+//    	return $count ? : 0;
+//    }
 
 	/**
      * [客户成交新增数量]
@@ -1110,16 +1459,17 @@ class Customer extends Common
         $customerWhere = [];
         if ((!empty($param['type']) && $param['type'] == 2) || !$poolStatus) {
             $customerWhere = $this->getWhereByCustomer();
-            $customerAuth['owner_user_id'] = ['neq', 0];
         }
 
         # 公海
         $poolWhere = [];
         if (!empty($param['type']) && $param['type'] == 9 && $poolStatus) {
-            $poolWhere = $this->getWhereByPool();
+            $poolWhere = ['customer.customer_id' => 0];
+            $model = '公海客户管理模块';
         }
 
         if (!empty($param['type']) && $param['type'] == 9 && !$poolStatus) {
+            $model = '客户管理模块';
             return [];
         }
 
@@ -1144,7 +1494,7 @@ class Customer extends Common
             ->where($poolWhere)
             ->where($lngLatWhere)
             ->where($customerAuth)
-            ->field(['customer_id', 'name', 'address', 'detail_address', 'owner_user_id', 'lat', 'lng'])
+            ->field(['customer_id', 'name', 'address', 'detail_address', 'owner_user_id', 'lat', 'lng','next_time','last_time'])
             ->order('update_time', 'desc')
             ->select();
 
@@ -1155,6 +1505,8 @@ class Customer extends Common
             $ownerUserName = !empty($ownerUserInfo['realname']) ? $ownerUserInfo['realname'] : '';
             $list[$key]['owner_user_name'] = !empty($ownerUserName) ? $ownerUserName : '暂无负责人';
             $list[$key]['distance'] = $this->getLngLatDistance($param['lng'], $param['lat'], $value['lng'], $value['lat'], 1, 0);
+            $list[$key]['last_time'] = !empty($value['last_time'])?date('y-m-d H:i:s',$value['last_time']):!empty($value['next_time'])?date('y-m-d H:i:s',$value['next_time']):null;
+            $list[$key]['model']=$model;
         }
 
         return ['list' => $list, 'count' => $count];
@@ -1233,21 +1585,19 @@ class Customer extends Common
     public function getSystemInfo($id)
     {
         # 客户
-        $field = ['obtain_time', 'deal_status', 'create_time', 'update_time', 'create_time'];
+        $field = ['obtain_time', 'deal_status', 'create_time', 'update_time', 'create_time', 'last_time', 'last_record'];
         $customer = Db::name('crm_customer')->field($field)->where('customer_id', $id)->find();
         # 创建人
         $realname = Db::name('admin_user')->where('id', $customer['create_user_id'])->value('realname');
-        # 最后跟进时间
-        $follow = Db::name('crm_activity')->field(['content', 'update_time'])->where(['type' => 1, 'activity_type' => 2, 'activity_type_id' => $id])->order('activity_id', 'desc')->find();
 
         return [
-            'obtain_time'      => !empty($customer['obtain_time']) ? date('Y-m-d H:i:s', $customer['obtain_time']) : '',
-            'follow_record'    => !empty($follow['content']) ? $follow['content'] : '',
-            'create_user_name' => $realname,
-            'create_time'      => date('Y-m-d H:i:s', $customer['create_time']),
-            'update_time'      => date('Y-m-d H:i:s', $customer['update_time']),
-            'follow_time'      => !empty($follow['update_time']) ? date('Y-m-d H:i:s', $follow['update_time']) : '',
-            'deal_status'      => $customer['deal_status']
+            'obtain_time' => !empty($customer['obtain_time']) ? date('Y-m-d H:i:s', $customer['obtain_time']) : '',
+            'last_record' => !empty($customer['last_record']) ? $customer['last_record'] : '',
+            'create_user_id' => $realname,
+            'create_time' => date('Y-m-d H:i:s', $customer['create_time']),
+            'update_time' => date('Y-m-d H:i:s', $customer['update_time']),
+            'last_time' => !empty($customer['last_time']) ? date('Y-m-d H:i:s', $customer['last_time']) : '',
+            'deal_status' => $customer['deal_status']
         ];
     }
 

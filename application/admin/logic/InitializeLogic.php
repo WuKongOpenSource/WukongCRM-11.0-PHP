@@ -8,6 +8,7 @@
 
 namespace app\admin\logic;
 
+use app\admin\controller\UpdateSql;
 use think\Db;
 use think\Exception;
 
@@ -275,6 +276,32 @@ class InitializeLogic
             # ------ 重置联系人数据 END ------ #
 
 
+            # ------ 重置公海数据 START ------ #
+
+            # 清除公海主数据并重置自增ID
+            Db::query("TRUNCATE TABLE ".$prefix."crm_customer_pool");
+
+            # 清除公海字段数据并重置自增ID
+            Db::query("TRUNCATE TABLE ".$prefix."crm_customer_pool_field_setting");
+
+            # 清除公海用户自定义字段样式数据并重置自增ID
+            Db::query("TRUNCATE TABLE ".$prefix."crm_customer_pool_field_style");
+
+            # 清除公海操作记录数据并重置自增ID
+            Db::query("TRUNCATE TABLE ".$prefix."crm_customer_pool_record");
+
+            # 清除公海关联数据并重置自增ID
+            Db::query("TRUNCATE TABLE ".$prefix."crm_customer_pool_relation");
+
+            # 清除公海规则数据并重置自增ID
+            Db::query("TRUNCATE TABLE ".$prefix."crm_customer_pool_rule");
+
+            # 添加公海默认数据
+            UpdateSql::addPoolDefaultData();
+
+            # ------ 重置公海数据 END ------ #
+
+
             # ------ 重置客户数据 START ------ #
 
             # 获取客户附件ID
@@ -355,15 +382,10 @@ class InitializeLogic
             # ------ 清除数据操作日志数据 END ------ #
 
 
-            # ------ 清除模板打印记录数据 START ------ #
+            # ------ 清除客户配置表（锁定、拥有）数据 START ------ #
             Db::query("TRUNCATE TABLE ".$prefix."crm_customer_config");
-            # ------ 清除模板打印记录数据 END ------ #
-
-
-            # ------ 清除模板打印记录数据 START ------ #
-            Db::query("TRUNCATE TABLE ".$prefix."crm_printing_record");
-            # ------ 清除模板打印记录数据 END ------ #
-
+            # ------ 清除客户配置表（锁定、拥有）数据 END ------ #
+            
 
             # ------ 清除导入数据记录表 START ------ #
             Db::name('admin_import_record')->where(['type' => ['like', 'crm_%']])->delete();
@@ -400,7 +422,7 @@ class InitializeLogic
             # ------ 清除跟客户模块有关的管理数据表 END ------ #
 
 
-            # ------ 清除自动编号数据 START ------ #
+            # ------ 重置自动编号数据 START ------ #
             $time = time();
             Db::query("TRUNCATE TABLE ".$prefix."crm_number_sequence");
             Db::query("INSERT INTO `".$prefix."crm_number_sequence` VALUES (1, 1, 1, 'HT', null, null, null, null, ".$time.", 1, null, 0, 1)");
@@ -415,7 +437,7 @@ class InitializeLogic
             Db::query("INSERT INTO `".$prefix."crm_number_sequence` VALUES (10, 1, 2, 'yyyyMMdd', null, null, null, null, ".$time.", 1, null, 0, 4)");
             Db::query("INSERT INTO `".$prefix."crm_number_sequence` VALUES (11, 2, 1, 'FP', null, null, null, null, ".$time.", 1, null, 0, 4)");
             Db::query("INSERT INTO `".$prefix."crm_number_sequence` VALUES (12, 3, 3, 1, 1, 1, 1, ".$time.", ".$time.", 1, null, 0, 4)");
-            # ------ 清除自动编号数据 END ------ #
+            # ------ 重置自动编号数据 END ------ #
 
 
             # ------ 设置跟进记录常用语 START ------ #
@@ -433,6 +455,12 @@ class InitializeLogic
                 ]);
             }
             # ------ 设置跟进记录常用语 END ------ #
+
+
+            # ------ 清除打印相关数据 START ------ #
+            Db::query("TRUNCATE TABLE ".$prefix."admin_printing_data");
+            Db::query("TRUNCATE TABLE ".$prefix."crm_printing_record");
+            # ------ 清除打印相关数据 END ------ #
 
 
             # ------ 删除审批记录 START ------ #
@@ -829,6 +857,12 @@ class InitializeLogic
 //            Db::name('task')->where('work_id', '<>', 0)->delete();
 //            # 重置自增ID
 //            Db::query("ALTER TABLE ".$prefix."task AUTO_INCREMENT = 1");
+
+            # 清除项目排序数据
+            Db::query("TRUNCATE TABLE ".$prefix."work_order");
+
+            # 清除标签排序数据
+            Db::query("TRUNCATE TABLE ".$prefix."work_lable_order");
 
             # 清除项目数据
             Db::query("TRUNCATE TABLE ".$prefix."work");

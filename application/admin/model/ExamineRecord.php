@@ -55,30 +55,9 @@ class ExamineRecord extends Common
         }
 
         $result = [];
-
-        # 获取创建者信息（办公审批）
-        if ($param['types'] == 'oa_examine' && !empty($param['is_record'])) {
-            $info     = db('oa_examine')->field(['create_time', 'create_user_id'])->where('examine_id', $param['types_id'])->find();
-            $userInfo = $userModel->getUserById($info['create_user_id']);
-
-            $result[] = [
-                'check_date'         => date('Y-m-d H:i:s', $info['create_time']),
-                'check_time'         => $info['create_time'],
-                'check_user_id'      => $info['create_user_id'],
-                'check_user_id_info' => $userInfo,
-                'content'            => '',
-                'flow_id'            => 0,
-                'is_end'             => 0,
-                'order_id'           => 1,
-                'record_id'          => 0,
-                'status'             => 3,
-                'types'              => $param['types'],
-                'types_id'           => $param['types_id']
-            ];
-        }
-
+        
         # 获取创建者信息（业务审批）
-        if (in_array($param['types'], ['crm_contract', 'crm_receivables', 'crm_invoice']) && !empty($param['is_record'])) {
+        if (in_array($param['types'], ['crm_contract', 'crm_receivables', 'crm_invoice'])) {
             $model      = db($param['types']);
             $primaryKey = null;
             if ($param['types'] == 'crm_contract')    $primaryKey = 'contract_id';
@@ -102,9 +81,37 @@ class ExamineRecord extends Common
                 'types'              => $param['types'],
                 'types_id'           => $param['types_id']
             ];
+        }else{
+            unset($param['action']);
+            # 获取创建者信息（办公审批）
+    
+            $info     = db('oa_examine')->field(['create_time', 'create_user_id','update_time,check_status'])->where('examine_id', $param['types_id'])->find();
+            $userInfo = $userModel->getUserById($info['create_user_id']);
+            #撤销之后修改再次审批 审批流程过滤之前的审批记录
+            if($info['check_status']<2){
+                $param['check_time']=['>',$info['update_time']?:$info['create_time']];
+            }
+            $result[] = [
+                'check_date'         => date('Y-m-d H:i:s', $info['create_time']),
+                'check_time'         => $info['create_time'],
+                'check_user_id'      => $info['create_user_id'],
+                'check_user_id_info' => $userInfo,
+                'content'            => '',
+                'flow_id'            => 0,
+                'is_end'             => 0,
+                'order_id'           => 1,
+                'record_id'          => 0,
+                'status'             => 3,
+                'types'              => $param['types'],
+                'types_id'           => $param['types_id']
+            ];
+    
+    
         }
         unset($param['is_record']);
-
+        # 多次撤销使用 只显示最后一次撤销数据条件  is_end 0
+        $param['is_end']=0;
+        
         $list = db('admin_examine_record')->where($param)->order('check_time asc')->select();
         foreach ($list as $k=>$v) {
             $list[$k]['check_user_id_info'] = $userModel->getUserById($v['check_user_id']);

@@ -161,6 +161,10 @@ class Message extends Common
      * 退出合同团队
      */
     const CONTRACT_END = 30;
+    /**
+     * 移除团队成员
+     */
+    const TEAM_END = 31;
 
     /**
      * 消息类型
@@ -265,6 +269,9 @@ class Message extends Common
 
         30 => [
             'template' => '{from_user} 退出了您合同 {title} 的团队。',
+        ],
+        31 => [
+            'template' => '将{from_user} 移除了您 {title} 的团队。',
         ],
     ];
 

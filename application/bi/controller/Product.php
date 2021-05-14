@@ -25,7 +25,7 @@ class Product extends ApiCommon
     {
         $action = [
             'permission' => [''],
-            'allow' => ['statistics', 'productcategory', 'excelexport']
+            'allow' => ['statistics', 'productcategory', 'excelexport','listproduct']
         ];
         Hook::listen('check_auth', $action);
         $request = Request::instance();
@@ -65,7 +65,7 @@ class Product extends ApiCommon
         }
         return resultArray(['data' => $list]);
     }
-
+    
     /**
      * 产品分类销量分析
      *
@@ -99,50 +99,23 @@ class Product extends ApiCommon
     {
         $param = $this->param;
         $list = $this->statistics($param);
-        $data = [];
-        $subtotalCount = [];
-        $sumCount = [];
-        $item = [];
-        $res = [];
-        foreach ($list as &$val) {
-            $res[] = $val['product_id'];
-            $data[$val['product_id']][] = $val;
-        }
-        $res = array_unique($res);
-        foreach ($res as $e) {
-            $unm = 0;
-            $subtotal = 0;
-            foreach ($list as $v) {
-                if ($e == $v['product_id']) {
-                    $unm += $v['num'];
-                    $subtotal += $v['subtotal'];
-                    $sumCount[$e] = $unm;
-                    $subtotalCount[$e] = (float)$subtotal;
-                }
-            }
-            $item[$e][] = [
-                'type' => '',
-                'category_id_info' => '',
-                'product_name' => '',
-                'contract_num' => '',
-                'realname' => '',
-                'name' => '',
-                'price' => '合计',
-                'num' => $sumCount[$e],
-                'subtotal' => $subtotalCount[$e],
-            ];
-        }
-        $items = [];
-        foreach ($data as $key => $value) {
-            $items[] = array_merge($data[$key], $item[$key]);
-        }
-        foreach ($items as $u) {
-            foreach ($u as $d) {
-                $field[] = $d;
-            }
-        }
         $excelLogic = new ExcelLogic();
-        $data = $excelLogic->productExcel($param, $field);
+        $data = $excelLogic->productExcel($param, $list['list']);
         return $data;
     }
+    /**
+     * 产品销量列表
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/4/20 0020 16:16
+     */
+    public function listProduct(){
+        $param = $this->param;
+        $productModel = new \app\crm\model\Product();
+        if (!empty($param['start_time'])) $param['start_time'] = $param['start_time'] . ' 00:00:00';
+        if (!empty($param['end_time']))   $param['end_time']   = $param['end_time'] . ' 23:59:59';
+        $list = $productModel->listProduct($param);
+        return resultArray(['data' => $list]);
+    }
+    
 }

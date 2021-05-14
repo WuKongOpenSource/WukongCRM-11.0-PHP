@@ -33,7 +33,7 @@ class UserLogic
             };
         }
         if($param['structure_id']){
-            $where['user.id']= $param['structure_id'];
+            $where['user.structure_id']= $param['structure_id'];
         }
         if (isset($param['star_type'])) {
             if ($param['star_type'] == 1) {

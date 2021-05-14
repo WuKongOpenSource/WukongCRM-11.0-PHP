@@ -1,9 +1,8 @@
 <?php
-
 /**
- *  PHPExcel_Writer_PDF
+ *  PHPExcel
  *
- *  Copyright (c) 2006 - 2015 PHPExcel
+ *  Copyright (c) 2006 - 2014 PHPExcel
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -21,11 +20,20 @@
  *
  *  @category    PHPExcel
  *  @package     PHPExcel_Writer_PDF
- *  @copyright   Copyright (c) 2006 - 2015 PHPExcel (http://www.codeplex.com/PHPExcel)
+ *  @copyright   Copyright (c) 2006 - 2014 PHPExcel (http://www.codeplex.com/PHPExcel)
  *  @license     http://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt    LGPL
  *  @version     ##VERSION##, ##DATE##
  */
-class PHPExcel_Writer_PDF implements PHPExcel_Writer_IWriter
+
+
+/**
+ *  PHPExcel_Writer_PDF
+ *
+ *  @category    PHPExcel
+ *  @package     PHPExcel_Writer_PDF
+ *  @copyright   Copyright (c) 2006 - 2014 PHPExcel (http://www.codeplex.com/PHPExcel)
+ */
+class PHPExcel_Writer_PDF
 {
 
     /**
@@ -33,7 +41,7 @@ class PHPExcel_Writer_PDF implements PHPExcel_Writer_IWriter
      *
      * @var PHPExcel_Writer_PDF_Core
      */
-    private $renderer = null;
+    private $_renderer = NULL;
 
     /**
      *  Instantiate a new renderer of the configured type within this container class
@@ -59,7 +67,7 @@ class PHPExcel_Writer_PDF implements PHPExcel_Writer_IWriter
         }
 
         $rendererName = 'PHPExcel_Writer_PDF_' . $pdfLibraryName;
-        $this->renderer = new $rendererName($phpExcel);
+        $this->_renderer = new $rendererName($phpExcel);
     }
 
 
@@ -72,18 +80,11 @@ class PHPExcel_Writer_PDF implements PHPExcel_Writer_IWriter
      */
     public function __call($name, $arguments)
     {
-        if ($this->renderer === null) {
+        if ($this->_renderer === NULL) {
             throw new PHPExcel_Writer_Exception("PDF Rendering library has not been defined.");
         }
 
-        return call_user_func_array(array($this->renderer, $name), $arguments);
+        return call_user_func_array(array($this->_renderer, $name), $arguments);
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    public function save($pFilename = null)
-    {
-        $this->renderer->save($pFilename);
-    }
 }

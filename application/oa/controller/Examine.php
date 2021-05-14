@@ -27,7 +27,7 @@ class Examine extends ApiCommon
     {
         $action = [
             'permission'=>[''],
-            'allow'=>['index','save','read','update','delete','categorylist','check','revokecheck','category','categorysave','categoryupdate','categorydelete','categoryenables','excelexport','myexamine']
+            'allow'=>['index','save','read','update','delete','categorylist','check','revokecheck','category','categorysave','categoryupdate','categorydelete','categoryenables','excelexport','myexamine','examinesort']
         ];
         Hook::listen('check_auth',$action);
         $request = Request::instance();
@@ -37,7 +37,7 @@ class Examine extends ApiCommon
         }
         //权限判断
 //        $unAction = ['index','save','read','update','delete','categorylist','check','revokecheck','excelexport',];
-        $unAction = ['index','save','read','update','delete','categorylist','check','revokecheck','category','categorysave','categoryupdate','categorydelete','categoryenables','excelexport','myexamine'];
+        $unAction = ['index','save','read','update','delete','categorylist','check','revokecheck','category','categorysave','categoryupdate','categorydelete','categoryenables','excelexport','myexamine','examinesort'];
         if (!in_array($a, $unAction) && !checkPerByAction('admin', 'oa', 'examine')) {
             header('Content-Type:application/json; charset=utf-8');
             exit(json_encode(['code'=>102,'error'=>'无权操作']));
@@ -287,6 +287,10 @@ class Examine extends ApiCommon
 
         $res = $categoryModel->createData($param);
         if ($res) {
+            #添加系统操作日志
+            $userInfo=$this->userInfo;
+            SystemActionLog($userInfo['id'], 'admin_examine','approval', $res['category_id'],  'save', $param['title'], '', '','添加了办公审批流：'.$param['title']);
+    
             return resultArray(['data' => $res]);
         } else {
             return resultArray(['error' => $categoryModel->getError()]);
@@ -322,7 +326,7 @@ class Examine extends ApiCommon
         $param['structure_ids'] = arrayToString($param['structure_ids']);
         $param['update_user_id'] = $userInfo['id'];
         $param['create_time'] = time();
-        $param['update_time'] = time();
+//        $param['update_time'] = time();
         $param['status'] = 1;
         $resUpdate = $examineFlowModel->createData($param);
 
@@ -350,6 +354,10 @@ class Examine extends ApiCommon
             if (!$res) {
                 return resultArray(['error' => $categoryModel->getError()]);
             }
+            # 系统操作记录
+            $userInfo=$this->userInfo;
+            SystemActionLog($userInfo['id'], 'oa_examine','approval', $category_id, 'save', '办公审批' , '', '编辑了办公审批流：办公审批');
+    
             return resultArray(['data' => '编辑成功']);
         } else {
             return resultArray(['error' => $examineFlowModel->getError()]);
@@ -391,6 +399,14 @@ class Examine extends ApiCommon
         if (!$data) {
             return resultArray(['error' => $categoryModel->getError()]);
         }
+        $info=db('oa_examine_category')->where('category_id',$param['id'])->find();
+        # 系统操作记录
+        if($param['status']==0){
+            $content='停用了：'.$info['title'];
+        }else{
+            $content='启用了：'.$info['title'];
+        }
+        SystemActionLog($userInfo['id'], 'oa_examine','approval', $param['id'],  'delete',$info['title'] , '', '',$content);
         return resultArray(['data' => '操作成功']);
     }
 
@@ -404,17 +420,31 @@ class Examine extends ApiCommon
         $param = $this->param;
         $userInfo = $this->userInfo;
         $where = [];
-        $where['is_deleted'] = ['neq',1];
-        $where['status'] = ['eq',1];
+        $where['c.is_deleted'] = ['neq',1];
+        $where['c.status'] = ['eq',1];
+        $examineCategory=db('oa_examine_order')->where('user_id',$userInfo['id'])->column('work_id');
+        $category_id=db('oa_examine_category')->where(['create_user_id'=>$userInfo['id'],'is_deleted'=>['neq',1],'status'=>1])->column('category_id');
+        if($examineCategory && count($examineCategory)==count($category_id)){
+            $orderField = 'o.order';
+            $orderSort = 'asc';
+            $join=[['__OA_EXAMINE_ORDER__ o','o.work_id=c.category_id','LEFT']];
+            $where['o.user_id'] = ['eq',$userInfo['id']];
+        }else{
+            $orderField = 'c.category_id';
+            $orderSort = 'asc';
+            $join='';
+        }
         $list = db('oa_examine_category')
+            ->alias('c')
+            ->join($join)
                 ->where($where)
                 ->where(function ($query) use ($userInfo){
-                    $query->where('`user_ids` = "" AND `structure_ids` = ""')
+                    $query->where('c.`user_ids` = "" AND c.`structure_ids` = ""')
                     ->whereOr(function($query) use ($userInfo){
-                        $query->where('structure_ids','like','%,'.$userInfo['structure_id'].',%')
-                              ->whereOr('user_ids','like','%,'.$userInfo['id'].',%');
+                        $query->where('c.structure_ids','like','%,'.$userInfo['structure_id'].',%')
+                              ->whereOr('c.user_ids','like','%,'.$userInfo['id'].',%');
                     });
-                })->select();
+                })->order($orderField,$orderSort)->select();
         return resultArray(['data' => $list]);
     }
 
@@ -614,5 +644,21 @@ class Examine extends ApiCommon
         $ExamineLogic = new ExamineLogic();
         $data = $ExamineLogic->myExamine($param);
          return resultArray(['data' => $data]);
+    }
+    
+    /**
+     * 办公审批类型排序
+     *
+     * @author      alvin guogaobo
+     * @version     1.0 版本号
+     * @since       2021/4/16 0016 14:02
+     */
+    public function examineSort(){
+        $examineIds  = $this->param['examineIds'];
+        $userInfo = $this->userInfo;
+        $examineCategory=new ExamineLogic();
+        $examineCategory->setWorkOrder($examineIds, $userInfo['id']);
+
+        return resultArray(['data' => '操作成功！']);
     }
 }

@@ -2,7 +2,7 @@
 /**
  * PHPExcel
  *
- * Copyright (c) 2006 - 2015 PHPExcel
+ * Copyright (C) 2006 - 2014 PHPExcel
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,7 +20,7 @@
  *
  * @category   PHPExcel
  * @package    PHPExcel
- * @copyright  Copyright (c) 2006 - 2015 PHPExcel (http://www.codeplex.com/PHPExcel)
+ * @copyright  Copyright (c) 2006 - 2014 PHPExcel (http://www.codeplex.com/PHPExcel)
  * @license    http://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt	LGPL
  * @version    ##VERSION##, ##DATE##
  */
@@ -59,7 +59,6 @@ $aTests = array(
 	, '11documentsecurity-xls.php'
 	, '12cellProtection.php'
 	, '13calculation.php'
-    , '13calculationCyclicFormulae.php'
 	, '14excel5.php'
 	, '15datavalidation.php'
 	, '15datavalidation-xls.php'
@@ -98,12 +97,7 @@ $aTests = array(
 	, '36chartreadwritePDF.php'
 	, '37page_layout_view.php'
 	, '38cloneWorksheet.php'
-    , '39dropdown.php'
 	, '40duplicateStyle.php'
-	, '41password.php'
-	, '42richText.php'
-    , '43mergeWorkbooks.php'
-    , '44worksheetInfo.php'
 	, 'OOCalcReader.php'
 	, 'OOCalcReaderPCLZip.php'
 	, 'SylkReader.php'
@@ -112,7 +106,7 @@ $aTests = array(
 	, 'GnumericReader.php'
 );
 
-// First, clear all previous run results
+// First, clear all results
 foreach ($aTests as $sTest) {
 	@unlink( str_replace('.php', '.xls', 	$sTest) );
 	@unlink( str_replace('.php', '.xlsx', 	$sTest) );

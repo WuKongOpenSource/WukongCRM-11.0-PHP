@@ -124,7 +124,9 @@ return [
 	'work/tasklable/read' => ['work/tasklable/read', ['method' => 'POST']],	
 	'work/tasklable/groupList' => ['work/tasklable/groupList', ['method' => 'POST']],	
 	//【标签】标签获取任务列表
-	'work/tasklable/getWokList' => ['work/tasklable/getWokList', ['method' => 'POST']],	
+	'work/tasklable/getWokList' => ['work/tasklable/getWokList', ['method' => 'POST']],
+    //【标签】排序
+    'work/tasklable/updateOrder' => ['work/tasklable/updateOrder', ['method' => 'POST']],
 
 	//【类别】编辑
 	'work/taskclass/rename' => ['work/taskclass/rename', ['method' => 'POST']],		
